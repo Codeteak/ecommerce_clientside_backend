@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "nodemon src/main/bootstrap.js",
     "start": "node src/main/bootstrap.js",
-    "db:migrate": "node scripts/migrate.js"
+    "db:migrate": "node scripts/migrate.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@node-rs/bcrypt": "^1.10.7",
@@ -22,6 +24,8 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "nodemon": "^3.1.4",
+    "supertest": "^7.0.0",
+    "vitest": "^3.0.0"
   }
 }

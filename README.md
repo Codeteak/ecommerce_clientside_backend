@@ -97,3 +97,12 @@ If the email already exists, the same password must be supplied; the service eit
 - `GET /api/catalog/items?shopId=<uuid>` — active products for that shop (or header **`x-shop-id`**)
 
 Default port: **4100** (see `.env.example`).
+
+## Tests
+
+HTTP tests use [Vitest](https://vitest.dev/) and [Supertest](https://github.com/ladjs/supertest) (no live server; `createServer()` only). They cover **health**, **auth/login/register validation**, **catalog `shopId` validation**, **404**, and **malformed JSON** (`INVALID_JSON`). They do **not** require PostgreSQL.
+
+```bash
+npm test
+npm run test:watch
+```
