@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "ClientSide Ecommerce API",
-    "description": "Storefront API (`clientSideEcommerce`): health, customer auth (register/login), catalog.\n\n**Prerequisites**\n- Server running (`npm run dev`, default port **4100**).\n- PostgreSQL migrated (`npm run db:migrate`).\n- A **shop** row must exist; set **`shopId`** (UUID) in the environment to match it.\n\n**Flow**\n1. Run **Health**.\n2. **Register** (or **Login** if the user exists).\n3. Optional: copy `accessToken` from the response for future authenticated routes.\n4. **List catalog items** with the same shop (`shopId` query or `x-shop-id` header).\n\nJWT payload includes `role: customer`, `shopId`, `customerId`.",
+    "description": "Storefront API (`clientSideEcommerce`): health, customer auth (register/login), catalog.\n\n**Prerequisites**\n- Server running (`npm run dev`, default port **4100**).\n- PostgreSQL migrated (`npm run db:migrate`).\n- A **shop** row must exist; set **`shopId`** (UUID) in the environment to match it.\n\n**Flow**\n1. Run **Health**.\n2. **Register** (or **Login** if the user exists).\n3. Optional: copy `accessToken` from the response for future authenticated routes.\n4. **List categories** and **products** with the same shop (`shopId` query or `x-shop-id` header). **`GET /api/catalog/items`** is an alias of **products**.\n\nJWT payload includes `role: customer`, `shopId`, `customerId`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -116,6 +116,26 @@
             ],
             "url": "{{baseUrl}}/api/catalog/items",
             "description": "Alternative to `?shopId=` — pass shop UUID in **x-shop-id**."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/catalog/categories (root)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/catalog/categories?shopId={{shopId}}",
+            "description": "Lists **root** active categories (`parentId` omitted). Optional: `parentId=<uuid>` for children of that category."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/catalog/products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/catalog/products?shopId={{shopId}}",
+            "description": "Lists **active** products (same as **GET /api/catalog/items**). Optional: `categoryId=<uuid>` to filter by category."
           },
           "response": []
         }

@@ -16,6 +16,8 @@ export function createRoutes(ctx) {
   r.post("/api/auth/register", validate({ body: registerBodySchema }), authController.register(ctx));
   r.post("/api/auth/login", validate({ body: loginBodySchema }), authController.login(ctx));
 
+  r.get("/api/catalog/categories", catalogController.listCategories(ctx));
+  r.get("/api/catalog/products", catalogController.listProducts(ctx));
   r.get("/api/catalog/items", catalogController.listItems(ctx));
 
   return r;

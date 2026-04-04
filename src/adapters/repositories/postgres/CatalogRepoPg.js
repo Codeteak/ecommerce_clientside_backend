@@ -4,10 +4,11 @@ import { setTenantContext } from "../../../infra/db/tenantContext.js";
 
 export class CatalogRepoPg extends CatalogRepo {
   /**
-   * Lists active products for the current tenant (RLS enforced via `app.current_shop_id`).
    * @param {string} shopId
+   * @param {{ categoryId?: string|null }} filters
    */
-  async list(shopId) {
+  async listProducts(shopId, filters = {}) {
+    const categoryId = filters.categoryId ?? null;
     const client = await pool.connect();
     try {
       await setTenantContext(client, shopId);
@@ -16,8 +17,37 @@ export class CatalogRepoPg extends CatalogRepo {
                 created_at, updated_at
            FROM products
           WHERE status = 'active'
+            AND ($1::uuid IS NULL OR category_id = $1)
           ORDER BY name ASC
-          LIMIT 200`
+          LIMIT 100`,
+        [categoryId]
+      );
+      return rows;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * @param {string} shopId
+   * @param {{ parentId?: string|null }} filters
+   */
+  async listCategories(shopId, filters = {}) {
+    const parentId = filters.parentId !== undefined ? filters.parentId : null;
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `SELECT id, shop_id, parent_id, name, slug, sort_order, is_active, metadata
+           FROM categories
+          WHERE is_active = true
+            AND (
+              ($1::uuid IS NULL AND parent_id IS NULL)
+              OR ($1::uuid IS NOT NULL AND parent_id = $1)
+            )
+          ORDER BY sort_order ASC, name ASC
+          LIMIT 500`,
+        [parentId]
       );
       return rows;
     } finally {

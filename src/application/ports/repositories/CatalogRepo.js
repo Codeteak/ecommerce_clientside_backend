@@ -12,13 +12,36 @@
  * @property {string} updated_at
  */
 
+/**
+ * @typedef {Object} CategoryRow
+ * @property {string} id
+ * @property {string} shop_id
+ * @property {string|null} parent_id
+ * @property {string} name
+ * @property {string} slug
+ * @property {number} sort_order
+ * @property {boolean} is_active
+ * @property {unknown} metadata
+ */
+
 export class CatalogRepo {
   /**
-   * @param {string} shopId
+   * @param {string} _shopId
+   * @param {{ categoryId?: string|null }} _filters
    * @returns {Promise<CatalogItem[]>}
    */
   // eslint-disable-next-line no-unused-vars
-  async list(shopId) {
+  async listProducts(_shopId, _filters) {
+    throw new Error("Not implemented");
+  }
+
+  /**
+   * @param {string} _shopId
+   * @param {{ parentId?: string|null }} _filters — omit or null: root categories; UUID: children of that parent
+   * @returns {Promise<CategoryRow[]>}
+   */
+  // eslint-disable-next-line no-unused-vars
+  async listCategories(_shopId, _filters) {
     throw new Error("Not implemented");
   }
 }
