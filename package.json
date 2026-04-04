@@ -27,6 +27,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "drizzle-orm": "^0.45.2",
     "nodemon": "^3.1.4",
     "supertest": "^7.0.0",
     "vitest": "^3.0.0"
