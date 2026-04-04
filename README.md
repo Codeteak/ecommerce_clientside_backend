@@ -2,6 +2,8 @@
 
 Express API with **domain → application → adapters → interface** layering. The composition root is `src/main/composition.js`.
 
+**Frontend / integration:** see the API reference at [docs/client-storefront-api.md](../docs/client-storefront-api.md).
+
 The database schema matches the unified multi-tenant ecommerce script: `migrations/000_unified_schema.sql` (same as the main `backend` migration). Tenant-scoped reads use Postgres **RLS** via `set_config('app.current_shop_id', …)` before querying.
 
 ## Layout
