@@ -16,7 +16,6 @@ import { createOAuthStatePayload, signOAuthState, verifyOAuthState } from "../..
  * @param {import("../../../main/composition.js").AppContext} ctx
  */
 export const oauthController = {
-  /** `GET /api/oauth/ok` — liveness for the OAuth mount (not Google-specific). */
   ok: () => (_req, res, next) => {
     try {
       res.json({ ok: true });
@@ -25,7 +24,23 @@ export const oauthController = {
     }
   },
 
-  /** `GET /api/oauth/dev/google-start` — browser redirect into Google (dev convenience). */
+  success: () => (_req, res) => {
+    res.json({
+      ok: true,
+      message:
+        "POST /api/auth/oauth/jwt from this origin with credentials (include cookies) to receive accessToken."
+    });
+  },
+
+  signInSocialGet: () => (_req, res) => {
+    res.status(405).set("Allow", "POST").json({
+      error: {
+        code: "METHOD_NOT_ALLOWED",
+        message: "Use POST with JSON body (provider, optional disableRedirect, callbackURL, additionalData)."
+      }
+    });
+  },
+
   devGoogleStart: (_ctx) => async (req, res, next) => {
     try {
       if (!assertGoogleOAuthConfigured()) {
@@ -48,7 +63,6 @@ export const oauthController = {
     }
   },
 
-  /** `POST /api/oauth/sign-in/social` — returns `{ url }` when `disableRedirect: true`. */
   socialSignIn: (_ctx) => async (req, res, next) => {
     try {
       if (!assertGoogleOAuthConfigured()) {
@@ -75,7 +89,6 @@ export const oauthController = {
     }
   },
 
-  /** `GET /api/oauth/callback/google` */
   googleCallback: (ctx) => async (req, res, next) => {
     const cookieOpts = oauthExchangeCookieOptions();
     try {
@@ -97,10 +110,11 @@ export const oauthController = {
       }
 
       const shopId = payload.shopId ?? undefined;
+      const base = env.API_PUBLIC_URL.replace(/\/$/, "");
       const callbackURL =
         typeof payload.callbackURL === "string" && payload.callbackURL
           ? payload.callbackURL
-          : `${env.API_PUBLIC_URL.replace(/\/$/, "")}/`;
+          : `${base}/api/oauth/success`;
 
       const accessToken = await exchangeGoogleAuthorizationCode(code);
       const info = await fetchGoogleUserInfo(accessToken);

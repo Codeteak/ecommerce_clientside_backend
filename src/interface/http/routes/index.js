@@ -32,6 +32,15 @@ export function createRoutes(ctx) {
     }
   });
 
+  r.get("/", (_req, res) => {
+    res.json({
+      ok: true,
+      service: "clientside-ecommerce-api",
+      health: "/health",
+      oauthAfterLogin: "/api/oauth/success"
+    });
+  });
+
   r.get("/health", healthController.get(ctx));
 
   r.post(
@@ -49,6 +58,8 @@ export function createRoutes(ctx) {
   );
 
   r.get("/api/oauth/ok", oauthController.ok());
+  r.get("/api/oauth/success", oauthController.success());
+  r.get("/api/oauth/sign-in/social", oauthController.signInSocialGet());
   r.get(
     "/api/oauth/dev/google-start",
     authLimiter,

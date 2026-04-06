@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "ClientSide Ecommerce API",
-    "description": "Storefront API (`clientSideEcommerce`): health, customer auth (register/login), Google OAuth (Better Auth), catalog.\n\n**Prerequisites**\n- Server running (`npm run dev`, default port **4100**).\n- PostgreSQL: `npm run db:migrate` and **`npm run db:oauth:migrate`** (Better Auth tables).\n- A **shop** row must exist; set **`shopId`** (UUID) in the environment to match it.\n\n**Flow**\n1. Run **Health** and **GET /api/oauth/ok** (Better Auth mounted).\n2. **Register** (or **Login** if the user exists), or use **Google OAuth** from the frontend (`better-auth/client`, `basePath` `/api/oauth`).\n3. Optional: copy `accessToken` from the response for future authenticated routes.\n4. **List categories** and **products** with the same shop (`shopId` query or `x-shop-id` header). **`GET /api/catalog/items`** is an alias of **products**.\n\nJWT payload includes `role: customer`, `shopId`, `customerId`.",
+    "description": "Storefront API: health, auth (register/login), Google OAuth2, JWT exchange, profile, service area, catalog list + search.\n\n**Setup**\n- Run `npm run dev` (default port **4100**). Copy `.env.example` → `.env`; set `DATABASE_URL`, `JWT_SECRET`, `API_PUBLIC_URL`, Google vars for OAuth.\n- `npm run db:migrate`. A **shop** row must exist; set collection variable **`shopId`** to its UUID.\n\n**JWT**\n- Response includes `accessToken`. Payload: `role`, `customerId`; `shopId` may be present when the user has exactly one active shop (register or single-shop login).\n- Authenticated routes: `Authorization: Bearer {{accessToken}}`.\n\n**Google sign-in (browser)**\n- Redirect URI in Google Cloud Console: `{API_PUBLIC_URL}/api/oauth/callback/google`.\n- After Google, the API redirects to **`GET /api/oauth/success`** (or your `callbackURL`) and sets cookie **`storefront_oauth_exchange`**. Then `POST /api/auth/oauth/jwt` with **`credentials: 'include'`** (same origin as the API). **`POST /api/oauth/sign-in/social`** (not GET).\n- Email-only body `{ \"email\" }` only if `ALLOW_EMAIL_ONLY_JWT_EXCHANGE=true` (non-production).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -21,7 +21,7 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/health",
-            "description": "Liveness check. Returns `status` and `service`."
+            "description": "Returns `status` and `service`."
           },
           "response": []
         }
@@ -49,15 +49,13 @@
           ],
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"shopId\": \"{{shopId}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"displayName\": \"Test Buyer\"\n}"
             },
             "url": "{{baseUrl}}/api/auth/register",
-            "description": "Create user + customer + membership for the shop. **`shopId`** is the shop UUID.\n\n**201** — returns `accessToken`, `user`, `shop`, `customer`, `profile` (name + shop fields), `role: customer`.\n\n**409** — already registered for this shop (active membership).\n\nTest script saves `accessToken` and `shopId` to collection variables on success."
+            "description": "**201** — `accessToken`, `user`, `shop`, `customer`, `profile`, `role: customer`.\n\n**409** — cannot complete registration for this shop (e.g. active membership conflict).\n\nTest script saves `accessToken` and `shopId` on success."
           },
           "response": []
         },
@@ -80,15 +78,13 @@
           ],
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
             },
             "url": "{{baseUrl}}/api/auth/login",
-            "description": "Customer login with **email + password** only. Response includes **`shopIds`**, **`profile`** (per shop: `name` from customer display name, `shopName` / `shopId` / `shopSlug`).\n\n**401** — invalid credentials or no customer profile.\n\nTest script saves `accessToken` and sets `shopId` to the first `shopIds` entry when present."
+            "description": "**200** — `accessToken`, `shopIds`, `profile` (per shop). **401** — invalid credentials.\n\nTest script saves `accessToken` and first `shopId` when present."
           },
           "response": []
         },
@@ -116,7 +112,7 @@
               "raw": "{\n  \"email\": \"{{email}}\"\n}"
             },
             "url": "{{baseUrl}}/api/auth/oauth/jwt",
-            "description": "**Insecure / disabled by default.** Body: `{ \"email\" }` only. Returns **`403`** unless **`ALLOW_EMAIL_ONLY_JWT_EXCHANGE=true`** in server `.env` (never in production).\n\nWhen enabled: same response shape as **login** if the email exists as a storefront customer. Prefer **`POST /api/auth/login`** in normal flows."
+            "description": "**Preferred:** send the **`storefront_oauth_exchange`** httpOnly cookie set after `GET /api/oauth/callback/google` (browser + `credentials: 'include'` from the API origin).\n\n**Dev-only:** JSON `{ \"email\" }` works only if `ALLOW_EMAIL_ONLY_JWT_EXCHANGE=true` (forbidden in production). **403** when disabled and no valid cookie.\n\n**200** — same shape as login; saves `accessToken` in test script."
           },
           "response": []
         },
@@ -127,12 +123,11 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "description": "From Register / Login / OAuth JWT exchange."
+                "value": "Bearer {{accessToken}}"
               }
             ],
             "url": "{{baseUrl}}/api/me/profile",
-            "description": "Authenticated customer profile: **`customer.displayName`** and **`address`** (from `addresses`, or `null`).\n\n**401** if token missing/invalid or customer blocked."
+            "description": "**401** without valid Bearer token."
           },
           "response": []
         },
@@ -142,25 +137,21 @@
             "method": "PATCH",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "description": "From Register / Login / OAuth JWT exchange."
-              }
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"displayName\": \"Updated Name\",\n  \"address\": {\n    \"city\": \"London\",\n    \"postalCode\": \"SW1A 1AA\",\n    \"line1\": \"10 Example Street\"\n  }\n}"
             },
             "url": "{{baseUrl}}/api/me/profile",
-            "description": "Partial update: only send fields to change. Nested **`address`** keys merge into the linked `addresses` row (or create one). **`lat`/`lng`** must both be set or both `null`.\n\n**200** — same JSON shape as GET."
+            "description": "Partial update. Do not send `address: {}` (validation error). `lat`/`lng` must both be set or both null."
           },
           "response": []
         }
       ]
     },
     {
-      "name": "OAuth (Better Auth)",
+      "name": "OAuth (Google)",
       "item": [
         {
           "name": "GET /api/oauth/ok",
@@ -168,34 +159,34 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/oauth/ok",
-            "description": "Better Auth liveness. Expect `{ \"ok\": true }`. **This does not return a Google link** — use **POST …/sign-in/social** or the frontend `signIn.social` client."
+            "description": "Liveness: `{ \"ok\": true }`."
           },
           "response": []
         },
         {
-          "name": "GET /api/oauth/dev/google-start (browser — dev only)",
+          "name": "GET /api/oauth/dev/google-start",
           "request": {
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/oauth/dev/google-start?shopId={{shopId}}",
-            "description": "**Use in Chrome/Safari**, not Postman. Default **`callbackURL`** is **`{{baseUrl}}/oauth/success`** (API host) so you are not redirected to port **5173** unless the storefront is running.\n\nOverride: `?callbackURL=http://localhost:5173/&shopId=...` when Vite is up.\n\nOptional **`shopId`** for storefront provisioning."
+            "description": "Redirect to Google (use a real browser). Optional `callbackURL` (e.g. storefront). Requires `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`."
           },
           "response": []
         },
         {
-          "name": "POST /api/oauth/sign-in/social (Google URL)",
+          "name": "POST /api/oauth/sign-in/social",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
-              { "key": "Origin", "value": "http://localhost:5173", "description": "Must match server CORS_ORIGIN for browser calls." }
+              { "key": "Origin", "value": "http://localhost:5173" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"google\",\n  \"disableRedirect\": true,\n  \"callbackURL\": \"{{baseUrl}}/oauth/success\",\n  \"additionalData\": {\n    \"shopId\": \"{{shopId}}\"\n  }\n}"
+              "raw": "{\n  \"provider\": \"google\",\n  \"disableRedirect\": true,\n  \"callbackURL\": \"http://localhost:4100/\",\n  \"additionalData\": {\n    \"shopId\": \"{{shopId}}\"\n  }\n}"
             },
             "url": "{{baseUrl}}/api/oauth/sign-in/social",
-            "description": "Starts Google OAuth. **`additionalData.shopId`** (shop UUID) is optional: after Google returns, the API creates/links **`users` / `customers` / `customer_shop_memberships`** like register (no password; Google does not provide one). Omit **`additionalData`** if you only want Better Auth sign-in.\n\n**`disableRedirect`: true** is for Postman (JSON **`url`**). For a real browser flow, omit it and start sign-in from the app with **`credentials: \"include\"`** so the OAuth state cookie is set — do not paste the Google URL from Postman into the browser (that causes **`state_mismatch`**).\n\nRequires **GOOGLE_CLIENT_ID** / **GOOGLE_CLIENT_SECRET**. Redirect URI: `{{baseUrl}}/api/oauth/callback/google`."
+            "description": "**`disableRedirect: true`** — JSON `{ \"url\" }` for Postman. Browser flow: omit it; use `credentials: 'include'` and do not paste the returned URL into a new tab (state cookie).\n\n**`additionalData.shopId`** optional: provision membership for that shop after Google verifies email.\n\n**503** if Google OAuth env is not configured."
           },
           "response": []
         }
@@ -214,7 +205,7 @@
               "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}"
             },
             "url": "{{baseUrl}}/api/shops/{{shopId}}/service-area/check",
-            "description": "Returns **`inServiceArea`**, **`distanceM`**, **`maxRadiusM`**, **`code`**, **`message`**. Hub = shop linked **`addresses.lat`/`lng`**. Radius from env **`SERVICE_AREA_RADIUS_METERS`** (default 5000 m). Set **`shopId`** after register or from DB."
+            "description": "Response: `inServiceArea`, `distanceM`, `maxRadiusM`, `code`, `message`."
           },
           "response": []
         }
@@ -224,12 +215,22 @@
       "name": "Catalog",
       "item": [
         {
+          "name": "GET /api/catalog/search",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/catalog/search?shopId={{shopId}}&type=both&q=&categoryId=&parentId=&availability=&productSort=name&productOrder=asc&categorySort=sort_order&categoryOrder=asc&productLimit=100&productOffset=0&categoryLimit=500&categoryOffset=0",
+            "description": "Search/filter/sort products and/or categories in one call.\n\n**shopId** or **x-shop-id** header required.\n\n**type:** `products` | `categories` | `both` (default both).\n\n**q:** optional text (matches product/category **name** and **slug**).\n\n**Products:** `categoryId`, `availability` (`in_stock` | `out_of_stock` | `unknown`), `productSort` (`name` | `price` | `created_at` | `availability`), `productOrder` (`asc` | `desc`), `productLimit` (1–100), `productOffset`.\n\n**Categories:** `parentId` (omit/null = root only; UUID = children), `categorySort` (`sort_order` | `name` | `created_at`), `categoryOrder`, `categoryLimit` (1–500), `categoryOffset`.\n\n**200:** `{ \"products\": [...], \"categories\": [...] }` (empty arrays for sides not requested)."
+          },
+          "response": []
+        },
+        {
           "name": "GET /api/catalog/items (query shopId)",
           "request": {
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/catalog/items?shopId={{shopId}}",
-            "description": "Lists **active** products for the shop. Set `shopId` in variables (from **Register** response or your DB)."
+            "description": "Active products (alias of **GET /api/catalog/products** without category filter)."
           },
           "response": []
         },
@@ -237,11 +238,9 @@
           "name": "GET /api/catalog/items (header x-shop-id)",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "x-shop-id", "value": "{{shopId}}", "description": "Same as query param" }
-            ],
+            "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
             "url": "{{baseUrl}}/api/catalog/items",
-            "description": "Alternative to `?shopId=` — pass shop UUID in **x-shop-id**."
+            "description": "Same as query `shopId`."
           },
           "response": []
         },
@@ -251,7 +250,7 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/catalog/categories?shopId={{shopId}}",
-            "description": "Lists **root** active categories (`parentId` omitted). Optional: `parentId=<uuid>` for children of that category."
+            "description": "Root active categories. Optional `parentId=<uuid>` for children."
           },
           "response": []
         },
@@ -261,7 +260,7 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/catalog/products?shopId={{shopId}}",
-            "description": "Lists **active** products (same as **GET /api/catalog/items**). Optional: `categoryId=<uuid>` to filter by category."
+            "description": "Active products. Optional `categoryId`."
           },
           "response": []
         }

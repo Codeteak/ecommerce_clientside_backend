@@ -15,6 +15,35 @@ describe("GET /api/oauth/ok", () => {
   });
 });
 
+describe("GET /api/oauth/success", () => {
+  let app;
+
+  beforeAll(() => {
+    app = getTestApp();
+  });
+
+  it("returns 200 after OAuth redirect landing", async () => {
+    const res = await request(app).get("/api/oauth/success").expect(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.message).toContain("oauth/jwt");
+  });
+});
+
+describe("GET /api/oauth/sign-in/social", () => {
+  let app;
+
+  beforeAll(() => {
+    app = getTestApp();
+  });
+
+  it("returns 405 Method Not Allowed", async () => {
+    const res = await request(app).get("/api/oauth/sign-in/social").expect(405);
+
+    expect(res.headers.allow).toBe("POST");
+    expect(res.body.error?.code).toBe("METHOD_NOT_ALLOWED");
+  });
+});
+
 describe("POST /api/oauth/sign-in/social", () => {
   let app;
 
