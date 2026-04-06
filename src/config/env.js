@@ -6,7 +6,7 @@ dotenv.config();
 /**
  * - `test`: Vitest runs without a `.env`; safe defaults are applied only then.
  * - `development`: missing keys get the same optional defaults so older `.env` files keep working;
- *   override anything in `.env` (see `.env.example`). Production never uses these fallbacks.
+ *   override anything in `.env` (see README). Production never uses these fallbacks.
  */
 function rawEnv() {
   const src = { ...process.env };

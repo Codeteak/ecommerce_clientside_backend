@@ -2,9 +2,9 @@
 
 Express API with **domain → application → adapters → interface** layering. The composition root is `src/main/composition.js`.
 
-**Frontend / integration:** see the API reference at [docs/client-storefront-api.md](../docs/client-storefront-api.md).
+**API reference:** [docs/API.md](docs/API.md)
 
-The database schema matches `migrations/001_deployment_postgresql.sql` (same as `backend/migrations/001_deployment_postgresql.sql`). Apply it with `npm run db:migrate` (or `psql -f`). To drop tables not in that file (after a backup), use **`npm run db:prune`**. Tenant-scoped reads use Postgres **RLS** via `set_config('app.current_shop_id', …)` before querying.
+The database schema matches `migrations/001_deployment_postgresql.sql`. Apply it with `npm run db:migrate` (or `psql -f`). To drop tables not in that file (after a backup), use **`npm run db:prune`**. Tenant-scoped reads use Postgres **RLS** via `set_config('app.current_shop_id', …)` before querying.
 
 ## Layout
 
@@ -12,7 +12,7 @@ The database schema matches `migrations/001_deployment_postgresql.sql` (same as 
 |--------|------|
 | `domain/` | Domain errors (`AppError`, `NotFoundError`, `ValidationError`, `AuthError`, `ConflictError`) |
 | `application/ports/` | Repository interfaces (contracts) |
-| `application/usecases/` | Application services (catalog, auth, health) |
+| `application/usecases/` | Application services (catalog, auth, profile, shops, health) |
 | `adapters/` | Postgres repositories |
 | `infra/db/` | Connection pool, transactions (`withTx` / `withClient`), tenant session helper |
 | `infra/security` | JWT (customer tokens), password hashing |
@@ -21,95 +21,59 @@ The database schema matches `migrations/001_deployment_postgresql.sql` (same as 
 
 ## Environment
 
-Copy `.env.example` to `.env` and set at least:
+Create a **`.env`** file in the project root (it is gitignored). The app reads configuration from the environment only.
 
-- `DATABASE_URL` — PostgreSQL connection string (**optional in development**: defaults to `postgresql://localhost:5432/postgres` if unset). **Required in production.**
-- `JWT_SECRET` — min 16 characters (required non-default in production)
-- `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_EXPIRES_IN` — optional; defaults suit local dev
+**Development:** many keys have safe defaults if omitted (see `src/config/env.js`). **Production:** set real values; `DATABASE_URL` and a strong `JWT_SECRET` (min 16 characters) are required.
 
-## Database
+Example `.env` (adjust values; do not commit secrets):
+
+```env
+NODE_ENV=development
+PORT=4100
+
+CORS_ORIGIN=http://localhost:5173
+API_PUBLIC_URL=http://localhost:4100
+
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
+DATABASE_SSL_REJECT_UNAUTHORIZED=false
+
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_OAUTH_AUTH_URL=https://accounts.google.com/o/oauth2/v2/auth
+GOOGLE_OAUTH_TOKEN_URL=https://oauth2.googleapis.com/token
+GOOGLE_OAUTH_USERINFO_URL=https://www.googleapis.com/oauth2/v3/userinfo
+GOOGLE_OAUTH_SCOPE=openid email profile
+
+JWT_SECRET=change_me_min_16_chars
+JWT_ISSUER=clientside-ecommerce
+JWT_AUDIENCE=clientside-ecommerce
+JWT_EXPIRES_IN=8h
+
+SERVICE_AREA_RADIUS_METERS=5000
+ALLOW_EMAIL_ONLY_JWT_EXCHANGE=false
+```
+
+## Run locally
 
 ```bash
-cp .env.example .env
-# edit DATABASE_URL and JWT_*
 npm install
+# create .env (see above)
 npm run db:migrate
 npm run dev
 ```
 
-Ensure a **shop** row exists (e.g. from admin backend or SQL) before calling customer auth.
+Default port: **4100**. Ensure a **shop** row exists before customer registration / OAuth with `shopId`.
 
 ## Postman
 
-1. Import [postman/ClientSide-Ecommerce-API.postman_collection.json](postman/ClientSide-Ecommerce-API.postman_collection.json) into Postman.
-2. Optional: import [postman/Local.postman_environment.json](postman/Local.postman_environment.json) and select environment **ClientSide Ecommerce — Local**.
-3. Set `shopId` (shop UUID) and `email` / `password` to match your database.
-4. Run **Health**, then **Auth → Register** or **Login**; successful responses save `accessToken` and `shopId` to collection variables for the **Catalog** requests.
-
-## API
-
-### Health
-
-- `GET /health` — liveness
-
-### Customer auth
-
-Identity uses `users` (credentials), `customers` (profile, one per user), and `customer_shop_memberships` (shop scope). **Register** tokens include `shopId` in the JWT. **Login** tokens omit `shopId` in the JWT; the JSON body includes **`shopIds`** (active membership shop UUIDs only).
-
-**Register** — `POST /api/auth/register` (201)
-
-Body (shop UUID from your database):
-
-```json
-{
-  "shopId": "00000000-0000-0000-0000-000000000000",
-  "email": "buyer@example.com",
-  "password": "secret12",
-  "displayName": "Alex"
-}
-```
-
-Response:
-
-```json
-{
-  "accessToken": "<jwt>",
-  "role": "customer",
-  "user": { "id": "<uuid>", "email": "buyer@example.com" },
-  "shop": { "id": "<uuid>", "slug": "my-shop", "name": "My Shop" },
-  "customer": { "id": "<uuid>" },
-  "profile": [{ "name": "Alex", "shopName": "My Shop", "shopId": "<uuid>", "shopSlug": "my-shop" }]
-}
-```
-
-If the email already exists, the same password must be supplied; the service either completes membership for this shop or returns `409` when already registered for that shop.
-
-**Login** — `POST /api/auth/login`
-
-```json
-{
-  "email": "buyer@example.com",
-  "password": "secret12"
-}
-```
-
-**200** — `{ accessToken, role, user, customer, shopIds, profile }` where `shopIds` lists active membership shop UUIDs (empty if none) and `profile` lists the same shops with `name` (`customers.display_name`), `shopName`, `shopId`, `shopSlug`. JWT has no `shopId` claim on login; use a value from `shopIds` for catalog query/header.
-
-**Profile (authenticated)** — `GET /api/me/profile` and `PATCH /api/me/profile` with header `Authorization: Bearer <accessToken>`. Response includes `customer` (`id`, `displayName`) and `address` (normalized fields from `addresses`, or `null`). See [docs/client-storefront-api.md](../docs/client-storefront-api.md).
-
-### Delivery service area (public)
-
-- `POST /api/shops/:shopId/service-area/check` — body `{ "lat", "lng" }`; returns **`inServiceArea`**, **`distanceM`**, **`maxRadiusM`** vs shop address hub. Radius: **`SERVICE_AREA_RADIUS_METERS`** (default 5000). See [docs/client-storefront-api.md](../docs/client-storefront-api.md).
-
-### Catalog (tenant-scoped)
-
-- `GET /api/catalog/items?shopId=<uuid>` — active products for that shop (or header **`x-shop-id`**)
-
-Default port: **4100** (see `.env.example`).
+1. Import [postman/ClientSide-Ecommerce-API.postman_collection.json](postman/ClientSide-Ecommerce-API.postman_collection.json).
+2. Optional: [postman/Local.postman_environment.json](postman/Local.postman_environment.json) — environment **ClientSide Ecommerce — Local**.
+3. Set `shopId`, `email`, `password` to match your database.
+4. Run **Health**, then **Auth**; successful auth saves `accessToken` for protected requests.
 
 ## Tests
 
-HTTP tests use [Vitest](https://vitest.dev/) and [Supertest](https://github.com/ladjs/supertest) (no live server; `createServer()` only). They cover **health**, **auth/login/register validation**, **catalog `shopId` validation**, **oauth/jwt forbidden by default**, **unknown routes** (`ROUTE_NOT_FOUND`), and **malformed JSON** (`INVALID_JSON`). Profile tests skip JWT→DB session checks under **`NODE_ENV=test`**. They do **not** require PostgreSQL for most cases.
+HTTP tests use [Vitest](https://vitest.dev/) and [Supertest](https://github.com/ladjs/supertest) (`createServer()` only). Most tests do **not** require PostgreSQL.
 
 ```bash
 npm test
