@@ -1,22 +1,17 @@
 import { AuthError } from "../../../domain/errors/AuthError.js";
-import { verifyPassword } from "../../../infra/security/passwordHasher.js";
 import { signCustomerAccessToken } from "../../../infra/auth/jwt.js";
 
 /**
- * Purpose: Sign in with email and password and return a JWT plus shop memberships.
+ * Purpose: Turn a Google sign-in (by email) into the same JWT you get from email/password login.
+ * Only works if we already saved that person as a storefront user and customer.
  */
-export function loginCustomer({ authRepo }) {
-  return async function execute(client, input) {
-    const { email, password } = input;
-
+export function exchangeOAuthSessionForJwt({ authRepo }) {
+  return async function execute(client, email) {
     const user = await authRepo.getUserByEmail(client, email);
     if (!user || !user.is_active) {
-      throw new AuthError("Invalid credentials");
-    }
-
-    const passwordOk = await verifyPassword(password, user.password_hash);
-    if (!passwordOk) {
-      throw new AuthError("Invalid credentials");
+      throw new AuthError(
+        "No storefront profile for this account. Complete Google sign-in with shopId in additionalData, or register with email for this shop."
+      );
     }
 
     const customer = await authRepo.getCustomerByUserId(client, user.id);

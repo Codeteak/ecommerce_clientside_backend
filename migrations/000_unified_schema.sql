@@ -138,6 +138,22 @@ BEGIN
   END IF;
 END $$;
 
+-- How the storefront user row was first created: email/password vs Google (OAuth).
+DO $$
+BEGIN
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS registration_source TEXT;
+  UPDATE users
+     SET registration_source = CASE WHEN password_hash IS NULL THEN 'google' ELSE 'password' END
+   WHERE registration_source IS NULL;
+  ALTER TABLE users ALTER COLUMN registration_source SET DEFAULT 'password';
+  ALTER TABLE users ALTER COLUMN registration_source SET NOT NULL;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_registration_source_chk') THEN
+    ALTER TABLE users
+      ADD CONSTRAINT users_registration_source_chk
+      CHECK (registration_source IN ('password', 'google'));
+  END IF;
+END $$;
+
 -- Stricter format checks for shop-facing identifiers.
 DO $$
 BEGIN

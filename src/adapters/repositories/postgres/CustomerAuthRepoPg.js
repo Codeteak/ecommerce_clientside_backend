@@ -15,7 +15,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
   /** @param {import("pg").PoolClient} client */
   async getUserByEmail(client, email) {
     const { rows } = await client.query(
-      `SELECT id, email, phone, password_hash, is_active
+      `SELECT id, email, phone, password_hash, registration_source, is_active
          FROM users
         WHERE lower(email) = lower($1)`,
       [email]
@@ -62,12 +62,12 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
   }
 
   /** @param {import("pg").PoolClient} client */
-  async insertUser(client, { email, password_hash }) {
+  async insertUser(client, { email, password_hash, registration_source = "password" }) {
     const { rows } = await client.query(
-      `INSERT INTO users (email, password_hash)
-       VALUES ($1, $2)
-       RETURNING id, email`,
-      [email, password_hash]
+      `INSERT INTO users (email, password_hash, registration_source)
+       VALUES ($1, $2, $3)
+       RETURNING id, email, registration_source`,
+      [email, password_hash, registration_source]
     );
     return rows[0];
   }

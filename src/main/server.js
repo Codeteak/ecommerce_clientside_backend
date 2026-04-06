@@ -10,6 +10,8 @@ import { createRoutes } from "../interface/http/routes/index.js";
 import { notFound } from "../interface/http/middleware/notFound.js";
 import { errorHandler } from "../interface/http/middleware/errorHandler.js";
 import { createAppContext } from "./composition.js";
+import { createGoogleOAuthDevStartHandler } from "../interface/http/googleOAuthDevStart.js";
+import { oauthDevSuccessPage } from "../interface/http/oauthDevSuccessPage.js";
 
 export function createServer() {
   const app = express();
@@ -24,6 +26,14 @@ export function createServer() {
       credentials: true
     })
   );
+
+  if (env.NODE_ENV === "development") {
+    app.get("/oauth/success", oauthDevSuccessPage);
+    app.get(
+      `${env.BETTER_AUTH_BASE_PATH}/dev/google-start`,
+      createGoogleOAuthDevStartHandler(env, auth)
+    );
+  }
 
   /**
    * Better Auth (e.g. Google OAuth). Must be mounted before `express.json()` or requests hang.

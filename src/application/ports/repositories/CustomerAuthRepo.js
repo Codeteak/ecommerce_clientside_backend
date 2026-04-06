@@ -15,6 +15,7 @@
  * @property {string|null} email
  * @property {string|null} phone
  * @property {string|null} password_hash
+ * @property {'password'|'google'} registration_source
  * @property {boolean} is_active
  */
 
@@ -92,7 +93,7 @@ export class CustomerAuthRepo {
 
   /**
    * @param {import("pg").PoolClient} _client
-   * @param {{ email: string, password_hash: string }} _row
+   * @param {{ email: string, password_hash: string|null, registration_source?: 'password'|'google' }} _row
    * @returns {Promise<{ id: string, email: string|null }>}
    */
   // eslint-disable-next-line no-unused-vars

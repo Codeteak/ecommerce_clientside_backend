@@ -91,6 +91,32 @@
             "description": "Customer login with **email + password** only. Response includes **`shopIds`** (shop UUIDs only, active memberships).\n\n**401** — invalid credentials or no customer profile.\n\nTest script saves `accessToken` and sets `shopId` to the first `shopIds` entry when present."
           },
           "response": []
+        },
+        {
+          "name": "POST /api/auth/oauth/jwt",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.accessToken) pm.collectionVariables.set('accessToken', j.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Cookie", "value": "better-auth.session_token=PASTE_VALUE_AFTER_BROWSER_OAUTH", "description": "Copy from browser DevTools → Application → Cookies, or use Postman Interceptor." }
+            ],
+            "url": "{{baseUrl}}/api/auth/oauth/jwt",
+            "description": "Returns a storefront **JWT** like **login**, using an existing **Better Auth** session. Postman has no cookie until you paste **`better-auth.session_token`** from the browser after Google sign-in. Same-origin browser **`fetch(..., { credentials: 'include' })`** does not need a manual Cookie header."
+          },
+          "response": []
         }
       ]
     },
@@ -103,7 +129,34 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/oauth/ok",
-            "description": "Better Auth liveness. Expect `{ \"ok\": true }`. Google sign-in uses the Better Auth client (`signIn.social`) — not a simple Postman GET; configure **Google OAuth** env vars and redirect URI `{baseUrl}/api/oauth/callback/google`."
+            "description": "Better Auth liveness. Expect `{ \"ok\": true }`. **This does not return a Google link** — use **POST …/sign-in/social** or the frontend `signIn.social` client."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/oauth/dev/google-start (browser — dev only)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/oauth/dev/google-start?shopId={{shopId}}",
+            "description": "**Use in Chrome/Safari**, not Postman. Default **`callbackURL`** is **`{{baseUrl}}/oauth/success`** (API host) so you are not redirected to port **5173** unless the storefront is running.\n\nOverride: `?callbackURL=http://localhost:5173/&shopId=...` when Vite is up.\n\nOptional **`shopId`** for storefront provisioning."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/oauth/sign-in/social (Google URL)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "http://localhost:5173", "description": "Must match server CORS_ORIGIN for browser calls." }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"google\",\n  \"disableRedirect\": true,\n  \"callbackURL\": \"{{baseUrl}}/oauth/success\",\n  \"additionalData\": {\n    \"shopId\": \"{{shopId}}\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/oauth/sign-in/social",
+            "description": "Starts Google OAuth. **`additionalData.shopId`** (shop UUID) is optional: after Google returns, the API creates/links **`users` / `customers` / `customer_shop_memberships`** like register (no password; Google does not provide one). Omit **`additionalData`** if you only want Better Auth sign-in.\n\n**`disableRedirect`: true** is for Postman (JSON **`url`**). For a real browser flow, omit it and start sign-in from the app with **`credentials: \"include\"`** so the OAuth state cookie is set — do not paste the Google URL from Postman into the browser (that causes **`state_mismatch`**).\n\nRequires **GOOGLE_CLIENT_ID** / **GOOGLE_CLIENT_SECRET**. Redirect URI: `{{baseUrl}}/api/oauth/callback/google`."
           },
           "response": []
         }

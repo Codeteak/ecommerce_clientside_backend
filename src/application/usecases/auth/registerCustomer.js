@@ -6,13 +6,10 @@ import { signCustomerAccessToken } from "../../../infra/auth/jwt.js";
 import { shopAllowsCustomers } from "./shopPolicy.js";
 
 /**
- * @param {{ authRepo: import("../../ports/repositories/CustomerAuthRepo.js").CustomerAuthRepo }} deps
+ * Purpose: Join a shop as a customer — new account or existing email adding this shop.
+ * Returns a JWT and shop info; JWT includes shopId on success.
  */
 export function registerCustomer({ authRepo }) {
-  /**
-   * @param {import("pg").PoolClient} client
-   * @param {{ shopId: string, email: string, password: string, displayName?: string|null }} input
-   */
   return async function execute(client, input) {
     const { shopId, email, password, displayName } = input;
 
@@ -26,7 +23,7 @@ export function registerCustomer({ authRepo }) {
 
     if (!existing) {
       const password_hash = await hashPassword(password);
-      const user = await authRepo.insertUser(client, { email, password_hash });
+      const user = await authRepo.insertUser(client, { email, password_hash, registration_source: "password" });
       const customer = await authRepo.insertCustomer(client, {
         user_id: user.id,
         display_name: displayName ?? null
@@ -45,7 +42,7 @@ export function registerCustomer({ authRepo }) {
       return {
         accessToken,
         role: "customer",
-        user: { id: user.id, email: user.email },
+        user: { id: user.id, email: user.email, registrationSource: user.registration_source },
         shop: { id: shop.id, slug: shop.slug, name: shop.name },
         customer: { id: customer.id }
       };
@@ -92,7 +89,11 @@ export function registerCustomer({ authRepo }) {
     return {
       accessToken,
       role: "customer",
-      user: { id: existing.id, email: existing.email },
+      user: {
+        id: existing.id,
+        email: existing.email,
+        registrationSource: existing.registration_source
+      },
       shop: { id: shop.id, slug: shop.slug, name: shop.name },
       customer: { id: customer.id }
     };

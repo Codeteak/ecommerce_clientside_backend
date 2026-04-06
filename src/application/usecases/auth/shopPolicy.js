@@ -1,4 +1,6 @@
-/** @param {import("../../ports/repositories/CustomerAuthRepo.js").ShopRow|null} shop */
+/**
+ * Purpose: Answer "can this shop take customers right now?" (exists, active, not blocked).
+ */
 export function shopAllowsCustomers(shop) {
   if (!shop) return false;
   return (
