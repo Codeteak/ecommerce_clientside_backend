@@ -12,10 +12,8 @@ import { registerBodySchema, loginBodySchema, oauthJwtBodySchema } from "../vali
 import { oauthDevGoogleStartQuerySchema, oauthSocialBodySchema } from "../validations/oauthSchemas.js";
 import { patchProfileBodySchema } from "../validations/profileSchemas.js";
 import { shopIdParamSchema, serviceAreaCheckBodySchema } from "../validations/shopSchemas.js";
+import { catalogSearchQuerySchema } from "../validations/catalogSearchSchemas.js";
 
-/**
- * @param {import("../../../main/composition.js").AppContext} ctx
- */
 export function createRoutes(ctx) {
   const r = Router();
 
@@ -82,6 +80,11 @@ export function createRoutes(ctx) {
   r.get("/api/catalog/categories", catalogController.listCategories(ctx));
   r.get("/api/catalog/products", catalogController.listProducts(ctx));
   r.get("/api/catalog/items", catalogController.listItems(ctx));
+  r.get(
+    "/api/catalog/search",
+    validate({ query: catalogSearchQuerySchema }),
+    catalogController.search(ctx)
+  );
 
   return r;
 }

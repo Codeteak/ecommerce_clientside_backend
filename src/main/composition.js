@@ -5,6 +5,7 @@ import { env } from "../config/env.js";
 import { createListCatalogItems } from "../application/usecases/catalog/listCatalogItems.js";
 import { createListCategories } from "../application/usecases/catalog/listCategories.js";
 import { createListProducts } from "../application/usecases/catalog/listProducts.js";
+import { createSearchCatalog } from "../application/usecases/catalog/searchCatalog.js";
 import { createGetHealth } from "../application/usecases/health/getHealth.js";
 import { registerCustomer } from "../application/usecases/auth/registerCustomer.js";
 import { loginCustomer } from "../application/usecases/auth/loginCustomer.js";
@@ -17,10 +18,6 @@ import { createCheckShopServiceArea } from "../application/usecases/shops/checkS
 import { createEnsureShopForCatalog } from "../application/usecases/catalog/ensureShopForCatalog.js";
 import { createRequireCustomerJwt } from "../interface/http/middleware/requireCustomerJwt.js";
 
-/**
- * Composition root: wire adapters → use cases → handlers.
- * Add new repositories here and pass them into use-case factories.
- */
 export function createAppContext() {
   const catalogRepo = new CatalogRepoPg();
   const customerAuthRepo = new CustomerAuthRepoPg();
@@ -36,6 +33,7 @@ export function createAppContext() {
     listCatalogItems: createListCatalogItems({ catalogRepo, ensureShopForCatalog }),
     listCategories: createListCategories({ catalogRepo, ensureShopForCatalog }),
     listProducts: createListProducts({ catalogRepo, ensureShopForCatalog }),
+    searchCatalog: createSearchCatalog({ catalogRepo, ensureShopForCatalog }),
     registerCustomer: registerCustomer({ authRepo: customerAuthRepo }),
     loginCustomer: loginCustomer({ authRepo: customerAuthRepo }),
     exchangeOAuthSessionForJwt: exchangeOAuthSessionForJwt({ authRepo: customerAuthRepo }),

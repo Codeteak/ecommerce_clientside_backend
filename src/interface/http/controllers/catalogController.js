@@ -31,6 +31,14 @@ export const catalogController = {
 
   listProducts: listProductsHandler,
 
-  /** Same handler as listProducts — prefer GET /api/catalog/products. */
-  listItems: listProductsHandler
+  listItems: listProductsHandler,
+
+  search: (ctx) => async (req, res, next) => {
+    try {
+      const result = await ctx.searchCatalog(shopIdFromRequest(req), req.query);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
 };
