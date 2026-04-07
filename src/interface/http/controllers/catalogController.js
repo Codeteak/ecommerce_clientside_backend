@@ -1,5 +1,6 @@
+// Purpose: This file handles catalog API requests and returns categories, products, and search results.
 function shopIdFromRequest(req) {
-  return req.query.shopId ?? req.headers["x-shop-id"];
+  return req.shopId ?? req.query.shopId ?? req.headers["x-shop-id"];
 }
 
 function createListProductsHandler() {
