@@ -1,13 +1,9 @@
+// Purpose: This file reads, validates, and exports environment settings used by the app.
 import { z } from "zod";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-/**
- * - `test`: Vitest runs without a `.env`; safe defaults are applied only then.
- * - `development`: missing keys get the same optional defaults so older `.env` files keep working;
- *   override anything in `.env` (see README). Production never uses these fallbacks.
- */
 function rawEnv() {
   const src = { ...process.env };
   const nodeEnv = src.NODE_ENV || "development";
@@ -41,6 +37,7 @@ function rawEnv() {
 
   if (nodeEnv === "test") {
     src.JWT_SECRET ??= "test_jwt_secret_16_chars";
+    src.ALLOW_EMAIL_ONLY_JWT_EXCHANGE = "false";
   }
 
   if (nodeEnv === "development") {
@@ -65,10 +62,6 @@ const envSchema = z
     GOOGLE_OAUTH_SCOPE: z.string().min(1),
 
     DATABASE_URL: z.string().min(1),
-    /**
-     * When true, Postgres connections use TLS with certificate verification.
-     * Use false for typical local Postgres without TLS (set explicitly in `.env`).
-     */
     DATABASE_SSL_REJECT_UNAUTHORIZED: z.preprocess((val) => {
       if (val === true || val === 1) return true;
       if (val === false || val === 0) return false;
@@ -85,6 +78,20 @@ const envSchema = z
     SERVICE_AREA_RADIUS_METERS: z.coerce.number().int().positive(),
 
     ALLOW_EMAIL_ONLY_JWT_EXCHANGE: z.preprocess((val) => {
+      if (val === true || val === 1) return true;
+      if (val === false || val === 0) return false;
+      if (val === undefined || val === null || val === "") return false;
+      const s = String(val).toLowerCase();
+      return s === "true" || s === "1" || s === "yes";
+    }, z.boolean()),
+
+    STOREFRONT_ROOT_DOMAIN: z.string().optional().default(""),
+
+    REDIS_URL: z.string().optional().default(""),
+
+    STOREFRONT_DELIVERY_FEE_MINOR: z.coerce.number().int().nonnegative().optional().default(0),
+
+    STOREFRONT_ENFORCE_SERVICEABILITY: z.preprocess((val) => {
       if (val === true || val === 1) return true;
       if (val === false || val === 0) return false;
       if (val === undefined || val === null || val === "") return false;
@@ -118,7 +125,6 @@ const envSchema = z
 
 const parsed = envSchema.safeParse(rawEnv());
 if (!parsed.success) {
-  // eslint-disable-next-line no-console
   console.error("Invalid environment variables:", parsed.error.flatten().fieldErrors);
   process.exit(1);
 }
@@ -128,5 +134,9 @@ const apiPublic = parsed.data.API_PUBLIC_URL.replace(/\/$/, "");
 export const env = {
   ...parsed.data,
   API_PUBLIC_URL: apiPublic,
-  DATABASE_URL: parsed.data.DATABASE_URL.trim()
+  DATABASE_URL: parsed.data.DATABASE_URL.trim(),
+  STOREFRONT_ROOT_DOMAIN: parsed.data.STOREFRONT_ROOT_DOMAIN?.trim() || "",
+  REDIS_URL: parsed.data.REDIS_URL?.trim() || "",
+  STOREFRONT_DELIVERY_FEE_MINOR: parsed.data.STOREFRONT_DELIVERY_FEE_MINOR ?? 0,
+  STOREFRONT_ENFORCE_SERVICEABILITY: parsed.data.STOREFRONT_ENFORCE_SERVICEABILITY ?? false
 };

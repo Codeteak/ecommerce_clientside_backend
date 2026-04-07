@@ -1,14 +1,24 @@
+import http from "node:http";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { pool } from "../infra/db/pool.js";
-import { createServer } from "./server.js";
+import { createAppContext } from "./composition.js";
+import { createExpressApp } from "./server.js";
 
+/**
+ * Purpose: This file starts the application server.
+ * It checks database connectivity, builds app context, starts HTTP,
+ * and logs startup errors clearly.
+ */
 async function main() {
   await pool.query("select 1 as ok");
 
-  const app = createServer();
+  const ctx = createAppContext();
+  const app = createExpressApp(ctx);
+  const server = http.createServer(app);
+
   await new Promise((resolve, reject) => {
-    const server = app.listen(env.PORT, () => {
+    server.listen(env.PORT, () => {
       logger.info({ port: env.PORT }, "Server is running and healthy");
       resolve();
     });

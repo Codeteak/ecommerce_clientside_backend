@@ -1,3 +1,4 @@
+// Purpose: This file creates and configures the Express app with middleware, routes, and error handlers.
 import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
@@ -10,9 +11,8 @@ import { notFound } from "../interface/http/middleware/notFound.js";
 import { errorHandler } from "../interface/http/middleware/errorHandler.js";
 import { createAppContext } from "./composition.js";
 
-export function createServer() {
+export function createExpressApp(ctx) {
   const app = express();
-  const ctx = createAppContext();
 
   app.disable("x-powered-by");
   app.use(pinoHttp({ logger }));
@@ -27,10 +27,16 @@ export function createServer() {
   app.use(cookieParser());
   app.use(express.json({ limit: "1mb" }));
 
+  app.use(ctx.shopResolver);
   app.use(createRoutes(ctx));
 
   app.use(notFound);
   app.use(errorHandler);
 
   return app;
+}
+
+export function createServer() {
+  const ctx = createAppContext();
+  return createExpressApp(ctx);
 }
