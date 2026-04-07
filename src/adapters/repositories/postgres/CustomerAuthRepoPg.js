@@ -3,7 +3,11 @@ import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { pool } from "../../../infra/db/pool.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
 
-/** @param {{ password_hash: string|null }|null|undefined} row */
+/**
+ * Purpose: This file is the PostgreSQL implementation of customer auth data access.
+ * It handles user/customer lookup, membership checks, profile updates, and
+ * account creation queries used by authentication and profile services.
+ */
 function registrationSourceFromUserRow(row) {
   if (!row) return "password";
   return row.password_hash == null ? "google" : "password";
@@ -28,7 +32,6 @@ const ADDRESS_API_TO_DB = {
 };
 
 export class CustomerAuthRepoPg extends CustomerAuthRepo {
-  /** @param {import("pg").PoolClient} client */
   async getShopById(client, shopId) {
     const { rows } = await client.query(
       `SELECT id, slug, name, is_active, status, is_blocked, is_deleted
@@ -39,7 +42,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return rows[0] ?? null;
   }
 
-  /** @param {string} userId @param {string} customerId */
   async isCustomerSessionValid(userId, customerId) {
     const client = await pool.connect();
     try {
@@ -61,7 +63,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     }
   }
 
-  /** @param {import("pg").PoolClient} client */
   async getUserById(client, userId) {
     const { rows } = await client.query(
       `SELECT id, email, phone, password_hash, is_active
@@ -72,7 +73,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return withRegistrationSource(rows[0]);
   }
 
-  /** @param {import("pg").PoolClient} client */
   async getUserByEmail(client, email) {
     const { rows } = await client.query(
       `SELECT id, email, phone, password_hash, is_active
@@ -83,7 +83,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return withRegistrationSource(rows[0]);
   }
 
-  /** @param {import("pg").PoolClient} client */
   async getCustomerByUserId(client, userId) {
     const { rows } = await client.query(
       `SELECT id, user_id, display_name, is_blocked, is_deleted
@@ -94,7 +93,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return rows[0] ?? null;
   }
 
-  /** @param {import("pg").PoolClient} client */
   async getMembershipByCustomerAndShop(client, customerId, shopId) {
     const { rows } = await client.query(
       `SELECT id, shop_id, customer_id, is_active, is_blocked, is_deleted
@@ -105,7 +103,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return rows[0] ?? null;
   }
 
-  /** @param {import("pg").PoolClient} client */
   async listShopIdsForCustomer(client, customerId) {
     const { rows } = await client.query(
       `SELECT s.id
@@ -121,7 +118,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return rows.map((r) => r.id);
   }
 
-  /** @param {import("pg").PoolClient} client */
   async listActiveShopsForCustomer(client, customerId) {
     const { rows } = await client.query(
       `SELECT s.id, s.name, s.slug
@@ -137,7 +133,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return rows;
   }
 
-  /** @param {import("pg").PoolClient} client */
   async getCustomerProfileByCustomerId(client, customerId) {
     const { rows } = await client.query(
       `SELECT c.id, c.user_id, c.display_name, c.is_blocked, c.is_deleted,
@@ -176,7 +171,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     };
   }
 
-  /** @param {import("pg").PoolClient} client */
   async patchCustomerProfile(client, { customerId, userId, displayName, addressPatch }) {
     const custRes = await client.query(
       `SELECT id, address_id, display_name, is_blocked, is_deleted
@@ -313,7 +307,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     }
   }
 
-  /** @param {import("pg").PoolClient} client */
   async insertUser(client, { email, password_hash }) {
     const { rows } = await client.query(
       `INSERT INTO users (email, password_hash)
@@ -324,7 +317,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return withRegistrationSource(rows[0]);
   }
 
-  /** @param {import("pg").PoolClient} client */
   async insertCustomer(client, { user_id, display_name }) {
     const { rows } = await client.query(
       `INSERT INTO customers (user_id, display_name)
@@ -335,7 +327,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return rows[0];
   }
 
-  /** @param {import("pg").PoolClient} client */
   async insertMembership(client, { shop_id, customer_id }) {
     const { rows } = await client.query(
       `INSERT INTO customer_shop_memberships (shop_id, customer_id, is_active)
@@ -346,7 +337,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return rows[0];
   }
 
-  /** @param {import("pg").PoolClient} client */
   async reactivateMembership(client, membershipId) {
     await client.query(
       `UPDATE customer_shop_memberships
@@ -357,5 +347,9 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
         WHERE id = $1`,
       [membershipId]
     );
+  }
+
+  async updateUserPhone(client, userId, phone) {
+    await client.query(`UPDATE users SET phone = $2 WHERE id = $1`, [userId, phone]);
   }
 }
