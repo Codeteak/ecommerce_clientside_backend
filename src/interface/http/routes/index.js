@@ -166,25 +166,25 @@ export function createRoutes(ctx) {
     storefrontCatalogController.getProductBySlug(ctx)
   );
 
-  r.post("/storefront/cart", ctx.optionalCustomerJwt, storefrontCartController.getOrCreate(ctx));
-  r.get("/storefront/cart", ctx.optionalCustomerJwt, storefrontCartController.get(ctx));
+  r.post("/storefront/cart", ctx.requireCustomerJwt, storefrontCartController.getOrCreate(ctx));
+  r.get("/storefront/cart", ctx.requireCustomerJwt, storefrontCartController.get(ctx));
   r.post(
     "/storefront/cart/items",
-    ctx.optionalCustomerJwt,
+    ctx.requireCustomerJwt,
     cartMutateLimiter,
     validate({ body: storefrontCartItemBodySchema }),
     storefrontCartController.addItem(ctx)
   );
   r.patch(
     "/storefront/cart/items/:itemId",
-    ctx.optionalCustomerJwt,
+    ctx.requireCustomerJwt,
     cartMutateLimiter,
     validate({ params: cartItemIdParamSchema, body: storefrontCartItemPatchSchema }),
     storefrontCartController.patchItem(ctx)
   );
   r.delete(
     "/storefront/cart/items/:itemId",
-    ctx.optionalCustomerJwt,
+    ctx.requireCustomerJwt,
     cartMutateLimiter,
     validate({ params: cartItemIdParamSchema }),
     storefrontCartController.deleteItem(ctx)

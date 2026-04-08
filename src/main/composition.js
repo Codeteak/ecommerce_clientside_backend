@@ -8,7 +8,6 @@ import { ShopServiceAreaRepoPg } from "../adapters/repositories/postgres/ShopSer
 import { env } from "../config/env.js";
 import { createShopResolver } from "../interface/http/middleware/shopResolver.js";
 import { createRequireCustomerJwt } from "../interface/http/middleware/requireCustomerJwt.js";
-import { createOptionalCustomerJwt } from "../interface/http/middleware/optionalCustomerJwt.js";
 import { createLocationGuard } from "../interface/http/middleware/locationGuard.js";
 import { createListCatalogItems } from "../application/services/catalog/listCatalogItems.js";
 import { createListCategories } from "../application/services/catalog/listCategories.js";
@@ -29,7 +28,6 @@ import { createEnsureShopForCatalog } from "../application/services/catalog/ensu
 import { createCatalogCache } from "../infra/cache/catalogCache.js";
 import { createStorefrontCatalog } from "../application/services/storefront/storefrontCatalog.js";
 import { createStorefrontCart } from "../application/services/storefront/storefrontCart.js";
-import { createMergeGuestCart } from "../application/services/cart/mergeGuestCart.js";
 import { createCheckoutStorefront } from "../application/services/checkout/checkoutStorefront.js";
 import { logger } from "../config/logger.js";
 
@@ -42,10 +40,6 @@ export function createAppContext() {
   const shopServiceAreaRepo = new ShopServiceAreaRepoPg();
   const ensureShopForCatalog = createEnsureShopForCatalog({ authRepo });
   const customerJwtMiddleware = createRequireCustomerJwt({
-    authRepo,
-    skipDbSessionCheck: env.NODE_ENV === "test"
-  });
-  const optionalCustomerJwt = createOptionalCustomerJwt({
     authRepo,
     skipDbSessionCheck: env.NODE_ENV === "test"
   });
@@ -64,9 +58,12 @@ export function createAppContext() {
   });
 
   const storefrontCart = createStorefrontCart({ cartRepo, ensureShopForCatalog });
-  const mergeGuestCart = createMergeGuestCart({ cartRepo });
   const assertCustomerShopAccess = createAssertCustomerShopAccess({ authRepo });
   const updateStorefrontProfile = createUpdateStorefrontProfile({ authRepo });
+  const checkShopServiceArea = createCheckShopServiceArea({
+    shopServiceAreaRepo,
+    maxRadiusM: env.SERVICE_AREA_RADIUS_METERS
+  });
 
   const realtime = {
     emitPickerOrderNew: () => {}
@@ -76,6 +73,7 @@ export function createAppContext() {
     cartRepo,
     orderRepo,
     authRepo,
+    checkShopServiceArea,
     deliveryFeeMinor: env.STOREFRONT_DELIVERY_FEE_MINOR,
     emitOrderNew: (payload) => realtime.emitPickerOrderNew(payload)
   });
@@ -98,16 +96,11 @@ export function createAppContext() {
     buildStorefrontSessionResponse: (client, userId) => buildStorefrontSessionResponse(authRepo, client, userId),
     getCustomerProfile: getCustomerProfile({ authRepo }),
     updateCustomerProfile: updateCustomerProfile({ authRepo }),
-    checkShopServiceArea: createCheckShopServiceArea({
-      shopServiceAreaRepo,
-      maxRadiusM: env.SERVICE_AREA_RADIUS_METERS
-    }),
+    checkShopServiceArea,
     requireCustomerJwt: customerJwtMiddleware(),
-    optionalCustomerJwt: optionalCustomerJwt(),
     locationGuard: createLocationGuard(),
     storefrontCatalog,
     storefrontCart,
-    mergeGuestCart,
     assertCustomerShopAccess,
     updateStorefrontProfile,
     checkoutStorefront,
