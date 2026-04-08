@@ -99,7 +99,7 @@ export class CartRepoPg extends CartRepo {
   async getProductSnapshotForCart(client, shopId, productId) {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
-      `SELECT id, name, base_unit, price_minor_per_unit, status
+      `SELECT id, name, base_unit, price_minor_per_unit, status, availability
          FROM products
         WHERE id = $1::uuid AND shop_id = $2::uuid AND status = 'active'`,
       [productId, shopId]
@@ -114,58 +114,6 @@ export class CartRepoPg extends CartRepo {
       [cartId, newCustomerIdText]
     );
     return rows[0] ?? null;
-  }
-
-  async mergeGuestCartForShop(client, shopId, guestCustomerIdText, customerUuidText) {
-    await setTenantContext(client, shopId);
-    const guest = await this.findCartByShopAndCustomerId(client, shopId, guestCustomerIdText);
-    if (!guest) return { merged: false };
-
-    const existingCustomerCart = await this.findCartByShopAndCustomerId(client, shopId, customerUuidText);
-
-    if (!existingCustomerCart) {
-      await client.query(`UPDATE carts SET customer_id = $2 WHERE id = $1::uuid`, [
-        guest.id,
-        customerUuidText
-      ]);
-      return { merged: true };
-    }
-
-    const gItems = await this.listCartItems(client, shopId, guest.id);
-    for (const it of gItems) {
-      const { rows: match } = await client.query(
-        `SELECT id, quantity FROM cart_items
-          WHERE cart_id = $1::uuid
-            AND product_id IS NOT DISTINCT FROM $2::uuid
-            AND is_custom = $3
-          LIMIT 1`,
-        [existingCustomerCart.id, it.product_id, it.is_custom]
-      );
-      if (match[0]) {
-        const q = Number(match[0].quantity) + Number(it.quantity);
-        await this.updateCartItemQuantity(client, shopId, match[0].id, q);
-      } else {
-        await client.query(
-          `INSERT INTO cart_items (cart_id, shop_id, product_id, title_snapshot, quantity, unit_label, unit_price_minor, is_custom, custom_note)
-           VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9)`,
-          [
-            existingCustomerCart.id,
-            shopId,
-            it.product_id,
-            it.title_snapshot,
-            it.quantity,
-            it.unit_label,
-            it.unit_price_minor,
-            it.is_custom,
-            it.custom_note
-          ]
-        );
-      }
-    }
-
-    await this.deleteCartItemsForCart(client, shopId, guest.id);
-    await this.deleteCart(client, shopId, guest.id);
-    return { merged: true };
   }
 
   async findCartItemWithCart(client, shopId, itemId) {
@@ -194,5 +142,19 @@ export class CartRepoPg extends CartRepo {
       [cartId, shopId, productId, isCustom, customNote]
     );
     return rows[0] ?? null;
+  }
+
+  async listCartProductAvailability(client, shopId, cartId) {
+    await setTenantContext(client, shopId);
+    const { rows } = await client.query(
+      `SELECT ci.id AS cart_item_id, ci.product_id, p.status AS product_status, p.availability
+         FROM cart_items ci
+         LEFT JOIN products p
+           ON p.id = ci.product_id
+          AND p.shop_id = ci.shop_id
+        WHERE ci.cart_id = $1::uuid`,
+      [cartId]
+    );
+    return rows;
   }
 }

@@ -31,12 +31,10 @@ describe("storefront cart addItem merge behavior", () => {
       ensureShopForCatalog: vi.fn().mockResolvedValue(undefined)
     });
 
-    const out = await service.addItem(
-      {},
-      "00000000-0000-4000-8000-000000000001",
-      { sessionId: "sess-123" },
-      { productId: "22222222-2222-4222-8222-222222222222", quantity: 3 }
-    );
+    const out = await service.addItem({}, "00000000-0000-4000-8000-000000000001", { customerId: "cust-1" }, {
+      productId: "22222222-2222-4222-8222-222222222222",
+      quantity: 3
+    });
 
     expect(cartRepo.findMatchingCartItem).toHaveBeenCalled();
     expect(cartRepo.updateCartItemQuantity).toHaveBeenCalledWith(
@@ -76,11 +74,9 @@ describe("storefront cart addItem merge behavior", () => {
       ensureShopForCatalog: vi.fn().mockResolvedValue(undefined)
     });
 
-    const out = await service.getCartContents(
-      {},
-      "00000000-0000-4000-8000-000000000001",
-      { sessionId: "sess-123" }
-    );
+    const out = await service.getCartContents({}, "00000000-0000-4000-8000-000000000001", {
+      customerId: "cust-1"
+    });
 
     expect(out.summary).toEqual({
       total_price_minor: 250,

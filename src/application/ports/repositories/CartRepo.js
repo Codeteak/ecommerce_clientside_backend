@@ -75,14 +75,6 @@ export class CartRepo {
     throw new Error("Not implemented");
   }
 
-  async mergeGuestCartForShop(_client, _shopId, _guestCustomerIdText, _customerUuidText) {
-    void _client;
-    void _shopId;
-    void _guestCustomerIdText;
-    void _customerUuidText;
-    throw new Error("Not implemented");
-  }
-
   async findCartItemWithCart(_client, _shopId, _itemId) {
     void _client;
     void _shopId;
@@ -97,6 +89,13 @@ export class CartRepo {
     void _productId;
     void _isCustom;
     void _customNote;
+    throw new Error("Not implemented");
+  }
+
+  async listCartProductAvailability(_client, _shopId, _cartId) {
+    void _client;
+    void _shopId;
+    void _cartId;
     throw new Error("Not implemented");
   }
 }

@@ -7,38 +7,21 @@ import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
  * It resolves the active cart for guest or customer users, validates
  * item operations, and delegates cart reads/writes to the repository.
  */
-export const CART_SESSION_COOKIE = "cart_session_id";
-
 export function createStorefrontCart({ cartRepo, ensureShopForCatalog }) {
-  function guestKeyFromSession(sessionId) {
-    return `guest:${String(sessionId).trim()}`;
-  }
-
   async function resolveCart(client, shopIdRaw, scope) {
     const shopId = requireShopId(shopIdRaw);
     await ensureShopForCatalog(shopId);
 
     const customerId = scope.customerId != null ? String(scope.customerId).trim() : "";
-    const sessionId = scope.sessionId != null ? String(scope.sessionId).trim() : "";
-
-    if (customerId) {
-      let cart = await cartRepo.findCartByShopAndCustomerId(client, shopId, customerId);
-      if (!cart) {
-        cart = await cartRepo.insertCart(client, shopId, customerId);
-      }
-      return { shopId, cart, key: customerId };
+    if (!customerId) {
+      throw new ValidationError("customer auth required");
     }
 
-    if (!sessionId) {
-      throw new ValidationError("cart session required");
-    }
-
-    const gKey = guestKeyFromSession(sessionId);
-    let cart = await cartRepo.findCartByShopAndCustomerId(client, shopId, gKey);
+    let cart = await cartRepo.findCartByShopAndCustomerId(client, shopId, customerId);
     if (!cart) {
-      cart = await cartRepo.insertCart(client, shopId, gKey);
+      cart = await cartRepo.insertCart(client, shopId, customerId);
     }
-    return { shopId, cart, key: gKey };
+    return { shopId, cart, key: customerId };
   }
 
   return {
