@@ -77,7 +77,7 @@ export class OrderRepoPg extends OrderRepo {
   async listOrdersForCustomer(client, shopId, customerIdText) {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
-      `SELECT id, order_number, status, total_minor, currency, placed_at
+      `SELECT id, order_number, status, total_minor, currency, placed_at, picker_id, picker_name
          FROM orders
         WHERE shop_id = $1::uuid AND customer_id = $2
         ORDER BY placed_at DESC
@@ -92,6 +92,7 @@ export class OrderRepoPg extends OrderRepo {
     const { rows: o } = await client.query(
       `SELECT id, shop_id, customer_id, order_number, status, payment_method,
               subtotal_minor, delivery_fee_minor, total_minor, currency, notes,
+              picker_id, picker_name,
               placed_at, accepted_at, out_for_delivery_at, delivered_at, rejected_at
          FROM orders
         WHERE id = $1::uuid AND shop_id = $2::uuid AND customer_id = $3

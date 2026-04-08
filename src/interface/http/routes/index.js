@@ -6,7 +6,6 @@ import { healthController } from "../controllers/healthController.js";
 import { catalogController } from "../controllers/catalogController.js";
 import { authController } from "../controllers/authController.js";
 import { profileController } from "../controllers/profileController.js";
-import { shopController } from "../controllers/shopController.js";
 import { storefrontController } from "../controllers/storefrontController.js";
 import { storefrontCatalogController } from "../controllers/storefrontCatalogController.js";
 import { storefrontCartController } from "../controllers/storefrontCartController.js";
@@ -18,7 +17,6 @@ import { validate } from "../middleware/validate.js";
 import { registerBodySchema, loginBodySchema, oauthJwtBodySchema } from "../validations/authSchemas.js";
 import { oauthDevGoogleStartQuerySchema, oauthSocialBodySchema } from "../validations/oauthSchemas.js";
 import { patchProfileBodySchema } from "../validations/profileSchemas.js";
-import { shopIdParamSchema, serviceAreaCheckBodySchema } from "../validations/shopSchemas.js";
 import { storefrontLocationBodySchema } from "../validations/storefrontSchemas.js";
 import {
   storefrontCategoriesQuerySchema,
@@ -143,12 +141,6 @@ export function createRoutes(ctx) {
     ctx.requireCustomerJwt,
     validate({ body: patchProfileBodySchema }),
     profileController.patch(ctx)
-  );
-
-  r.post(
-    "/api/shops/:shopId/service-area/check",
-    validate({ params: shopIdParamSchema, body: serviceAreaCheckBodySchema }),
-    shopController.checkServiceArea(ctx)
   );
 
   r.post(

@@ -173,6 +173,7 @@ export class CatalogRepoPg extends CatalogRepo {
       const { rows } = await client.query(
         `SELECT p.id, p.category_id, p.name, p.slug, p.base_unit, p.status, p.availability,
                 p.price_minor_per_unit::text AS price_minor_per_unit,
+                p.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
                 p.created_at, p.updated_at,
                 thumb.media_asset_id AS thumb_media_id,
                 m.storage_key AS thumb_storage_key,
@@ -210,6 +211,7 @@ export class CatalogRepoPg extends CatalogRepo {
       const { rows: prodRows } = await client.query(
         `SELECT id, shop_id, category_id, name, slug, base_unit, status, availability,
                 price_minor_per_unit::text AS price_minor_per_unit,
+                offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
                 created_at, updated_at
            FROM products
           WHERE shop_id = $1::uuid

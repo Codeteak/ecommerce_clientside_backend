@@ -32,6 +32,7 @@ function mapProductRow(r) {
     name: r.name,
     slug: r.slug,
     price_minor_per_unit: r.price_minor_per_unit,
+    offer_price_minor_per_unit: r.offer_price_minor_per_unit,
     availability: r.availability,
     unit: r.base_unit,
     thumbnail:
@@ -117,6 +118,7 @@ export function createStorefrontCatalog({ catalogRepo, ensureShopForCatalog, cat
         slug: product.slug,
         unit: product.base_unit,
         price_minor_per_unit: product.price_minor_per_unit,
+        offer_price_minor_per_unit: product.offer_price_minor_per_unit,
         availability: product.availability,
         category_id: product.category_id,
         images: gallery.map((g) => ({

@@ -9,6 +9,31 @@ Base URL: your API host (local default `http://localhost:4100`). JSON request/re
 - This server keeps storefront/customer APIs and emits only an internal `order.created` notification hook during checkout.
 - Cart/profile/account/order controllers and validation files were cleaned for consistency (single purpose header per file, comment cleanup).
 
+## API changes applied (field additions)
+
+This section lists backward-compatible response field additions applied from the API field applicability analysis.
+
+### `GET /storefront/products`
+- Added response field:
+  - `offer_price_minor_per_unit` (string or null, as stored in DB minor units).
+
+### `GET /storefront/products/:slug`
+- Added response field:
+  - `offer_price_minor_per_unit` (string or null, as stored in DB minor units).
+
+### `GET /storefront/orders`
+- Added response fields per order:
+  - `picker_id` (uuid or null),
+  - `picker_name` (string or null).
+
+### `GET /storefront/orders/:id`
+- Added response fields under `order`:
+  - `picker_id` (uuid or null),
+  - `picker_name` (string or null).
+
+Compatibility note:
+- These are additive response fields only. Existing clients continue to work without changes.
+
 ## Authentication
 
 - **Bearer JWT:** `Authorization: Bearer <accessToken>` for protected routes.
@@ -92,12 +117,6 @@ Google Cloud Console **redirect URI:** `{API_PUBLIC_URL}/api/oauth/callback/goog
 |--------|------|-------------|
 | GET | `/api/me/profile` | `{ customer: { id, displayName }, address \| null }` |
 | PATCH | `/api/me/profile` | Partial update: `displayName?`, `address?` (nested partial; `address` must not be `{}`) |
-
-## Service area (public)
-
-| Method | Path | Body |
-|--------|------|------|
-| POST | `/api/shops/:shopId/service-area/check` | `{ lat, lng }` — response includes `inServiceArea`, `distanceM`, `maxRadiusM` (`SERVICE_AREA_RADIUS_METERS`, default 5000). |
 
 ## Storefront (public + customer)
 
