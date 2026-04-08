@@ -1,6 +1,7 @@
 import { requireShopId } from "../catalog/catalogShopId.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
+import { AppError } from "../../../domain/errors/AppError.js";
 import crypto from "node:crypto";
 
 /**
@@ -17,15 +18,20 @@ function minorFromLine(q, unitPrice) {
   return Math.round(line);
 }
 
+function checkoutError(code, message) {
+  return new AppError(message, { statusCode: 400, code });
+}
+
 export function createCheckoutStorefront({
   cartRepo,
   orderRepo,
   authRepo,
+  checkShopServiceArea,
   deliveryFeeMinor,
   emitOrderNew = null
 }) {
   return async function checkoutStorefront(client, input) {
-    const { shopId: shopRaw, customerId, userId, notes } = input;
+    const { shopId: shopRaw, customerId, userId, addressId, notes } = input;
     const shopId = requireShopId(shopRaw);
 
     const membership = await authRepo.getMembershipByCustomerAndShop(client, customerId, shopId);
@@ -40,8 +46,26 @@ export function createCheckoutStorefront({
     if (profile.user_id !== userId) {
       throw new ValidationError("Invalid customer");
     }
-    if (!profile.address || !profile.address.line1) {
-      throw new ValidationError("Delivery address is required");
+    if (!profile.phone || String(profile.phone).trim() === "") {
+      throw checkoutError("PHONE_REQUIRED", "Phone number is required before checkout");
+    }
+    if (!profile.address || !profile.address.id || !profile.address.line1) {
+      throw checkoutError("ADDRESS_REQUIRED", "Delivery address is required");
+    }
+    if (String(profile.address.id) !== String(addressId)) {
+      throw checkoutError("ADDRESS_INVALID", "Selected address is invalid for this user");
+    }
+    if (profile.address.lat == null || profile.address.lng == null) {
+      throw checkoutError("ADDRESS_COORDINATES_REQUIRED", "Selected address must include location coordinates");
+    }
+
+    const service = await checkShopServiceArea({
+      shopId,
+      lat: Number(profile.address.lat),
+      lng: Number(profile.address.lng)
+    });
+    if (!service.inServiceArea) {
+      throw checkoutError("ADDRESS_NOT_SERVICEABLE", "Selected address is not serviceable for delivery");
     }
 
     const custKey = String(customerId);
@@ -52,6 +76,13 @@ export function createCheckoutStorefront({
     const items = await cartRepo.listCartItems(client, shopId, cart.id);
     if (!items.length) {
       throw new ValidationError("Cart is empty");
+    }
+
+    const availability = await cartRepo.listCartProductAvailability(client, shopId, cart.id);
+    for (const row of availability) {
+      if (!row.product_id || row.product_status !== "active" || row.availability !== "in_stock") {
+        throw checkoutError("PRODUCT_UNAVAILABLE", "One or more products are unavailable. Please refresh cart.");
+      }
     }
 
     let subtotal = 0;

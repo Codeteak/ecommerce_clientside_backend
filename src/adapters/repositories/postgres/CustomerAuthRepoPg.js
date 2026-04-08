@@ -136,9 +136,11 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
   async getCustomerProfileByCustomerId(client, customerId) {
     const { rows } = await client.query(
       `SELECT c.id, c.user_id, c.display_name, c.is_blocked, c.is_deleted,
+              u.phone,
               a.id AS a_id, a.line1, a.line2, a.landmark, a.city, a.state,
               a.postal_code, a.country, a.lat, a.lng, a.raw
          FROM customers c
+         JOIN users u ON u.id = c.user_id
          LEFT JOIN addresses a ON a.id = c.address_id
         WHERE c.id = $1`,
       [customerId]
@@ -148,6 +150,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
 
     const address = r.a_id
       ? {
+          id: r.a_id,
           line1: r.line1,
           line2: r.line2,
           landmark: r.landmark,
@@ -165,6 +168,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
       id: r.id,
       user_id: r.user_id,
       display_name: r.display_name,
+      phone: r.phone,
       is_blocked: r.is_blocked,
       is_deleted: r.is_deleted,
       address

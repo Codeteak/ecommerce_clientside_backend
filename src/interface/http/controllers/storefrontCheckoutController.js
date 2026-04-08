@@ -16,6 +16,7 @@ export const storefrontCheckoutController = {
           shopId,
           customerId,
           userId,
+          addressId: req.body.addressId,
           notes: req.body?.notes ?? null
         })
       );
