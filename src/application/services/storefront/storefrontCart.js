@@ -50,7 +50,26 @@ export function createStorefrontCart({ cartRepo, ensureShopForCatalog }) {
     async getCartContents(client, shopIdRaw, scope) {
       const { shopId, cart } = await resolveCart(client, shopIdRaw, scope);
       const items = await cartRepo.listCartItems(client, shopId, cart.id);
-      return { cartId: cart.id, items };
+      let totalPriceMinor = 0;
+      let totalOfferPriceMinor = 0;
+      for (const it of items) {
+        const qty = Number(it.quantity);
+        const unitPrice = Number(it.unit_price_minor);
+        const offerRaw = it.offer_price_minor_per_unit;
+        const offerUnit = offerRaw == null ? unitPrice : Number(offerRaw);
+        totalPriceMinor += Math.round(qty * unitPrice);
+        totalOfferPriceMinor += Math.round(qty * offerUnit);
+      }
+      return {
+        cartId: cart.id,
+        items,
+        summary: {
+          total_price_minor: totalPriceMinor,
+          total_offer_price_minor: totalOfferPriceMinor,
+          total_discount_minor: Math.max(0, totalPriceMinor - totalOfferPriceMinor),
+          currency: "INR"
+        }
+      };
     },
 
     async addItem(client, shopIdRaw, scope, { productId, quantity }) {
@@ -62,6 +81,18 @@ export function createStorefrontCart({ cartRepo, ensureShopForCatalog }) {
       const p = await cartRepo.getProductSnapshotForCart(client, shopId, productId);
       if (!p) {
         throw new NotFoundError("Product not found");
+      }
+      const existing = await cartRepo.findMatchingCartItem(
+        client,
+        shopId,
+        cart.id,
+        p.id,
+        false,
+        null
+      );
+      if (existing) {
+        const mergedQty = Number(existing.quantity) + q;
+        return cartRepo.updateCartItemQuantity(client, shopId, existing.id, mergedQty);
       }
       const row = await cartRepo.insertCartItem(client, {
         cartId: cart.id,

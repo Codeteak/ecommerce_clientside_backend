@@ -89,4 +89,14 @@ export class CartRepo {
     void _itemId;
     throw new Error("Not implemented");
   }
+
+  async findMatchingCartItem(_client, _shopId, _cartId, _productId, _isCustom, _customNote) {
+    void _client;
+    void _shopId;
+    void _cartId;
+    void _productId;
+    void _isCustom;
+    void _customNote;
+    throw new Error("Not implemented");
+  }
 }

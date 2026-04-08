@@ -29,8 +29,10 @@ export class CartRepoPg extends CartRepo {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
       `SELECT ci.id, ci.cart_id, ci.product_id, ci.title_snapshot, ci.quantity::text AS quantity,
-              ci.unit_label, ci.unit_price_minor, ci.is_custom, ci.custom_note
+              ci.unit_label, ci.unit_price_minor, ci.is_custom, ci.custom_note,
+              p.offer_price_minor_per_unit::text AS offer_price_minor_per_unit
          FROM cart_items ci
+         LEFT JOIN products p ON p.id = ci.product_id AND p.shop_id = ci.shop_id
         WHERE ci.cart_id = $1::uuid
         ORDER BY ci.id ASC`,
       [cartId]
@@ -174,6 +176,22 @@ export class CartRepoPg extends CartRepo {
         WHERE ci.id = $1::uuid AND ci.shop_id = $2::uuid
         LIMIT 1`,
       [itemId, shopId]
+    );
+    return rows[0] ?? null;
+  }
+
+  async findMatchingCartItem(client, shopId, cartId, productId, isCustom, customNote) {
+    await setTenantContext(client, shopId);
+    const { rows } = await client.query(
+      `SELECT id, quantity::text AS quantity
+         FROM cart_items
+        WHERE cart_id = $1::uuid
+          AND shop_id = $2::uuid
+          AND product_id IS NOT DISTINCT FROM $3::uuid
+          AND is_custom = $4
+          AND custom_note IS NOT DISTINCT FROM $5
+        LIMIT 1`,
+      [cartId, shopId, productId, isCustom, customNote]
     );
     return rows[0] ?? null;
   }

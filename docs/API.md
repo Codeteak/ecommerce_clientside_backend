@@ -129,8 +129,8 @@ Resolve the shop with **`shopId` / `shop_id` query**, **`x-shop-id` header**, st
 | GET | `/storefront/products` | — | Filters + cursor search |
 | GET | `/storefront/products/:slug` | — | Detail (no `description` field — not in DB) |
 | POST | `/storefront/cart` | optional Bearer | Create/ensure cart; guest uses `cart_session_id` cookie |
-| GET | `/storefront/cart` | optional Bearer | Cart + items (Bearer uses customer cart instead of guest cookie) |
-| POST | `/storefront/cart/items` | optional Bearer | `{ productId, quantity }` |
+| GET | `/storefront/cart` | optional Bearer | Cart + items + `summary` (`total_price_minor`, `total_offer_price_minor`, `total_discount_minor`, `currency`); Bearer uses customer cart, otherwise guest `cart_session_id` cookie |
+| POST | `/storefront/cart/items` | optional Bearer | `{ productId, quantity }`; when same product already exists in the cart, API increments quantity instead of creating a duplicate line |
 | PATCH | `/storefront/cart/items/:itemId` | optional Bearer | `{ quantity }` |
 | DELETE | `/storefront/cart/items/:itemId` | optional Bearer | |
 | POST | `/storefront/checkout` | **Bearer** | `{ notes? }`; transactional order + `order.created` outbox + clears cart; optional `STOREFRONT_ENFORCE_SERVICEABILITY`; triggers internal new-order notification hook by `shopId` |
