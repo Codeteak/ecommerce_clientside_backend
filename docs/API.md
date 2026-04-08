@@ -66,7 +66,7 @@ Common codes: `VALIDATION_ERROR`, `AUTH_ERROR`, `NOT_FOUND`, `CONFLICT`, `ROUTE_
 | Method | Path | Body | Notes |
 |--------|------|------|--------|
 | POST | `/api/auth/register` | `{ shopId, email, password, displayName? }` | **201** — `accessToken`, `user`, `shop`, `customer`, `profile`, … |
-| POST | `/api/auth/login` | `{ email, password, shopId? }` | **200** — `accessToken`, `shopIds`, `profile`, …. Optional `shopId` selects which tenant to merge a guest cart from cookie `cart_session_id` into (defaults to the sole shop when `shopIds.length === 1`). |
+| POST | `/api/auth/login` | `{ email, password, shopId? }` | **200** — `accessToken`, `shopIds`, `profile`, … |
 
 Rate-limited together with OAuth/JWT routes (see server config).
 
@@ -76,7 +76,7 @@ Rate-limited together with OAuth/JWT routes (see server config).
 |--------|------|--------|
 | POST | `/auth/email/register` | Same as `/api/auth/register` |
 | POST | `/auth/email/login` | Same as `/api/auth/login` |
-| POST | `/auth/logout` | **204** — clears `cart_session_id`, OAuth exchange, and serviceability cookies |
+| POST | `/auth/logout` | **204** — clears OAuth exchange and serviceability cookies |
 | GET | `/auth/google` | **302** to `/api/oauth/dev/google-start` (pass through query string) |
 
 ## Google OAuth2
@@ -128,17 +128,25 @@ Resolve the shop with **`shopId` / `shop_id` query**, **`x-shop-id` header**, st
 | GET | `/storefront/categories` | — | Categories + category image when available |
 | GET | `/storefront/products` | — | Filters + cursor search |
 | GET | `/storefront/products/:slug` | — | Detail (no `description` field — not in DB) |
-| POST | `/storefront/cart` | optional Bearer | Create/ensure cart; guest uses `cart_session_id` cookie |
-| GET | `/storefront/cart` | optional Bearer | Cart + items + `summary` (`total_price_minor`, `total_offer_price_minor`, `total_discount_minor`, `currency`); Bearer uses customer cart, otherwise guest `cart_session_id` cookie |
-| POST | `/storefront/cart/items` | optional Bearer | `{ productId, quantity }`; when same product already exists in the cart, API increments quantity instead of creating a duplicate line |
-| PATCH | `/storefront/cart/items/:itemId` | optional Bearer | `{ quantity }` |
-| DELETE | `/storefront/cart/items/:itemId` | optional Bearer | |
-| POST | `/storefront/checkout` | **Bearer** | `{ notes? }`; transactional order + `order.created` outbox + clears cart; optional `STOREFRONT_ENFORCE_SERVICEABILITY`; triggers internal new-order notification hook by `shopId` |
+| POST | `/storefront/cart` | **Bearer** | Create/ensure authenticated customer cart |
+| GET | `/storefront/cart` | **Bearer** | Cart + items + `summary` (`total_price_minor`, `total_offer_price_minor`, `total_discount_minor`, `currency`) |
+| POST | `/storefront/cart/items` | **Bearer** | `{ productId, quantity }`; when same product already exists in the cart, API increments quantity instead of creating a duplicate line |
+| PATCH | `/storefront/cart/items/:itemId` | **Bearer** | `{ quantity }` |
+| DELETE | `/storefront/cart/items/:itemId` | **Bearer** | |
+| POST | `/storefront/checkout` | **Bearer** | `{ addressId, notes? }`; requires selected customer address, live serviceability validation using address coordinates, and all cart products `in_stock`; transactional order + `order.created` outbox + clears cart; optional `STOREFRONT_ENFORCE_SERVICEABILITY`; triggers internal new-order notification hook by `shopId` |
 | POST | `/storefront/profile` | **Bearer** | `{ displayName?, phone? }` (at least one) — `users.phone` + `customers.display_name` |
 | GET | `/storefront/address` | **Bearer** | Current linked address |
 | POST / PATCH | `/storefront/address` | **Bearer** | Create/patch delivery address (`addresses` + `customers.address_id`) |
 | GET | `/storefront/orders` | **Bearer** | Customer orders for tenant |
 | GET | `/storefront/orders/:id` | **Bearer** | Order + line items |
+
+Checkout may return these frontend-friendly error codes:
+- `PHONE_REQUIRED`
+- `ADDRESS_REQUIRED`
+- `ADDRESS_INVALID`
+- `ADDRESS_COORDINATES_REQUIRED`
+- `ADDRESS_NOT_SERVICEABLE`
+- `PRODUCT_UNAVAILABLE`
 
 **Picker / staff note**
 
