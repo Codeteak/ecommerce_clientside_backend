@@ -25,6 +25,14 @@ export const parameters = {
     in: "path",
     required: true,
     schema: { type: "string", format: "uuid" }
+  },
+  IdempotencyKey: {
+    name: "Idempotency-Key",
+    in: "header",
+    required: false,
+    description:
+      "Optional. Send the same value on retries so duplicate checkouts are not created (8–128 characters).",
+    schema: { type: "string", minLength: 8, maxLength: 128 }
   }
 };
 

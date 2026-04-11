@@ -1,5 +1,10 @@
 import { CartRepo } from "../../../application/ports/repositories/CartRepo.js";
+import { AppError } from "../../../domain/errors/AppError.js";
 import { setTenantContext } from "../../../infra/db/tenantContext.js";
+
+function commitErr(code, message) {
+  return new AppError(message, { statusCode: 400, code });
+}
 
 /**
  * Purpose: This file is the PostgreSQL implementation of cart data access.
@@ -156,5 +161,92 @@ export class CartRepoPg extends CartRepo {
       [cartId]
     );
     return rows;
+  }
+
+  async validateCartForCheckoutCommit(client, shopId, cartId) {
+    await setTenantContext(client, shopId);
+    const { rows: shopRows } = await client.query(
+      `SELECT inventory_tracking_enabled FROM shops WHERE id = $1::uuid LIMIT 1`,
+      [shopId]
+    );
+    const inventoryTrackingEnabled = shopRows[0]?.inventory_tracking_enabled === true;
+
+    const { rows: lines } = await client.query(
+      `SELECT ci.id, ci.product_id, ci.quantity::text AS quantity, ci.unit_price_minor,
+              ci.title_snapshot, ci.unit_label, ci.is_custom, ci.custom_note
+         FROM cart_items ci
+        WHERE ci.cart_id = $1::uuid AND ci.shop_id = $2::uuid
+        ORDER BY ci.id ASC`,
+      [cartId, shopId]
+    );
+
+    if (!lines.length) {
+      throw commitErr("CART_EMPTY", "Cart is empty");
+    }
+
+    const productLines = lines.filter((l) => !l.is_custom && l.product_id);
+    const sorted = [...productLines].sort((a, b) => String(a.product_id).localeCompare(String(b.product_id)));
+
+    for (const line of sorted) {
+      const { rows: pRows } = await client.query(
+        `SELECT id, price_minor_per_unit, status, availability
+           FROM products
+          WHERE id = $1::uuid AND shop_id = $2::uuid
+          FOR UPDATE`,
+        [line.product_id, shopId]
+      );
+      const p = pRows[0];
+      if (!p || p.status !== "active" || p.availability !== "in_stock") {
+        throw commitErr(
+          "PRODUCT_UNAVAILABLE",
+          "One or more products are unavailable. Please refresh your cart."
+        );
+      }
+      const listPrice = Number(p.price_minor_per_unit);
+      if (Number(line.unit_price_minor) !== listPrice) {
+        throw commitErr(
+          "PRICE_CHANGED",
+          "A product price was updated. Please refresh your cart and try again."
+        );
+      }
+
+      if (inventoryTrackingEnabled) {
+        const { rows: invRows } = await client.query(
+          `SELECT stock_quantity
+             FROM inventory_items
+            WHERE shop_id = $1::uuid AND product_id = $2::uuid
+            FOR UPDATE`,
+          [shopId, line.product_id]
+        );
+        const inv = invRows[0];
+        if (inv) {
+          const qty = Number(line.quantity);
+          const upd = await client.query(
+            `UPDATE inventory_items
+                SET stock_quantity = stock_quantity - $3::numeric
+              WHERE shop_id = $1::uuid
+                AND product_id = $2::uuid
+                AND stock_quantity >= $3::numeric
+              RETURNING id`,
+            [shopId, line.product_id, qty]
+          );
+          if (!upd.rows.length) {
+            throw commitErr(
+              "INSUFFICIENT_STOCK",
+              "Not enough stock for one or more items. Please adjust quantities and try again."
+            );
+          }
+        }
+      }
+    }
+
+    for (const line of lines) {
+      if (line.is_custom) continue;
+      if (!line.product_id) {
+        throw commitErr("PRODUCT_UNAVAILABLE", "One or more cart lines are invalid.");
+      }
+    }
+
+    return lines;
   }
 }

@@ -21,6 +21,7 @@ export function createExpressApp(ctx) {
   app.set("trust proxy", env.TRUST_PROXY ? env.TRUST_PROXY_HOPS : false);
 
   app.disable("x-powered-by");
+  app.use(helmet());
   app.use(
     pinoHttp({
       logger,
@@ -114,7 +115,6 @@ export function createExpressApp(ctx) {
     );
   }
 
-  app.use(helmet());
   app.use(
     cors({
       origin: env.CORS_ORIGIN,

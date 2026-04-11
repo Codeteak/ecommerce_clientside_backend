@@ -115,6 +115,12 @@ const envSchema = z
     }, z.boolean()),
 
     DATABASE_URL: z.string().min(1),
+    /** Max connections per Node process; size against DB max_connections and replica count. */
+    DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
+    /** Close idle clients after this many ms (node-pg default 10000). */
+    DATABASE_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(10_000),
+    /** Abort connect attempts after this many ms; 0 = no timeout (driver default). */
+    DATABASE_CONNECTION_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(0),
     DATABASE_SSL_REJECT_UNAUTHORIZED: z.preprocess((val) => {
       if (val === true || val === 1) return true;
       if (val === false || val === 0) return false;
@@ -170,6 +176,12 @@ const envSchema = z
     OBJECT_STORAGE_PUBLIC_BASE_URL: z.string().optional().default(""),
 
     REDIS_URL: z.string().optional().default(""),
+
+    /**
+     * In-memory TTL cache for `isCustomerSessionValid` (ms). 0 = always hit DB.
+     * Short values (e.g. 15000) reduce load; revocation may lag by up to this window.
+     */
+    CUSTOMER_SESSION_CHECK_CACHE_MS: z.coerce.number().int().nonnegative().default(0),
 
     STOREFRONT_DELIVERY_FEE_MINOR: z.coerce.number().int().nonnegative().optional().default(0),
 

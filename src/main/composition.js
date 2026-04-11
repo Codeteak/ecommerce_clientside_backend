@@ -25,6 +25,8 @@ import { createUpdateStorefrontProfile } from "../application/services/profile/u
 import { createCheckShopServiceArea } from "../application/services/shops/checkShopServiceArea.js";
 import { createEnsureShopForCatalog } from "../application/services/catalog/ensureShopForCatalog.js";
 import { createCatalogCache } from "../infra/cache/catalogCache.js";
+import { createSessionValidityCache } from "../infra/cache/sessionValidityCache.js";
+import { getSharedRedisClient } from "../infra/redis/sharedRedis.js";
 import { createStorefrontCatalog } from "../application/services/storefront/storefrontCatalog.js";
 import { createStorefrontCart } from "../application/services/storefront/storefrontCart.js";
 import { createCheckoutStorefront } from "../application/services/checkout/checkoutStorefront.js";
@@ -39,9 +41,13 @@ export function createAppContext() {
   const shopLookupRepo = new ShopLookupRepoPg();
   const shopServiceAreaRepo = new ShopServiceAreaRepoPg();
   const ensureShopForCatalog = createEnsureShopForCatalog({ authRepo });
+  const sessionValidityCache = createSessionValidityCache({
+    ttlMs: env.CUSTOMER_SESSION_CHECK_CACHE_MS
+  });
   const customerJwtMiddleware = createRequireCustomerJwt({
     authRepo,
-    skipDbSessionCheck: env.NODE_ENV === "test"
+    skipDbSessionCheck: env.NODE_ENV === "test",
+    sessionValidityCache
   });
 
   const shopResolver = createShopResolver({
@@ -49,7 +55,7 @@ export function createAppContext() {
     storefrontRootDomain: env.STOREFRONT_ROOT_DOMAIN || null
   });
 
-  const catalogCache = createCatalogCache({ redisUrl: env.REDIS_URL, logger });
+  const catalogCache = createCatalogCache({ redis: getSharedRedisClient() });
 
   const storefrontCatalog = createStorefrontCatalog({
     catalogRepo,

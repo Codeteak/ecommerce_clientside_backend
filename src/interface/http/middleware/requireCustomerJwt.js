@@ -4,10 +4,11 @@ import { logApiWarn } from "../../../infra/logging/apiLog.js";
 /**
  * @param {{
  *   authRepo: import("../../../application/ports/repositories/CustomerAuthRepo.js").CustomerAuthRepo,
- *   skipDbSessionCheck: boolean
+ *   skipDbSessionCheck: boolean,
+ *   sessionValidityCache?: { get: (key: string) => boolean | undefined, set: (key: string, valid: boolean) => void }
  * }} deps
  */
-export function createRequireCustomerJwt({ authRepo, skipDbSessionCheck }) {
+export function createRequireCustomerJwt({ authRepo, skipDbSessionCheck, sessionValidityCache }) {
   /**
    * Requires `Authorization: Bearer <JWT>` from `POST /api/auth/oauth/jwt` (or a trusted JWT).
    * Optionally re-checks DB so revoked/blocked users lose access before token expiry.
@@ -45,7 +46,34 @@ export function createRequireCustomerJwt({ authRepo, skipDbSessionCheck }) {
         const customerId = payload.customerId;
 
         if (!skipDbSessionCheck) {
+          const cacheKey = `${userId}:${customerId}`;
+          const cached = sessionValidityCache?.get(cacheKey);
+          if (cached === true) {
+            req.customerAuth = {
+              userId,
+              customerId,
+              shopId: payload.shopId,
+              role: payload.role
+            };
+            return next();
+          }
+          if (cached === false) {
+            logApiWarn("api.auth.rejected", req, {
+              code: "UNAUTHORIZED",
+              reason: "invalid_db_session",
+              userId,
+              customerId
+            });
+            return res.status(401).json({
+              error: {
+                code: "UNAUTHORIZED",
+                message: "Session is no longer valid"
+              }
+            });
+          }
+
           const ok = await authRepo.isCustomerSessionValid(userId, customerId);
+          sessionValidityCache?.set(cacheKey, ok);
           if (!ok) {
             logApiWarn("api.auth.rejected", req, {
               code: "UNAUTHORIZED",

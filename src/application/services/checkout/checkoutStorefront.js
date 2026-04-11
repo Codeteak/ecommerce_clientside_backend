@@ -1,6 +1,5 @@
 import { requireShopId } from "../catalog/catalogShopId.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
-import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { AppError } from "../../../domain/errors/AppError.js";
 import crypto from "node:crypto";
 import { logger } from "../../../config/logger.js";
@@ -40,8 +39,15 @@ export function createCheckoutStorefront({
   emitOrderPlaced = null
 }) {
   return async function checkoutStorefront(client, input) {
-    const { shopId: shopRaw, customerId, userId, addressId, notes, requestMeta } = input;
+    const { shopId: shopRaw, customerId, userId, addressId, notes, requestMeta, idempotencyKey } = input;
     const shopId = requireShopId(shopRaw);
+    const rawIdem = typeof idempotencyKey === "string" ? idempotencyKey.trim() : "";
+    if (rawIdem && (rawIdem.length < 8 || rawIdem.length > 128)) {
+      throw checkoutError(
+        "INVALID_IDEMPOTENCY_KEY",
+        "Idempotency-Key header must be between 8 and 128 characters when provided."
+      );
+    }
     const logBase = {
       event: "api.checkout.failed",
       requestId: requestMeta?.requestId,
@@ -117,21 +123,43 @@ export function createCheckoutStorefront({
       }
 
       const custKey = String(customerId);
-      const cart = await cartRepo.findCartByShopAndCustomerId(client, shopId, custKey);
-      if (!cart) {
-        throw new NotFoundError("Cart not found");
-      }
-      const items = await cartRepo.listCartItems(client, shopId, cart.id);
-      if (!items.length) {
-        throw new ValidationError("Cart is empty");
-      }
 
-      const availability = await cartRepo.listCartProductAvailability(client, shopId, cart.id);
-      for (const row of availability) {
-        if (!row.product_id || row.product_status !== "active" || row.availability !== "in_stock") {
-          throw checkoutError("PRODUCT_UNAVAILABLE", "One or more products are unavailable. Please refresh cart.");
+      if (rawIdem) {
+        await orderRepo.acquireCheckoutIdempotencyLock(client, shopId, custKey, rawIdem);
+        const existingOrderId = await orderRepo.findCheckoutIdempotencyOrderId(client, shopId, custKey, rawIdem);
+        if (existingOrderId) {
+          const summary = await orderRepo.getOrderSummaryForCheckoutReplay(
+            client,
+            shopId,
+            existingOrderId,
+            custKey
+          );
+          if (summary) {
+            logger.info(
+              {
+                event: "api.checkout.idempotent_replay",
+                requestId: requestMeta?.requestId,
+                shopId,
+                customerId,
+                orderId: summary.id
+              },
+              "Checkout idempotent replay"
+            );
+            return {
+              orderId: summary.id,
+              orderNumber: summary.order_number,
+              total_minor: Number(summary.total_minor)
+            };
+          }
         }
       }
+
+      const cart = await cartRepo.findCartByShopAndCustomerId(client, shopId, custKey);
+      if (!cart) {
+        throw new AppError("Cart not found", { statusCode: 404, code: "CART_NOT_FOUND" });
+      }
+
+      const items = await cartRepo.validateCartForCheckoutCommit(client, shopId, cart.id);
 
       let subtotal = 0;
       const orderItems = items.map((it) => {
@@ -179,6 +207,15 @@ export function createCheckoutStorefront({
         items: orderItems,
         outboxPayload
       });
+
+      if (rawIdem) {
+        await orderRepo.insertCheckoutIdempotency(client, {
+          shopId,
+          customerIdText: custKey,
+          idempotencyKey: rawIdem,
+          orderId: order.id
+        });
+      }
 
       await cartRepo.deleteCartItemsForCart(client, shopId, cart.id);
       await cartRepo.deleteCart(client, shopId, cart.id);

@@ -14,17 +14,19 @@ const pool = new pg.Pool({
 });
 
 const migrationsDir = path.join(__dirname, "../migrations");
-const schemaFile = "001_full_schema.sql";
-const sqlPath = path.join(migrationsDir, schemaFile);
+const migrationFiles = ["001_full_schema.sql", "002_checkout_idempotency.sql"];
 
 try {
-  if (!fs.existsSync(sqlPath)) {
-    throw new Error(`Missing canonical schema: migrations/${schemaFile}`);
+  for (const schemaFile of migrationFiles) {
+    const sqlPath = path.join(migrationsDir, schemaFile);
+    if (!fs.existsSync(sqlPath)) {
+      throw new Error(`Missing migration: migrations/${schemaFile}`);
+    }
+    const sql = fs.readFileSync(sqlPath, "utf8");
+    await pool.query(sql);
+    // eslint-disable-next-line no-console
+    console.log("Applied schema:", schemaFile);
   }
-  const sql = fs.readFileSync(sqlPath, "utf8");
-  await pool.query(sql);
-  // eslint-disable-next-line no-console
-  console.log("Applied schema:", schemaFile);
 } finally {
   await pool.end();
 }

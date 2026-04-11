@@ -423,8 +423,10 @@ export function buildPaths() {
       post: {
         tags: ["Storefront checkout"],
         summary: "Place order",
+        description:
+          "Send `Idempotency-Key` (optional) on the client to make retries safe (same key returns the same order).",
         security: [{ bearerAuth: [] }],
-        parameters: [...shopParams],
+        parameters: [...shopParams, P.IdempotencyKey],
         requestBody: {
           required: true,
           content: { "application/json": { schema: { $ref: "#/components/schemas/CheckoutBody" } } }

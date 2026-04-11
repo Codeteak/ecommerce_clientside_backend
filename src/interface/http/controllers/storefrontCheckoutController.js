@@ -11,6 +11,8 @@ function postHandler(ctx) {
     try {
       const shopId = requireShopId(req.shopId);
       const { userId, customerId } = req.customerAuth;
+      const idempotencyKey =
+        typeof req.get("Idempotency-Key") === "string" ? req.get("Idempotency-Key").trim() : "";
       const out = await withTx((c) =>
         ctx.checkoutStorefront(c, {
           shopId,
@@ -18,6 +20,7 @@ function postHandler(ctx) {
           userId,
           addressId: req.body.addressId,
           notes: req.body?.notes ?? null,
+          idempotencyKey,
           requestMeta: {
             requestId: req.id,
             method: req.method,

@@ -14,6 +14,13 @@ import { createExpressApp } from "./server.js";
 async function main() {
   await pool.query("select 1 as ok");
 
+  if (env.NODE_ENV === "production" && !env.REDIS_URL) {
+    logger.warn(
+      "REDIS_URL is not set: rate limits use per-process memory and catalog has no Redis cache. " +
+        "Set REDIS_URL when running multiple instances or for shared rate-limit state."
+    );
+  }
+
   const ctx = createAppContext();
   const app = createExpressApp(ctx);
   const server = http.createServer(app);

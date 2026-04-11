@@ -98,4 +98,16 @@ export class CartRepo {
     void _cartId;
     throw new Error("Not implemented");
   }
+
+  /**
+   * Locks product rows (ordered by product id), verifies live price vs cart line and availability,
+   * optionally decrements inventory when the shop has inventory tracking and a row exists.
+   * Call inside the checkout transaction before creating the order.
+   */
+  async validateCartForCheckoutCommit(_client, _shopId, _cartId) {
+    void _client;
+    void _shopId;
+    void _cartId;
+    throw new Error("Not implemented");
+  }
 }

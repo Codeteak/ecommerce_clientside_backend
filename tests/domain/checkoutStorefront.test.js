@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
+import { AppError } from "../../src/domain/errors/AppError.js";
 import { createCheckoutStorefront } from "../../src/application/services/checkout/checkoutStorefront.js";
 
 function deps() {
   return {
     cartRepo: {
       findCartByShopAndCustomerId: vi.fn().mockResolvedValue({ id: "cart-1" }),
-      listCartItems: vi.fn().mockResolvedValue([
+      validateCartForCheckoutCommit: vi.fn().mockResolvedValue([
         {
           product_id: "11111111-1111-4111-8111-111111111111",
           title_snapshot: "A",
@@ -14,14 +15,6 @@ function deps() {
           unit_price_minor: 100,
           is_custom: false,
           custom_note: null
-        }
-      ]),
-      listCartProductAvailability: vi.fn().mockResolvedValue([
-        {
-          cart_item_id: "ci-1",
-          product_id: "11111111-1111-4111-8111-111111111111",
-          product_status: "active",
-          availability: "in_stock"
         }
       ]),
       getProductSnapshotForCart: vi.fn().mockResolvedValue({
@@ -37,7 +30,11 @@ function deps() {
     },
     orderRepo: {
       insertOrderWithItemsAndOutbox: vi.fn().mockResolvedValue({ id: "order-1" }),
-      insertOutboxEvent: vi.fn().mockResolvedValue(undefined)
+      insertOutboxEvent: vi.fn().mockResolvedValue(undefined),
+      acquireCheckoutIdempotencyLock: vi.fn().mockResolvedValue(undefined),
+      findCheckoutIdempotencyOrderId: vi.fn().mockResolvedValue(null),
+      insertCheckoutIdempotency: vi.fn().mockResolvedValue(undefined),
+      getOrderSummaryForCheckoutReplay: vi.fn().mockResolvedValue(null)
     },
     authRepo: {
       getMembershipByCustomerAndShop: vi.fn().mockResolvedValue({
@@ -122,12 +119,12 @@ describe("checkoutStorefront validations", () => {
 
   it("fails when any cart product is not in stock", async () => {
     const d = deps();
-    d.cartRepo.listCartProductAvailability = vi.fn().mockResolvedValue([{
-      cart_item_id: "ci-1",
-      product_id: "11111111-1111-4111-8111-111111111111",
-      product_status: "active",
-      availability: "out_of_stock"
-    }]);
+    d.cartRepo.validateCartForCheckoutCommit = vi.fn().mockRejectedValue(
+      new AppError("One or more products are unavailable. Please refresh your cart.", {
+        statusCode: 400,
+        code: "PRODUCT_UNAVAILABLE"
+      })
+    );
     const run = createCheckoutStorefront(d);
     await expect(
       run({}, {
@@ -137,6 +134,30 @@ describe("checkoutStorefront validations", () => {
         addressId: "22222222-2222-4222-8222-222222222222"
       })
     ).rejects.toMatchObject({ code: "PRODUCT_UNAVAILABLE" });
+  });
+
+  it("returns existing order when idempotency key matches a completed checkout", async () => {
+    const d = deps();
+    d.orderRepo.findCheckoutIdempotencyOrderId = vi.fn().mockResolvedValue("order-existing");
+    d.orderRepo.getOrderSummaryForCheckoutReplay = vi.fn().mockResolvedValue({
+      id: "order-existing",
+      order_number: "ORD-1",
+      total_minor: "99"
+    });
+    const run = createCheckoutStorefront(d);
+    const out = await run(
+      {},
+      {
+        shopId: "00000000-0000-4000-8000-000000000001",
+        customerId: "cust-1",
+        userId: "user-1",
+        addressId: "22222222-2222-4222-8222-222222222222",
+        idempotencyKey: "idem-key-12345678"
+      }
+    );
+    expect(out).toEqual({ orderId: "order-existing", orderNumber: "ORD-1", total_minor: 99 });
+    expect(d.cartRepo.validateCartForCheckoutCommit).not.toHaveBeenCalled();
+    expect(d.orderRepo.insertOrderWithItemsAndOutbox).not.toHaveBeenCalled();
   });
 
   it("creates order on valid checkout path", async () => {
@@ -173,6 +194,46 @@ describe("checkoutStorefront validations", () => {
       orderId: "order-1",
       total_minor: 120
     });
+    expect(d.orderRepo.insertCheckoutIdempotency).not.toHaveBeenCalled();
+  });
+
+  it("records idempotency mapping when Idempotency-Key is provided", async () => {
+    const d = deps();
+    const run = createCheckoutStorefront(d);
+    await run(
+      {},
+      {
+        shopId: "00000000-0000-4000-8000-000000000001",
+        customerId: "cust-1",
+        userId: "user-1",
+        addressId: "22222222-2222-4222-8222-222222222222",
+        idempotencyKey: "checkout-key-abcdefgh"
+      }
+    );
+    expect(d.orderRepo.insertCheckoutIdempotency).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        idempotencyKey: "checkout-key-abcdefgh",
+        orderId: "order-1"
+      })
+    );
+  });
+
+  it("rejects idempotency keys outside 8–128 characters", async () => {
+    const d = deps();
+    const run = createCheckoutStorefront(d);
+    await expect(
+      run(
+        {},
+        {
+          shopId: "00000000-0000-4000-8000-000000000001",
+          customerId: "cust-1",
+          userId: "user-1",
+          addressId: "22222222-2222-4222-8222-222222222222",
+          idempotencyKey: "short"
+        }
+      )
+    ).rejects.toMatchObject({ code: "INVALID_IDEMPOTENCY_KEY" });
   });
 
   it("emits standardized order.placed payload after successful checkout", async () => {

@@ -2,8 +2,8 @@
 
 import rateLimit from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
-import Redis from "ioredis";
 import { env } from "../../../config/env.js";
+import { getSharedRedisClient } from "../../../infra/redis/sharedRedis.js";
 import { sendTooManyRequests } from "../responses/httpResponses.js";
 
 /**
@@ -14,17 +14,9 @@ function withKeyGenerator(customKeyGenerator) {
   return (req, res) => customKeyGenerator(req, res);
 }
 
-let redisClient = null;
-
 function buildStoreIfConfigured() {
-  if (!env.REDIS_URL) return undefined;
-  if (!redisClient) {
-    redisClient = new Redis(env.REDIS_URL, {
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-      enableOfflineQueue: false
-    });
-  }
+  const redisClient = getSharedRedisClient();
+  if (!redisClient) return undefined;
   return new RedisStore({
     sendCommand: (...args) => redisClient.call(...args)
   });

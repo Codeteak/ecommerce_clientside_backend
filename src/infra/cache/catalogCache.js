@@ -1,12 +1,12 @@
-import Redis from "ioredis";
-
 /**
  * Purpose: This file creates a small cache helper for catalog reads.
  * It uses Redis when available, and safely falls back to no-cache mode
  * so catalog endpoints still work if Redis is disabled or unavailable.
+ *
+ * @param {{ redis: import("ioredis").default | null }} opts
  */
-export function createCatalogCache({ redisUrl, logger }) {
-  if (!redisUrl) {
+export function createCatalogCache({ redis }) {
+  if (!redis) {
     return {
       async get(_key) {
         return null;
@@ -18,16 +18,8 @@ export function createCatalogCache({ redisUrl, logger }) {
     };
   }
 
-  let client = null;
-
   function getClient() {
-    if (!client) {
-      client = new Redis(redisUrl, { maxRetriesPerRequest: 2, lazyConnect: true });
-      client.on("error", (err) => {
-        logger?.warn?.({ err }, "Redis catalog cache error");
-      });
-    }
-    return client;
+    return redis;
   }
 
   return {

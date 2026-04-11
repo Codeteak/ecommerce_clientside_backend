@@ -234,4 +234,46 @@ export class OrderRepoPg extends OrderRepo {
       [row.aggregateType, row.aggregateId, row.eventType, JSON.stringify(row.payload)]
     );
   }
+
+  async acquireCheckoutIdempotencyLock(client, shopId, customerIdText, idempotencyKey) {
+    await setTenantContext(client, shopId);
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1::text), hashtext($2::text || chr(0) || $3::text))`, [
+      shopId,
+      customerIdText,
+      idempotencyKey
+    ]);
+  }
+
+  async findCheckoutIdempotencyOrderId(client, shopId, customerIdText, idempotencyKey) {
+    await setTenantContext(client, shopId);
+    const { rows } = await client.query(
+      `SELECT order_id::text AS order_id
+         FROM checkout_idempotency
+        WHERE shop_id = $1::uuid AND customer_id = $2 AND idempotency_key = $3
+        LIMIT 1`,
+      [shopId, customerIdText, idempotencyKey]
+    );
+    return rows[0]?.order_id ?? null;
+  }
+
+  async insertCheckoutIdempotency(client, { shopId, customerIdText, idempotencyKey, orderId }) {
+    await setTenantContext(client, shopId);
+    await client.query(
+      `INSERT INTO checkout_idempotency (shop_id, customer_id, idempotency_key, order_id)
+       VALUES ($1::uuid, $2, $3, $4::uuid)`,
+      [shopId, customerIdText, idempotencyKey, orderId]
+    );
+  }
+
+  async getOrderSummaryForCheckoutReplay(client, shopId, orderId, customerIdText) {
+    await setTenantContext(client, shopId);
+    const { rows } = await client.query(
+      `SELECT id::text AS id, order_number, total_minor::text AS total_minor
+         FROM orders
+        WHERE id = $1::uuid AND shop_id = $2::uuid AND customer_id = $3
+        LIMIT 1`,
+      [orderId, shopId, customerIdText]
+    );
+    return rows[0] ?? null;
+  }
 }
