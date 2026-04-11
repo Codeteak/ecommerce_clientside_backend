@@ -11,10 +11,14 @@ export class OrderRepo {
     throw new Error("Not implemented");
   }
 
-  async listOrdersForCustomer(_client, _shopId, _customerIdText) {
+  /**
+   * @param {{ limit?: number }} [_opts] max 100, default 50
+   */
+  async listOrdersForCustomer(_client, _shopId, _customerIdText, _opts) {
     void _client;
     void _shopId;
     void _customerIdText;
+    void _opts;
     throw new Error("Not implemented");
   }
 

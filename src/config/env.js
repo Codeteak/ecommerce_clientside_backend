@@ -47,7 +47,10 @@ function rawEnv() {
           JWT_ACCESS_EXPIRES_IN: "15m",
           JWT_REFRESH_EXPIRES_IN: "30d",
           JWT_KEY_ID: "dev-v1",
-          JWT_ALLOWED_ALGORITHMS: "HS256"
+          JWT_ALLOWED_ALGORITHMS: "HS256",
+          STOREFRONT_CATALOG_CACHE_TTL_SEC: "60",
+          STOREFRONT_CATALOG_HTTP_CACHE_SEC: "0",
+          CATALOG_CACHE_INVALIDATE_TOKEN: ""
         }
       : null;
 
@@ -191,7 +194,19 @@ const envSchema = z
       if (val === undefined || val === null || val === "") return false;
       const s = String(val).toLowerCase();
       return s === "true" || s === "1" || s === "yes";
-    }, z.boolean())
+    }, z.boolean()),
+
+    /** Redis catalog cache entry TTL (seconds). 0 = skip Redis for catalog reads (always fresh). Max 24h. */
+    STOREFRONT_CATALOG_CACHE_TTL_SEC: z.coerce.number().int().min(0).max(86_400).default(60),
+
+    /**
+     * Optional `Cache-Control: public, max-age=N` for catalog GET responses (browser/CDN).
+     * 0 = do not set. Keep N ≤ catalog Redis TTL to avoid stale content longer than origin cache.
+     */
+    STOREFRONT_CATALOG_HTTP_CACHE_SEC: z.coerce.number().int().min(0).max(86_400).default(0),
+
+    /** If non-empty, POST /storefront/catalog/cache/invalidate is enabled (requires matching header). */
+    CATALOG_CACHE_INVALIDATE_TOKEN: z.string().optional().default("")
   })
   .superRefine((val, ctx) => {
     if (val.NODE_ENV === "production" && !val.DATABASE_URL?.trim()) {
@@ -264,5 +279,8 @@ export const env = {
   OBJECT_STORAGE_PUBLIC_BASE_URL: parsed.data.OBJECT_STORAGE_PUBLIC_BASE_URL?.trim() || "",
   REDIS_URL: parsed.data.REDIS_URL?.trim() || "",
   STOREFRONT_DELIVERY_FEE_MINOR: parsed.data.STOREFRONT_DELIVERY_FEE_MINOR ?? 0,
-  STOREFRONT_ENFORCE_SERVICEABILITY: parsed.data.STOREFRONT_ENFORCE_SERVICEABILITY ?? false
+  STOREFRONT_ENFORCE_SERVICEABILITY: parsed.data.STOREFRONT_ENFORCE_SERVICEABILITY ?? false,
+  STOREFRONT_CATALOG_CACHE_TTL_SEC: parsed.data.STOREFRONT_CATALOG_CACHE_TTL_SEC ?? 60,
+  STOREFRONT_CATALOG_HTTP_CACHE_SEC: parsed.data.STOREFRONT_CATALOG_HTTP_CACHE_SEC ?? 0,
+  CATALOG_CACHE_INVALIDATE_TOKEN: parsed.data.CATALOG_CACHE_INVALIDATE_TOKEN?.trim() || ""
 };

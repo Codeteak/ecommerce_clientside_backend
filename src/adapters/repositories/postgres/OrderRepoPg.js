@@ -105,15 +105,17 @@ export class OrderRepoPg extends OrderRepo {
     return order;
   }
 
-  async listOrdersForCustomer(client, shopId, customerIdText) {
+  async listOrdersForCustomer(client, shopId, customerIdText, opts = {}) {
     await setTenantContext(client, shopId);
+    const raw = opts?.limit ?? 50;
+    const limit = Math.min(Math.max(Number(raw) || 50, 1), 100);
     const { rows } = await client.query(
       `SELECT id, order_number, status, total_minor, currency, placed_at, picker_id, picker_name
          FROM orders
         WHERE shop_id = $1::uuid AND customer_id = $2
         ORDER BY placed_at DESC
-        LIMIT 100`,
-      [shopId, customerIdText]
+        LIMIT $3::int`,
+      [shopId, customerIdText, limit]
     );
     if (!rows.length) return rows;
 

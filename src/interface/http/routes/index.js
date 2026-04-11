@@ -138,7 +138,8 @@ export function createRoutes(ctx) {
     storefrontCart,
     storefrontCheckout,
     storefrontAccount,
-    storefrontOrders
+    storefrontOrders,
+    invalidateShopCatalogCache: ctx.invalidateShopCatalogCache
   });
 
   return r;

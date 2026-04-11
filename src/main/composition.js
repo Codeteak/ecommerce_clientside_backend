@@ -60,7 +60,8 @@ export function createAppContext() {
   const storefrontCatalog = createStorefrontCatalog({
     catalogRepo,
     ensureShopForCatalog,
-    catalogCache
+    catalogCache,
+    catalogCacheTtlSec: env.STOREFRONT_CATALOG_CACHE_TTL_SEC
   });
 
   const storefrontCart = createStorefrontCart({ cartRepo, ensureShopForCatalog });
@@ -126,6 +127,8 @@ export function createAppContext() {
     assertCustomerShopAccess,
     updateStorefrontProfile,
     checkoutStorefront,
+    storefrontCatalogHttpCacheSec: env.STOREFRONT_CATALOG_HTTP_CACHE_SEC,
+    invalidateShopCatalogCache: (shopId) => catalogCache.invalidateShopCatalog(shopId),
     get emitOrderPlaced() {
       return realtime.emitOrderPlaced;
     },

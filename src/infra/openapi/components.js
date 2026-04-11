@@ -33,6 +33,13 @@ export const parameters = {
     description:
       "Optional. Send the same value on retries so duplicate checkouts are not created (8–128 characters).",
     schema: { type: "string", minLength: 8, maxLength: 128 }
+  },
+  OrdersLimit: {
+    name: "limit",
+    in: "query",
+    required: false,
+    description: "Max orders to return (1–100, default 50).",
+    schema: { type: "integer", minimum: 1, maximum: 100, default: 50 }
   }
 };
 

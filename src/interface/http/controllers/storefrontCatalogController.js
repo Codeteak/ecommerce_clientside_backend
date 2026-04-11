@@ -15,12 +15,20 @@ function shopIdForStorefront(req) {
   }
 }
 
+function setCatalogHttpCache(ctx, res) {
+  const n = ctx.storefrontCatalogHttpCacheSec;
+  if (typeof n === "number" && n > 0) {
+    res.setHeader("Cache-Control", `public, max-age=${n}, s-maxage=${n}`);
+  }
+}
+
 function listCategoriesHandler(ctx) {
   return async (req, res, next) => {
     try {
       const shopId = shopIdForStorefront(req);
       const parentId = req.query.parent_id ?? undefined;
       const categories = await ctx.storefrontCatalog.listCategories(shopId, { parentId });
+      setCatalogHttpCache(ctx, res);
       res.json({ categories });
     } catch (err) {
       next(err);
@@ -44,6 +52,7 @@ function listProductsHandler(ctx) {
         sortBy: req.query.sort_by,
         sortOrder: req.query.sort_order
       });
+      setCatalogHttpCache(ctx, res);
       res.json(result);
     } catch (err) {
       next(err);
@@ -60,6 +69,7 @@ function getProductBySlugHandler(ctx) {
       if (!product) {
         throw new NotFoundError("Product not found");
       }
+      setCatalogHttpCache(ctx, res);
       res.json(product);
     } catch (err) {
       next(err);

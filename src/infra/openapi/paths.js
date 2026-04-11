@@ -244,6 +244,8 @@ export function buildPaths() {
       get: {
         tags: ["Storefront catalog"],
         summary: "List categories",
+        description:
+          "When `STOREFRONT_CATALOG_HTTP_CACHE_SEC` is set on the server, responses may include `Cache-Control` for CDN/browser caching.",
         parameters: [
           ...shopParams,
           {
@@ -262,6 +264,41 @@ export function buildPaths() {
             }
           },
           "400": jsonErr
+        }
+      }
+    },
+    "/storefront/catalog/cache/invalidate": {
+      post: {
+        tags: ["Storefront catalog"],
+        summary: "Purge Redis catalog cache for a shop",
+        description:
+          "Only available when the API is configured with `CATALOG_CACHE_INVALIDATE_TOKEN`. Send that token in `X-Catalog-Cache-Invalidate`.",
+        parameters: [
+          ...shopParams,
+          {
+            name: "X-Catalog-Cache-Invalidate",
+            in: "header",
+            required: true,
+            schema: { type: "string" }
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                required: ["shopId"],
+                properties: { shopId: { type: "string", format: "uuid" } }
+              }
+            }
+          }
+        },
+        responses: {
+          "204": { description: "No content" },
+          "403": jsonErr,
+          "429": jsonErr
         }
       }
     },
@@ -530,7 +567,7 @@ export function buildPaths() {
         tags: ["Storefront orders"],
         summary: "List customer orders",
         security: [{ bearerAuth: [] }],
-        parameters: [...shopParams],
+        parameters: [...shopParams, P.OrdersLimit],
         responses: {
           "200": {
             description: "OK",

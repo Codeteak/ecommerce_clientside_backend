@@ -12,9 +12,10 @@ function listHandler(ctx) {
     try {
       const shopId = requireShopId(req.shopId);
       const { customerId } = req.customerAuth;
+      const limit = req.query.limit;
       const rows = await withClient(async (c) => {
         await ctx.assertCustomerShopAccess(c, shopId, customerId);
-        return ctx.orderRepo.listOrdersForCustomer(c, shopId, String(customerId));
+        return ctx.orderRepo.listOrdersForCustomer(c, shopId, String(customerId), { limit });
       });
       res.json({ orders: rows });
     } catch (err) {

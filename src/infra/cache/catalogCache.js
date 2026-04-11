@@ -14,7 +14,8 @@ export function createCatalogCache({ redis }) {
       async set(_key, _value, _ttlSec) {},
       async wrap(_key, ttlSec, fn) {
         return fn();
-      }
+      },
+      async invalidateShopCatalog(_shopId) {}
     };
   }
 
@@ -48,6 +49,28 @@ export function createCatalogCache({ redis }) {
       const v = await fn();
       await this.set(key, v, ttlSec);
       return v;
+    },
+
+    /**
+     * Deletes all Redis keys for a shop’s catalog cache (`shop:<uuid>:*`).
+     * Use after admin catalog changes when Redis is enabled.
+     */
+    async invalidateShopCatalog(shopId) {
+      const c = getClient();
+      const pattern = `shop:${shopId}:*`;
+      let cursor = "0";
+      try {
+        do {
+          const res = await c.scan(cursor, "MATCH", pattern, "COUNT", 500);
+          cursor = res[0];
+          const keys = res[1];
+          if (keys.length) {
+            await c.del(...keys);
+          }
+        } while (cursor !== "0");
+      } catch {
+        // best-effort; callers should not fail storefront reads
+      }
     }
   };
 }

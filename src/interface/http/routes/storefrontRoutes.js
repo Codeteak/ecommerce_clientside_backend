@@ -1,6 +1,12 @@
 // Purpose: Storefront location, catalog, cart, checkout, account, and orders.
 
 import { z } from "zod";
+import { env } from "../../../config/env.js";
+import { validate } from "../middleware/validate.js";
+import {
+  storefrontCatalogCacheInvalidateBodySchema,
+  storefrontOrdersListQuerySchema
+} from "../validations/storefrontRestSchemas.js";
 
 const cartItemIdParamSchema = z.object({
   itemId: z.string().uuid()
@@ -29,7 +35,8 @@ export function mountStorefrontRoutes(r, deps) {
     storefrontCart,
     storefrontCheckout,
     storefrontAccount,
-    storefrontOrders
+    storefrontOrders,
+    invalidateShopCatalogCache
   } = deps;
 
   r.post(
@@ -109,7 +116,34 @@ export function mountStorefrontRoutes(r, deps) {
     storefrontAccount.patchAddress
   );
 
-  r.get("/storefront/orders", requireCustomerJwt, storefrontOrders.list);
+  r.get(
+    "/storefront/orders",
+    requireCustomerJwt,
+    validate({ query: storefrontOrdersListQuerySchema }),
+    storefrontOrders.list
+  );
+
+  if (env.CATALOG_CACHE_INVALIDATE_TOKEN && typeof invalidateShopCatalogCache === "function") {
+    r.post(
+      "/storefront/catalog/cache/invalidate",
+      authLimiter,
+      validate({ body: storefrontCatalogCacheInvalidateBodySchema }),
+      (req, res, next) => {
+        const token = req.get("X-Catalog-Cache-Invalidate");
+        if (!token || token !== env.CATALOG_CACHE_INVALIDATE_TOKEN) {
+          return res.status(403).json({
+            error: {
+              code: "FORBIDDEN",
+              message: "Invalid or missing X-Catalog-Cache-Invalidate token"
+            }
+          });
+        }
+        Promise.resolve(invalidateShopCatalogCache(req.body.shopId))
+          .then(() => res.status(204).send())
+          .catch(next);
+      }
+    );
+  }
   r.get(
     "/storefront/orders/:id",
     requireCustomerJwt,

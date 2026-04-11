@@ -8,7 +8,6 @@ import { ValidationError } from "../../../domain/errors/ValidationError.js";
  * It validates shop context, handles pagination cursors, applies caching,
  * and maps database rows into API-friendly product/category responses.
  */
-const CACHE_TTL_SEC = 60;
 
 function mapCategoryRow(r) {
   const imageUrl = toPublicMediaUrl(r.image_storage_key);
@@ -90,13 +89,27 @@ function mapProductRow(r) {
   };
 }
 
-export function createStorefrontCatalog({ catalogRepo, ensureShopForCatalog, catalogCache }) {
+export function createStorefrontCatalog({
+  catalogRepo,
+  ensureShopForCatalog,
+  catalogCache,
+  catalogCacheTtlSec = 60
+}) {
+  const ttl = Number(catalogCacheTtlSec) || 0;
+
+  async function cached(key, fn) {
+    if (ttl <= 0) {
+      return fn();
+    }
+    return catalogCache.wrap(key, ttl, fn);
+  }
+
   return {
     async listCategories(shopIdRaw, { parentId }) {
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
       const key = `shop:${shopId}:categories:${parentId ?? "root"}`;
-      return catalogCache.wrap(key, CACHE_TTL_SEC, async () => {
+      return cached(key, async () => {
         const rows = await catalogRepo.listCategoriesStorefront(shopId, { parentId });
         return rows.map(mapCategoryRow);
       });
@@ -128,7 +141,7 @@ export function createStorefrontCatalog({ catalogRepo, ensureShopForCatalog, cat
       }
       const qPattern = toIlikePattern(search ?? null);
       const key = `shop:${shopId}:products:v2:${categoryId ?? "all"}:${brandId ?? "all"}:${qPattern ?? "q"}:${availability ?? "any"}:${minPriceMinor ?? "min"}:${maxPriceMinor ?? "max"}:${resolvedSortBy}:${resolvedSortOrder}:${lim}:cur:${cursor ?? "none"}`;
-      const items = await catalogCache.wrap(key, CACHE_TTL_SEC, async () => {
+      const items = await cached(key, async () => {
         const rows = await catalogRepo.listProductsStorefront(shopId, {
           categoryId: categoryId ?? null,
           brandId: brandId ?? null,
@@ -164,7 +177,7 @@ export function createStorefrontCatalog({ catalogRepo, ensureShopForCatalog, cat
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
       const key = `shop:${shopId}:product:${String(slug).toLowerCase()}`;
-      const data = await catalogCache.wrap(key, CACHE_TTL_SEC, async () => catalogRepo.getProductBySlugStorefront(shopId, slug));
+      const data = await cached(key, async () => catalogRepo.getProductBySlugStorefront(shopId, slug));
       if (!data) return null;
       const { product, gallery } = data;
       return {

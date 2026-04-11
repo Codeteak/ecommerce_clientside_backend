@@ -47,3 +47,14 @@ export const storefrontCheckoutBodySchema = z.object({
 export const storefrontOrderIdParamSchema = z.object({
   id: z.string().uuid()
 });
+
+export const storefrontOrdersListQuerySchema = z.object({
+  limit: z.preprocess(
+    (v) => (v === undefined || v === "" ? undefined : Number(v)),
+    z.number().int().min(1).max(100).optional()
+  )
+});
+
+export const storefrontCatalogCacheInvalidateBodySchema = z.object({
+  shopId: z.string().uuid()
+});
