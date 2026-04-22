@@ -66,7 +66,9 @@ export function createAppContext() {
   const customerJwtMiddleware = createRequireCustomerJwt({
     authRepo,
     skipDbSessionCheck: env.NODE_ENV === "test",
-    sessionValidityCache
+    sessionValidityCache,
+    shouldUseSessionCache: (req) =>
+      req.method === "GET" && (req.path === "/api/me/profile" || req.path === "/storefront/cart")
   });
 
   const shopResolver = createShopResolver({

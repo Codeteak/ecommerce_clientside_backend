@@ -6,10 +6,16 @@ import { logApiWarn } from "../../../infra/logging/apiLog.js";
  * @param {{
  *   authRepo: import("../../../application/ports/repositories/CustomerAuthRepo.js").CustomerAuthRepo,
  *   skipDbSessionCheck: boolean,
- *   sessionValidityCache?: { get: (key: string) => Promise<boolean | undefined> | boolean | undefined, set: (key: string, valid: boolean, ttlMs?: number) => Promise<void> | void }
+ *   sessionValidityCache?: { get: (key: string) => Promise<boolean | undefined> | boolean | undefined, set: (key: string, valid: boolean, ttlMs?: number) => Promise<void> | void },
+ *   shouldUseSessionCache?: (req: import("express").Request) => boolean
  * }} deps
  */
-export function createRequireCustomerJwt({ authRepo, skipDbSessionCheck, sessionValidityCache }) {
+export function createRequireCustomerJwt({
+  authRepo,
+  skipDbSessionCheck,
+  sessionValidityCache,
+  shouldUseSessionCache = () => true
+}) {
   /**
    * Requires `Authorization: Bearer <JWT>` from `POST /api/auth/oauth/jwt` (or a trusted JWT).
    * Optionally re-checks DB so revoked/blocked users lose access before token expiry.
@@ -49,34 +55,39 @@ export function createRequireCustomerJwt({ authRepo, skipDbSessionCheck, session
 
         if (!skipDbSessionCheck) {
           const cacheKey = `${userId}:${sessionId}`;
-          const cached = await sessionValidityCache?.get(cacheKey);
-          if (cached === true) {
-            req.customerAuth = {
-              userId,
-              customerId,
-              shopId: payload.shopId,
-              role: payload.role
-            };
-            return next();
-          }
-          if (cached === false) {
-            logApiWarn("api.auth.rejected", req, {
-              code: "UNAUTHORIZED",
-              reason: "invalid_db_session",
-              userId,
-              customerId
-            });
-            return res.status(401).json({
-              error: {
+          const useCache = shouldUseSessionCache(req);
+          if (useCache) {
+            const cached = await sessionValidityCache?.get(cacheKey);
+            if (cached === true) {
+              req.customerAuth = {
+                userId,
+                customerId,
+                shopId: payload.shopId,
+                role: payload.role
+              };
+              return next();
+            }
+            if (cached === false) {
+              logApiWarn("api.auth.rejected", req, {
                 code: "UNAUTHORIZED",
-                message: "Session is no longer valid"
-              }
-            });
+                reason: "invalid_db_session",
+                userId,
+                customerId
+              });
+              return res.status(401).json({
+                error: {
+                  code: "UNAUTHORIZED",
+                  message: "Session is no longer valid"
+                }
+              });
+            }
           }
 
           const ok = await authRepo.isCustomerSessionValid(userId, customerId);
           const ttlMs = Number(payload.exp) * 1000 - Date.now();
-          await sessionValidityCache?.set(cacheKey, ok, ttlMs);
+          if (useCache) {
+            await sessionValidityCache?.set(cacheKey, ok, ttlMs);
+          }
           if (!ok) {
             logApiWarn("api.auth.rejected", req, {
               code: "UNAUTHORIZED",

@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import { SmsSender } from "../../application/ports/SmsSender.js";
 import { logger } from "../../config/logger.js";
+import { withRetry } from "../../utils/withRetry.js";
 
 export class SmtpOtpSender extends SmsSender {
   constructor({
@@ -25,12 +26,22 @@ export class SmtpOtpSender extends SmsSender {
   }
 
   async sendOtp({ to, code }) {
-    await this.transporter.sendMail({
-      from: this.fromEmail,
-      to,
-      subject: "Your OTP Code",
-      text: `Your OTP code is ${code}. This code expires soon.`
-    });
+    await withRetry(
+      () =>
+        this.transporter.sendMail({
+          from: this.fromEmail,
+          to,
+          subject: "Your OTP Code",
+          text: `Your OTP code is ${code}. This code expires soon.`
+        }),
+      {
+        attempts: 3,
+        baseDelayMs: 200,
+        maxDelayMs: 2000,
+        event: "smtp_send_retry",
+        context: { recipient: to }
+      }
+    );
 
     logger.info(
       {

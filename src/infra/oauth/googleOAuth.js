@@ -1,4 +1,24 @@
 import { env } from "../../config/env.js";
+import { withRetry } from "../../utils/withRetry.js";
+
+async function fetchWithRetry(url, init, { event, attempts = 3 } = {}) {
+  return withRetry(
+    async () => {
+      const res = await fetch(url, init);
+      if (res.ok) return res;
+      if (res.status === 429 || res.status >= 500) {
+        throw new Error(`Retryable upstream response: ${res.status}`);
+      }
+      return res;
+    },
+    {
+      attempts,
+      baseDelayMs: 200,
+      maxDelayMs: 2000,
+      event
+    }
+  );
+}
 
 export function assertGoogleOAuthConfigured() {
   const id = env.GOOGLE_CLIENT_ID?.trim();
@@ -45,11 +65,15 @@ export async function exchangeGoogleAuthorizationCode(code) {
     redirect_uri: redirectUri,
     grant_type: "authorization_code"
   });
-  const res = await fetch(env.GOOGLE_OAUTH_TOKEN_URL, {
+  const res = await fetchWithRetry(
+    env.GOOGLE_OAUTH_TOKEN_URL,
+    {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body
-  });
+    },
+    { event: "google_oauth_token_retry", attempts: 3 }
+  );
   if (!res.ok) {
     const t = await res.text();
     throw new Error(`Google token error: ${res.status} ${t}`);
@@ -66,9 +90,13 @@ export async function exchangeGoogleAuthorizationCode(code) {
  * @param {string} accessToken
  */
 export async function fetchGoogleUserInfo(accessToken) {
-  const res = await fetch(env.GOOGLE_OAUTH_USERINFO_URL, {
-    headers: { Authorization: `Bearer ${accessToken}` }
-  });
+  const res = await fetchWithRetry(
+    env.GOOGLE_OAUTH_USERINFO_URL,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    },
+    { event: "google_oauth_userinfo_retry", attempts: 3 }
+  );
   if (!res.ok) {
     throw new Error(`Google userinfo error: ${res.status}`);
   }

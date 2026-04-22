@@ -7,6 +7,7 @@
  */
 import { incrementCacheMetric } from "../metrics/cacheMetrics.js";
 import { logger } from "../../config/logger.js";
+import { withRetry } from "../../utils/withRetry.js";
 
 export function createCatalogCache({ redis }) {
   if (!redis) {
@@ -30,7 +31,10 @@ export function createCatalogCache({ redis }) {
     async get(key) {
       try {
         const c = getClient();
-        const raw = await c.get(key);
+        const raw = await withRetry(() => c.get(key), {
+          event: "catalog_cache_get_retry",
+          context: { cacheKey: key }
+        });
         if (!raw) {
           incrementCacheMetric("get_miss");
           logger.debug({ event: "catalog_cache_miss", cacheKey: key }, "Catalog cache miss");
@@ -49,7 +53,10 @@ export function createCatalogCache({ redis }) {
     async set(key, value, ttlSec) {
       try {
         const c = getClient();
-        await c.set(key, JSON.stringify(value), "EX", ttlSec);
+        await withRetry(() => c.set(key, JSON.stringify(value), "EX", ttlSec), {
+          event: "catalog_cache_set_retry",
+          context: { cacheKey: key, ttlSec }
+        });
         incrementCacheMetric("set_ok");
         logger.debug(
           { event: "catalog_cache_set_ok", cacheKey: key, ttlSec },
@@ -69,7 +76,10 @@ export function createCatalogCache({ redis }) {
       if (hit != null) return hit;
       const c = getClient();
       const lockKey = `lock:${key}`;
-      const lock = await c.set(lockKey, "1", "EX", 5, "NX").catch(() => null);
+      const lock = await withRetry(() => c.set(lockKey, "1", "EX", 5, "NX"), {
+        event: "catalog_cache_lock_retry",
+        context: { cacheKey: key }
+      }).catch(() => null);
       if (lock === "OK") {
         incrementCacheMetric("lock_acquired");
         logger.debug({ event: "catalog_cache_lock_acquired", cacheKey: key }, "Catalog cache lock acquired");

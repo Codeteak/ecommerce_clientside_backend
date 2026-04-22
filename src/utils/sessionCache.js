@@ -2,6 +2,8 @@
 This file stores and validates active user sessions using Redis so all servers share login state.
 */
 
+import { withRetry } from "./withRetry.js";
+
 function sessionKey(userId, sessionId) {
   return `session:${userId}:${sessionId}`;
 }
@@ -11,7 +13,10 @@ export function createSessionCache({ redis }) {
     if (!redis || !userId || !sessionId || !Number.isFinite(ttlMs) || ttlMs <= 0) return false;
     const ttlSec = Math.max(1, Math.ceil(ttlMs / 1000));
     try {
-      await redis.set(sessionKey(userId, sessionId), "active", "EX", ttlSec);
+      await withRetry(() => redis.set(sessionKey(userId, sessionId), "active", "EX", ttlSec), {
+        event: "session_cache_set_retry",
+        context: { userId }
+      });
       return true;
     } catch {
       return false;
@@ -21,7 +26,10 @@ export function createSessionCache({ redis }) {
   async function validateSession({ userId, sessionId }) {
     if (!redis || !userId || !sessionId) return undefined;
     try {
-      const v = await redis.get(sessionKey(userId, sessionId));
+      const v = await withRetry(() => redis.get(sessionKey(userId, sessionId)), {
+        event: "session_cache_get_retry",
+        context: { userId }
+      });
       if (!v) return undefined;
       return v === "active";
     } catch {
@@ -32,7 +40,10 @@ export function createSessionCache({ redis }) {
   async function deleteSession({ userId, sessionId }) {
     if (!redis || !userId || !sessionId) return false;
     try {
-      await redis.del(sessionKey(userId, sessionId));
+      await withRetry(() => redis.del(sessionKey(userId, sessionId)), {
+        event: "session_cache_del_retry",
+        context: { userId }
+      });
       return true;
     } catch {
       return false;

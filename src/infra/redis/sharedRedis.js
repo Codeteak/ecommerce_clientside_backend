@@ -22,9 +22,13 @@ export function getSharedRedisClient() {
     const redisTls = String(redisUrl).startsWith("rediss://");
 
     client = new Redis(env.REDIS_URL, {
-      lazyConnect: true,
+      lazyConnect: false,
       maxRetriesPerRequest: 2,
-      enableOfflineQueue: false
+      enableOfflineQueue: false,
+      connectTimeout: 5000,
+      retryStrategy(times) {
+        return Math.min(2000, 100 * times);
+      }
     });
     client.on("connect", () => {
       logger.info({ event: "redis.connect", host: redisHost, tls: redisTls }, "Redis socket connected");

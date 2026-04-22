@@ -3,6 +3,7 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { pool } from "../infra/db/pool.js";
 import { disconnectSharedRedis } from "../infra/redis/sharedRedis.js";
+import { withRetry } from "../utils/withRetry.js";
 import { createAppContext } from "./composition.js";
 import { createExpressApp } from "./server.js";
 
@@ -45,7 +46,12 @@ function installGracefulShutdown() {
 }
 
 async function main() {
-  await pool.query("select 1 as ok");
+  await withRetry(() => pool.query("select 1 as ok"), {
+    attempts: env.SERVER_DB_RETRY_ATTEMPTS,
+    baseDelayMs: env.SERVER_DB_RETRY_BASE_DELAY_MS,
+    maxDelayMs: env.SERVER_DB_RETRY_MAX_DELAY_MS,
+    event: "server_start_db_retry"
+  });
 
   if (env.NODE_ENV === "production" && !env.REDIS_URL) {
     logger.warn(
@@ -69,7 +75,27 @@ async function main() {
   });
 }
 
-main().catch((err) => {
+async function startWithRetry() {
+  await withRetry(() => main(), {
+    attempts: env.SERVER_START_RETRY_ATTEMPTS,
+    baseDelayMs: env.SERVER_START_RETRY_BASE_DELAY_MS,
+    maxDelayMs: env.SERVER_START_RETRY_MAX_DELAY_MS,
+    event: "server_start_retry",
+    retryIf: (err) => {
+      const code = String(err?.code || err?.cause?.code || "");
+      if (code === "EADDRINUSE") return false;
+      return (
+        code === "ECONNREFUSED" ||
+        code === "ETIMEDOUT" ||
+        code === "ECONNRESET" ||
+        code === "EAI_AGAIN" ||
+        code === "ENOTFOUND"
+      );
+    }
+  });
+}
+
+startWithRetry().catch((err) => {
   if (err?.code === "EADDRINUSE") {
     logger.error(
       { port: env.PORT },
