@@ -30,7 +30,7 @@ function installGracefulShutdown() {
     try {
       await disconnectSharedRedis();
     } catch (err) {
-      logger.warn({ err }, "Redis disconnect during shutdown");
+      logger.warn({ err }, "Cache disconnect during shutdown");
     }
     try {
       await pool.end();
@@ -55,7 +55,7 @@ async function main() {
 
   if (env.NODE_ENV === "production" && !env.REDIS_URL) {
     logger.warn(
-      "REDIS_URL is not set: rate limits use per-process memory and catalog has no Redis cache. " +
+      "REDIS_URL is not set: rate limits use per-process memory and catalog has no shared cache. " +
         "Set REDIS_URL when running multiple instances or for shared rate-limit state."
     );
   }

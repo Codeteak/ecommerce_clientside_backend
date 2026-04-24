@@ -1,4 +1,4 @@
-// Purpose: Single shared ioredis client for REDIS_URL consumers (rate limits, catalog cache).
+// Purpose: Single shared ioredis client for REDIS_URL cache consumers (Redis/Valkey).
 import Redis from "ioredis";
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
@@ -31,21 +31,21 @@ export function getSharedRedisClient() {
       }
     });
     client.on("connect", () => {
-      logger.info({ event: "redis.connect", host: redisHost, tls: redisTls }, "Redis socket connected");
+      logger.info({ event: "cache.connect", host: redisHost, tls: redisTls }, "Cache socket connected");
     });
     client.on("ready", () => {
-      logger.info({ event: "redis.ready", host: redisHost, tls: redisTls }, "Redis client ready");
+      logger.info({ event: "cache.ready", host: redisHost, tls: redisTls }, "Cache client ready");
     });
     client.on("reconnecting", () => {
       logger.warn(
-        { event: "redis.reconnecting", host: redisHost, tls: redisTls },
-        "Redis reconnecting"
+        { event: "cache.reconnecting", host: redisHost, tls: redisTls },
+        "Cache reconnecting"
       );
     });
     client.on("error", (err) => {
       logger.warn(
-        { event: "redis.error", host: redisHost, tls: redisTls, err },
-        "Redis connection error"
+        { event: "cache.error", host: redisHost, tls: redisTls, err },
+        "Cache connection error"
       );
     });
   }

@@ -29,7 +29,6 @@ WORKDIR /app
 # environment variables
 ENV NODE_ENV=production
 ENV PORT=4100
-ENV REDIS_URL=redis://redis:6379
 ENV NODE_OPTIONS="--max-old-space-size=512"
 ENV UV_THREADPOOL_SIZE=16
 

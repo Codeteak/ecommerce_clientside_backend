@@ -1,0 +1,105 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        id: build_push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy API container on server
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          APP_DIR: ${{ secrets.APP_DIR || '/opt/clientside-ecommerce-api' }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          API_PUBLIC_URL: ${{ secrets.API_PUBLIC_URL }}
+          CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_CALLBACK_URL: ${{ secrets.GOOGLE_CALLBACK_URL }}
+        with:
+          host: ${{ secrets.EC2_HOST || secrets.DEPLOY_HOST }}
+          username: ${{ secrets.EC2_USER || secrets.DEPLOY_USER }}
+          key: ${{ secrets.EC2_SSH_KEY || secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || secrets.DEPLOY_PORT || 22 }}
+          envs: IMAGE,APP_DIR,GHCR_USERNAME,GHCR_PAT,DATABASE_URL,JWT_SECRET,JWT_REFRESH_SECRET,API_PUBLIC_URL,CORS_ORIGIN,REDIS_URL,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_CALLBACK_URL
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            mkdir -p "${APP_DIR}"
+            cd "${APP_DIR}"
+
+            echo "${GHCR_PAT}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+
+            cat > .env <<EOF
+            NODE_ENV=production
+            PORT=4100
+            DATABASE_URL=${DATABASE_URL}
+            JWT_SECRET=${JWT_SECRET}
+            JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+            API_PUBLIC_URL=${API_PUBLIC_URL}
+            CORS_ORIGIN=${CORS_ORIGIN}
+            # AWS Valkey endpoint (rediss://...) wired through REDIS_URL.
+            REDIS_URL=${REDIS_URL}
+            GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+            GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+            GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
+            EOF
+
+            docker pull "${IMAGE}"
+
+            docker rm -f clientside-ecommerce-api || true
+            docker run -d \
+              --name clientside-ecommerce-api \
+              --restart unless-stopped \
+              --env-file .env \
+              -p 4100:4100 \
+              "${IMAGE}"
+
+            docker image prune -f

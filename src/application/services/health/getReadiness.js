@@ -1,5 +1,5 @@
 /**
- * Purpose: Readiness probe — verifies database (and Redis when configured) before traffic.
+ * Purpose: Readiness probe — verifies database and cache (when configured) before traffic.
  */
 export function createGetReadiness({
   pool,
@@ -44,7 +44,7 @@ export function createGetReadiness({
         checks.redis = "ok";
       } catch (err) {
         checks.redis = "fail";
-        const e = new Error("Redis unavailable");
+        const e = new Error("Cache unavailable");
         e.statusCode = 503;
         e.checks = checks;
         e.cause = err;

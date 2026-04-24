@@ -39,6 +39,7 @@ jobs:
       CORS_ORIGIN: http://localhost:5173
       API_PUBLIC_URL: http://localhost:4100
       INTEGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app_test
+      # Integration uses local containerized cache; production uses AWS Valkey via REDIS_URL.
       INTEGRATION_REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4

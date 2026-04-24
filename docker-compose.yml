@@ -1,7 +1,4 @@
-version: "3.9"
-
 services:
-
   api:
     build:
       context: .
@@ -16,14 +13,9 @@ services:
 
     environment:
       PORT: "4100"
-      REDIS_URL: redis://redis:6379
 
     ports:
       - "4100:4100"
-
-    depends_on:
-      redis:
-        condition: service_healthy
 
     restart: unless-stopped
 
@@ -41,6 +33,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    profiles: ["dev-local-cache"]
 
     container_name: clientside-ecommerce-redis
 

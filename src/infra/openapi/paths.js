@@ -65,7 +65,7 @@ export function buildPaths() {
       get: {
         tags: ["Root"],
         summary: "Readiness probe",
-        description: "Checks database and Redis (when `REDIS_URL` is set). Returns 503 if a dependency is down.",
+        description: "Checks database and cache (Redis/Valkey) when `REDIS_URL` is set. Returns 503 if a dependency is down.",
         responses: {
           "200": {
             description: "Ready",
@@ -80,7 +80,7 @@ export function buildPaths() {
                       type: "object",
                       properties: {
                         database: { type: "string", enum: ["ok", "fail", "unknown"] },
-                        redis: { type: "string", enum: ["ok", "fail", "skipped"] }
+                        redis: { type: "string", enum: ["ok", "fail", "skipped"], description: "Cache dependency status" }
                       }
                     }
                   }
@@ -277,6 +277,158 @@ export function buildPaths() {
         }
       }
     },
+    "/api/catalog/categories": {
+      get: {
+        tags: ["Catalog"],
+        summary: "Legacy list categories",
+        description: "Legacy catalog categories endpoint under `/api/catalog`.",
+        parameters: [
+          P.XShopId,
+          {
+            name: "parentId",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "uuid" }
+          }
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    categories: { type: "array", items: { type: "object" } }
+                  }
+                }
+              }
+            }
+          },
+          "400": jsonErr,
+          "404": jsonErr
+        }
+      }
+    },
+    "/api/catalog/products": {
+      get: {
+        tags: ["Catalog"],
+        summary: "Legacy list products",
+        description: "Legacy catalog products endpoint under `/api/catalog`.",
+        parameters: [
+          P.XShopId,
+          {
+            name: "categoryId",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "uuid" }
+          }
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    items: { type: "array", items: { type: "object" } }
+                  }
+                }
+              }
+            }
+          },
+          "400": jsonErr,
+          "404": jsonErr
+        }
+      }
+    },
+    "/api/catalog/items": {
+      get: {
+        tags: ["Catalog"],
+        summary: "Legacy list items alias",
+        description: "Alias of `/api/catalog/products` returning the same payload shape.",
+        parameters: [
+          P.XShopId,
+          {
+            name: "categoryId",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "uuid" }
+          }
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    items: { type: "array", items: { type: "object" } }
+                  }
+                }
+              }
+            }
+          },
+          "400": jsonErr,
+          "404": jsonErr
+        }
+      }
+    },
+    "/api/catalog/search": {
+      get: {
+        tags: ["Catalog"],
+        summary: "Legacy catalog search",
+        description: "Searches products/categories with independent sorting and pagination controls.",
+        parameters: [
+          P.XShopId,
+          { name: "type", in: "query", schema: { type: "string", enum: ["products", "categories", "both"] } },
+          { name: "q", in: "query", schema: { type: "string", maxLength: 200 } },
+          { name: "categoryId", in: "query", schema: { type: "string", format: "uuid" } },
+          { name: "parentId", in: "query", schema: { type: "string", format: "uuid" } },
+          {
+            name: "availability",
+            in: "query",
+            schema: { type: "string", enum: ["in_stock", "out_of_stock", "unknown"] }
+          },
+          {
+            name: "productSort",
+            in: "query",
+            schema: { type: "string", enum: ["name", "price", "created_at", "availability"] }
+          },
+          { name: "productOrder", in: "query", schema: { type: "string", enum: ["asc", "desc"] } },
+          {
+            name: "categorySort",
+            in: "query",
+            schema: { type: "string", enum: ["sort_order", "name", "created_at"] }
+          },
+          { name: "categoryOrder", in: "query", schema: { type: "string", enum: ["asc", "desc"] } },
+          { name: "productLimit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100 } },
+          { name: "productOffset", in: "query", schema: { type: "integer", minimum: 0, maximum: 50000 } },
+          { name: "categoryLimit", in: "query", schema: { type: "integer", minimum: 1, maximum: 500 } },
+          { name: "categoryOffset", in: "query", schema: { type: "integer", minimum: 0, maximum: 50000 } }
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    products: { type: "array", items: { type: "object" } },
+                    categories: { type: "array", items: { type: "object" } }
+                  }
+                }
+              }
+            }
+          },
+          "400": jsonErr,
+          "404": jsonErr
+        }
+      }
+    },
     "/api/me/profile": {
       get: {
         tags: ["Profile"],
@@ -389,7 +541,7 @@ export function buildPaths() {
     "/storefront/catalog/cache/invalidate": {
       post: {
         tags: ["Storefront catalog"],
-        summary: "Purge Redis catalog cache for a shop",
+        summary: "Purge catalog cache for a shop",
         description:
           "Only available when the API is configured with `CATALOG_CACHE_INVALIDATE_TOKEN`. Send that token in `X-Catalog-Cache-Invalidate`.",
         parameters: [

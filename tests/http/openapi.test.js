@@ -17,6 +17,7 @@ describe("OpenAPI / Swagger", () => {
     expect(res.body.paths?.["/storefront/checkout"]?.post).toBeTruthy();
     expect(res.body.paths?.["/api/auth/otp/request"]?.post).toBeTruthy();
     expect(res.body.paths?.["/api/auth/otp/verify"]?.post).toBeTruthy();
+    expect(res.body.paths?.["/api/catalog/search"]?.get).toBeTruthy();
   });
 
   it("GET /api-docs serves Swagger UI HTML", async () => {

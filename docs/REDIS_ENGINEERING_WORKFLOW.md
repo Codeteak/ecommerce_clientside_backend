@@ -1,10 +1,10 @@
-# Redis Engineering Documentation
+# Cache (Redis/Valkey) Engineering Documentation
 
-This document explains how Redis is implemented in this project, how API flows connect to Redis, and what fallback behavior exists when Redis is unavailable.
+This document explains how cache is implemented in this project, how API flows connect using `REDIS_URL` (Redis/Valkey), and what fallback behavior exists when cache is unavailable.
 
 ## Purpose
 
-Redis is used for four core capabilities:
+Cache is used for four core capabilities:
 
 1. Shared rate limiting across API instances.
 2. Storefront catalog response caching.
@@ -14,13 +14,13 @@ Redis is used for four core capabilities:
 ## Core Components
 
 - `src/infra/redis/sharedRedis.js`
-  - Builds one shared `ioredis` client from `REDIS_URL`.
+  - Builds one shared `ioredis` client from `REDIS_URL` (works with Redis and AWS Valkey).
   - Used by rate limiter store, catalog cache, and session cache.
   - Closed on graceful shutdown via `disconnectSharedRedis()`.
 
 - `src/interface/http/middleware/createLimiter.js`
   - Creates `express-rate-limit` middleware.
-  - Uses `rate-limit-redis` store when Redis is configured.
+  - Uses `rate-limit-redis` store when cache is configured.
   - Falls back to in-memory counters when Redis is not configured.
   - Can be bypassed for local perf tests with `DISABLE_RATE_LIMITING=true`.
 
@@ -30,13 +30,13 @@ Redis is used for four core capabilities:
   - Supports shop-wide cache invalidation by key pattern scan.
 
 - `src/utils/sessionCache.js` + `src/interface/http/middleware/requireCustomerJwt.js`
-  - Stores and validates short-lived session validity keys in Redis:
+  - Stores and validates short-lived session validity keys in cache:
     - `session:<userId>:<hashedToken>`
   - On cache miss, middleware checks DB session validity and writes back to cache.
 
 - `src/application/services/health/getReadiness.js`
-  - Readiness endpoint pings Redis when available.
-  - Returns dependency status for DB and Redis.
+  - Readiness endpoint pings cache when available.
+  - Returns dependency status for DB and cache.
 
 ## End-to-End Architecture
 
@@ -50,8 +50,8 @@ flowchart TD
     C --> F[Storefront Catalog Service]
     C --> G[Health/Readiness Service]
 
-    D -->|uses RedisStore when REDIS_URL exists| R[(Redis)]
-    D -->|fallback if no Redis| M1[In-memory limiter]
+    D -->|uses RedisStore when REDIS_URL exists| R[(CacheRedisOrValkey)]
+    D -->|fallback if no cache| M1[In-memory limiter]
 
     E -->|session cache check userId:sessionId| R
     E -->|cache miss -> check| P[(PostgreSQL)]
@@ -79,7 +79,7 @@ flowchart LR
 
     RL --> R1[createLimiter()]
     R1 -->|if DISABLE_RATE_LIMITING=true| PASS1[skip limiter]
-    R1 -->|if REDIS_URL set| REDIS_RL[(Redis counters)]
+    R1 -->|if REDIS_URL set| REDIS_RL[(Cache counters)]
     R1 -->|if no REDIS_URL| MEM_RL[in-memory counters]
     REDIS_RL --> RES429[429 if over limit]
 
@@ -97,15 +97,15 @@ flowchart LR
     A3 --> A4{Session valid in Redis cache?}
     A4 -->|Yes| OK1[Allow request]
     A4 -->|No/unknown| A5[Check Postgres session]
-    A5 --> A6[Write result to Redis cache]
+    A5 --> A6[Write result to cache]
     A6 --> OK1
 
     READY --> H1[getReadiness]
     H1 --> H2[DB check]
-    H2 --> H3[Redis ping if configured]
+    H2 --> H3[Cache ping if configured]
 ```
 
-## Redis-Connected API Surface
+## Cache-Connected API Surface
 
 ### Rate-Limited Routes
 
@@ -127,7 +127,7 @@ Applied through shared limiter middleware:
 
 ### Session Cache in Auth Middleware
 
-JWT-protected storefront routes use Redis-backed session validity caching:
+JWT-protected storefront routes use cache-backed session validity caching:
 
 - cart routes
 - checkout route
@@ -136,20 +136,21 @@ JWT-protected storefront routes use Redis-backed session validity caching:
 
 ### Readiness
 
-- `GET /health/ready` pings Redis (if configured) and reports dependency status.
+- `GET /health/ready` pings cache (if configured) and reports dependency status.
 
 ## Configuration
 
-### Required for Redis usage
+### Required for cache usage
 
-- `REDIS_URL=<redis-connection-string>`
+- `REDIS_URL=<redis-or-valkey-connection-string>`
+- For AWS Valkey in production, use a `rediss://` endpoint.
 
 When `REDIS_URL` is empty:
 
 - rate limiting falls back to in-memory state,
 - catalog cache becomes no-op (direct DB reads),
 - session cache short-circuit behavior is reduced,
-- readiness reports Redis as skipped.
+- readiness reports cache as skipped.
 
 ### Performance testing switch
 
@@ -159,14 +160,14 @@ When `REDIS_URL` is empty:
 
 ## Failure and Fallback Strategy
 
-- Redis errors are handled as non-fatal where possible.
+- Cache errors are handled as non-fatal where possible.
 - Catalog cache degrades gracefully to DB reads.
 - Session cache misses fallback to DB session validity checks.
-- Rate limiting can continue in-memory without Redis.
+- Rate limiting can continue in-memory without cache.
 - Readiness endpoint fails only when dependency probes fail.
 
 ## Operational Notes
 
-- On shutdown, Redis client is closed through `disconnectSharedRedis()` in bootstrap.
+- On shutdown, cache client is closed through `disconnectSharedRedis()` in bootstrap.
 - In production, if `REDIS_URL` is missing, the app logs a warning to highlight reduced resilience and non-shared limiter state.
 - Cache invalidation endpoint requires `CATALOG_CACHE_INVALIDATE_TOKEN`.

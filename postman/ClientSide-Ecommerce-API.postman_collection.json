@@ -228,6 +228,51 @@
       ]
     },
     {
+      "name": "Catalog (Legacy /api/catalog)",
+      "item": [
+        {
+          "name": "GET /api/catalog/categories",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
+            "url": "{{baseUrl}}/api/catalog/categories?parentId=",
+            "description": "Legacy categories endpoint. Optional `parentId` (UUID) filters child categories."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/catalog/products",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
+            "url": "{{baseUrl}}/api/catalog/products?categoryId=",
+            "description": "Legacy products endpoint. Optional `categoryId` (UUID) filter."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/catalog/items",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
+            "url": "{{baseUrl}}/api/catalog/items?categoryId=",
+            "description": "Alias of `/api/catalog/products`; returns `{ items: [...] }`."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/catalog/search",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
+            "url": "{{baseUrl}}/api/catalog/search?type=both&q=&productSort=name&productOrder=asc&productLimit=100&productOffset=0&categorySort=sort_order&categoryOrder=asc&categoryLimit=500&categoryOffset=0",
+            "description": "Legacy combined search for products and categories. `type` can be `products`, `categories`, or `both`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Serviceability",
       "item": [
         {
