@@ -69,7 +69,6 @@ jobs:
           host: ${{ secrets.EC2_HOST || secrets.DEPLOY_HOST }}
           username: ${{ secrets.EC2_USER || secrets.DEPLOY_USER }}
           key: ${{ secrets.EC2_SSH_KEY || secrets.DEPLOY_SSH_KEY }}
-          passphrase: ${{ secrets.EC2_SSH_PASSPHRASE || secrets.DEPLOY_SSH_PASSPHRASE }}
           port: ${{ secrets.EC2_PORT || secrets.DEPLOY_PORT || 22 }}
           envs: IMAGE,APP_DIR,GHCR_USERNAME,GHCR_PAT,DATABASE_URL,JWT_SECRET,JWT_REFRESH_SECRET,API_PUBLIC_URL,CORS_ORIGIN,REDIS_URL,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_CALLBACK_URL
           script_stop: true
