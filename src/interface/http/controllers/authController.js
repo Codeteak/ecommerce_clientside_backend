@@ -96,6 +96,7 @@ function otpVerifyHandler(ctx) {
   };
 }
 
+//  funciton for requesting email OTP
 function emailOtpRequestHandler(ctx) {
   return async (req, res, next) => {
     try {
