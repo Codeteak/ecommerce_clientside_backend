@@ -29,6 +29,10 @@ jobs:
         id: image_name
         run: echo "value=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
+      # ✅ FIX: Required for ARM builds
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -39,15 +43,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # ✅ Multi-arch build (now stable with QEMU)
       - name: Build and push multi-arch image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: |
             ${{ env.REGISTRY }}/${{ steps.image_name.outputs.value }}:latest
             ${{ env.REGISTRY }}/${{ steps.image_name.outputs.value }}:${{ github.sha }}
-          platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -56,6 +61,7 @@ jobs:
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ steps.image_name.outputs.value }}:${{ github.sha }}
           APP_DIR: /opt/clientside-ecommerce-api
+
           GHCR_USERNAME: ${{ github.actor }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
 
@@ -82,9 +88,7 @@ jobs:
 
             echo "Starting deployment..."
 
-            sudo mkdir -p "${APP_DIR}"
-            sudo chown deploy:deploy "${APP_DIR}"
-
+            mkdir -p "${APP_DIR}"
             cd "${APP_DIR}"
 
             echo "Logging into GHCR..."
