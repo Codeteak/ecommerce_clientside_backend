@@ -11,7 +11,7 @@ Cache is used for four core capabilities:
 3. Customer JWT session validity caching.
 4. Readiness dependency checks.
 
-## Core Components
+## Core Componentss
 
 - `src/infra/redis/sharedRedis.js`
   - Builds one shared `ioredis` client from `REDIS_URL` (works with Redis and AWS Valkey).
