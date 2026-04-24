@@ -71,9 +71,8 @@ export function createCheckoutStorefront({
       if (profile.user_id !== userId) {
         throw new ValidationError("Invalid customer");
       }
-      if (!profile.phone || String(profile.phone).trim() === "") {
-        throw checkoutError("PHONE_REQUIRED", "Phone number is required before checkout");
-      }
+      // Temporary: allow checkout without a registered phone while OTP/mobile flow is not enabled in production.
+      // Re-enable PHONE_REQUIRED once real OTP verification is live.
       if (!profile.address || !profile.address.id || !profile.address.line1) {
         throw checkoutError("ADDRESS_REQUIRED", "Delivery address is required");
       }

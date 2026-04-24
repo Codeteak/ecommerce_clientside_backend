@@ -35,9 +35,9 @@ export class CartRepoPg extends CartRepo {
     const { rows } = await client.query(
       `SELECT ci.id, ci.cart_id, ci.product_id, ci.title_snapshot, ci.quantity::text AS quantity,
               ci.unit_label, ci.unit_price_minor, ci.is_custom, ci.custom_note,
-              p.offer_price_minor_per_unit::text AS offer_price_minor_per_unit
+              sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit
          FROM cart_items ci
-         LEFT JOIN products p ON p.id = ci.product_id AND p.shop_id = ci.shop_id
+         LEFT JOIN shop_products sp ON sp.id = ci.product_id AND sp.shop_id = ci.shop_id
         WHERE ci.cart_id = $1::uuid
         ORDER BY ci.id ASC`,
       [cartId]
@@ -104,9 +104,12 @@ export class CartRepoPg extends CartRepo {
   async getProductSnapshotForCart(client, shopId, productId) {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
-      `SELECT id, name, base_unit, price_minor_per_unit, status, availability
-         FROM products
-        WHERE id = $1::uuid AND shop_id = $2::uuid AND status = 'active'`,
+      `SELECT sp.id, gp.name, gp.base_unit, sp.price_minor_per_unit, sp.status, sp.availability
+         FROM shop_products sp
+         JOIN global_products gp ON gp.id = sp.global_product_id
+        WHERE sp.id = $1::uuid
+          AND sp.shop_id = $2::uuid
+          AND sp.status = 'active'`,
       [productId, shopId]
     );
     return rows[0] ?? null;
@@ -152,11 +155,11 @@ export class CartRepoPg extends CartRepo {
   async listCartProductAvailability(client, shopId, cartId) {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
-      `SELECT ci.id AS cart_item_id, ci.product_id, p.status AS product_status, p.availability
+      `SELECT ci.id AS cart_item_id, ci.product_id, sp.status AS product_status, sp.availability
          FROM cart_items ci
-         LEFT JOIN products p
-           ON p.id = ci.product_id
-          AND p.shop_id = ci.shop_id
+         LEFT JOIN shop_products sp
+           ON sp.id = ci.product_id
+          AND sp.shop_id = ci.shop_id
         WHERE ci.cart_id = $1::uuid`,
       [cartId]
     );
@@ -190,8 +193,9 @@ export class CartRepoPg extends CartRepo {
     for (const line of sorted) {
       const { rows: pRows } = await client.query(
         `SELECT id, price_minor_per_unit, status, availability
-           FROM products
-          WHERE id = $1::uuid AND shop_id = $2::uuid
+           FROM shop_products
+          WHERE id = $1::uuid
+            AND shop_id = $2::uuid
           FOR UPDATE`,
         [line.product_id, shopId]
       );
