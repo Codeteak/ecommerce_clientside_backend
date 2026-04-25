@@ -14,6 +14,11 @@ install_pkg() {
   fi
 }
 
+echo "[before_install] Ensuring deploy user/group exists..."
+if ! id -u deploy >/dev/null 2>&1; then
+  useradd --create-home --home-dir /home/deploy --shell /bin/bash deploy
+fi
+
 echo "[before_install] Ensuring application directory exists..."
 mkdir -p "${APP_DIR}"
 
