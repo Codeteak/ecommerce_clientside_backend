@@ -73,7 +73,6 @@ jobs:
 
             # 1. Navigate to the correct directory
             APP_DIR="/home/deploy/yaadro/ecommerce_clientside_backend"
-            mkdir -p "${APP_DIR}"
             cd "${APP_DIR}"
 
             echo "Logging into GHCR..."
@@ -98,11 +97,11 @@ jobs:
             echo "Updating Image..."
             docker pull "${IMAGE}"
 
-            # Stop any existing container to prevent the "Name Conflict" error
+            # Clean up the old container to avoid the "Name Conflict" error
             docker rm -f clientside-ecommerce-api || true
 
-            echo "Restarting with Docker Compose..."
-            # This ensures Redis and API start together with the right networking
+            echo "Deploying with Docker Compose..."
+            # This starts BOTH the API and Redis correctly
             docker-compose down
             docker-compose up -d --force-recreate
 

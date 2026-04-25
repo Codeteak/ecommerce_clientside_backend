@@ -16,20 +16,11 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 512M
 
   redis:
     image: redis:7-alpine
-    # Remove the profile if you want Redis to always run in production
     container_name: clientside-ecommerce-redis
-    command: >
-      redis-server
-      --appendonly yes
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
     volumes:
       - redis_data:/data
     restart: unless-stopped
