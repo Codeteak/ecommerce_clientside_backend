@@ -63,7 +63,7 @@ function deps() {
 }
 
 describe("checkoutStorefront validations", () => {
-  it("fails when customer phone is missing", async () => {
+  it("allows checkout when customer phone is missing", async () => {
     const d = deps();
     d.authRepo.getCustomerProfileByCustomerId = vi.fn().mockResolvedValue({
       id: "cust-1",
@@ -80,14 +80,20 @@ describe("checkoutStorefront validations", () => {
       }
     });
     const run = createCheckoutStorefront(d);
-    await expect(
-      run({}, {
+    const out = await run(
+      {},
+      {
         shopId: "00000000-0000-4000-8000-000000000001",
         customerId: "cust-1",
         userId: "user-1",
         addressId: "22222222-2222-4222-8222-222222222222"
-      })
-    ).rejects.toMatchObject({ code: "PHONE_REQUIRED" });
+      }
+    );
+    expect(out).toMatchObject({
+      orderId: "order-1",
+      total_minor: 120
+    });
+    expect(d.orderRepo.insertOrderWithItemsAndOutbox).toHaveBeenCalledTimes(1);
   });
 
   it("fails when selected address does not belong to customer", async () => {

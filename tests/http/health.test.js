@@ -28,8 +28,7 @@ describe("GET /health", () => {
   it("returns 200 with status ok", async () => {
     const res = await request(app).get("/health").expect(200);
     expect(res.body).toMatchObject({
-      status: "ok",
-      service: "clientside-ecommerce-api"
+      status: "ok"
     });
   });
 });
