@@ -2,7 +2,7 @@
 
 This document explains how cache is implemented in this project, how API flows connect using `REDIS_URL` (Redis/Valkey), and what fallback behavior exists when cache is unavailable.
 
-## Purpose
+## Purposee
 
 Cache is used for four core capabilities:
 
