@@ -7,7 +7,6 @@ services:
     init: true
     env_file:
       - ./.env
-      - ./.env.secret
     ports:
       - "4100:4100"
     restart: unless-stopped
