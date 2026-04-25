@@ -150,6 +150,10 @@ export function createExpressApp(ctx) {
   app.use(cookieParser());
   app.use(express.json({ limit: "1mb" }));
 
+  app.get("/health", (_req, res) => {
+    res.status(200).json({ status: "ok" });
+  });
+
   app.use(ctx.shopResolver);
   app.use(createRoutes(ctx));
 
