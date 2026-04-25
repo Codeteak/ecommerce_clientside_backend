@@ -71,15 +71,17 @@ jobs:
           script: |
             set -euo pipefail
 
-            # 1. Navigate to the correct directory
-            APP_DIR="/home/deploy/yaadro/ecommerce_clientside_backend"
-            cd "${APP_DIR}"
+            # 1. Force the correct directory
+            cd /home/deploy/yaadro/ecommerce_clientside_backend
 
             echo "Logging into GHCR..."
             echo "${GHCR_PAT}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
 
             echo "Fetching Secrets from AWS..."
-            # This fetches the JSON and converts it to a clean .env format
+            # Delete old file to ensure no stale data
+            rm -f .env.secret
+
+            # Pull fresh from AWS
             aws secretsmanager get-secret-value \
               --secret-id yaadro-ecom-prod-shop-api-runtime-env \
               --region ap-south-1 \
@@ -94,16 +96,12 @@ jobs:
               echo "TRUST_PROXY=true"
             } >> .env.secret
 
-            echo "Updating Image..."
+            echo "Pulling latest image..."
             docker pull "${IMAGE}"
 
-            # Clean up the old container to avoid the "Name Conflict" error
-            docker rm -f clientside-ecommerce-api || true
-
             echo "Deploying with Docker Compose..."
-            # This starts BOTH the API and Redis correctly
-            docker-compose down
+            # Use 'down' first to ensure all old environment mappings are destroyed
+            docker-compose down --remove-orphans
             docker-compose up -d --force-recreate
 
-            echo "Cleaning up..."
-            docker image prune -f
+            echo "Deployment successful!"
