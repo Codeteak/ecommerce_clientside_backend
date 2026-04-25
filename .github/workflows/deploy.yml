@@ -71,22 +71,23 @@ jobs:
           script: |
             set -euo pipefail
 
-            echo "Starting deployment..."
+            # 1. Navigate to the correct directory
+            APP_DIR="/home/deploy/yaadro/ecommerce_clientside_backend"
             mkdir -p "${APP_DIR}"
             cd "${APP_DIR}"
 
             echo "Logging into GHCR..."
             echo "${GHCR_PAT}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
 
-            echo "Fetching Latest Secrets from AWS Secrets Manager..."
-            # Pulls JSON, converts to KEY=VALUE, and saves to .env.secret
+            echo "Fetching Secrets from AWS..."
+            # This fetches the JSON and converts it to a clean .env format
             aws secretsmanager get-secret-value \
               --secret-id yaadro-ecom-prod-shop-api-runtime-env \
               --region ap-south-1 \
               --query SecretString \
               --output text | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > .env.secret
 
-            echo "Adding Production Runtime Overrides..."
+            echo "Adding Runtime Overrides..."
             {
               echo "NODE_ENV=production"
               echo "PORT=4100"
@@ -94,21 +95,16 @@ jobs:
               echo "TRUST_PROXY=true"
             } >> .env.secret
 
-            echo "Pulling latest image..."
+            echo "Updating Image..."
             docker pull "${IMAGE}"
 
-            echo "Stopping old container..."
+            # Stop any existing container to prevent the "Name Conflict" error
             docker rm -f clientside-ecommerce-api || true
 
-            echo "Starting new container with fresh secrets..."
-            docker run -d \
-              --name clientside-ecommerce-api \
-              --restart unless-stopped \
-              --env-file .env.secret \
-              -p 4100:4100 \
-              "${IMAGE}"
+            echo "Restarting with Docker Compose..."
+            # This ensures Redis and API start together with the right networking
+            docker-compose down
+            docker-compose up -d --force-recreate
 
-            echo "Cleaning unused images..."
+            echo "Cleaning up..."
             docker image prune -f
-
-            echo "Deployment completed successfully!"
