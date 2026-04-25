@@ -6,6 +6,7 @@ services:
     container_name: clientside-ecommerce-api
     init: true
     env_file:
+      - ./.env
       - ./.env.secret
     ports:
       - "4100:4100"
