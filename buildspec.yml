@@ -20,18 +20,17 @@ phases:
       - IMAGE_TAG="$(echo "${IMAGE_TAG}" | tr '/' '-' | cut -c1-120)"
       - echo "Logging in to Amazon ECR..."
       - aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+      - echo "Preparing Docker Buildx for ARM64 build..."
+      - docker buildx create --name clientside-builder --use || docker buildx use clientside-builder
+      - docker buildx inspect --bootstrap
   build:
     commands:
       - echo "Running tests..."
       - npm test
-      - echo "Building image ${ECR_URI}:${IMAGE_TAG}..."
-      - docker build -t "${ECR_URI}:${IMAGE_TAG}" .
-      - docker tag "${ECR_URI}:${IMAGE_TAG}" "${ECR_URI}:latest"
+      - echo "Building and pushing ARM64 image ${ECR_URI}:${IMAGE_TAG}..."
+      - docker buildx build --platform linux/arm64 -t "${ECR_URI}:${IMAGE_TAG}" -t "${ECR_URI}:latest" --push .
   post_build:
     commands:
-      - echo "Pushing ECR images..."
-      - docker push "${ECR_URI}:${IMAGE_TAG}"
-      - docker push "${ECR_URI}:latest"
       - printf '{"imageUri":"%s","imageTag":"%s","repository":"%s","builtAt":"%s"}\n' "${ECR_URI}:${IMAGE_TAG}" "${IMAGE_TAG}" "${ECR_URI}" "$(date -u +%FT%TZ)" > image-detail.json
       - echo "Build completed at $(date)"
 
