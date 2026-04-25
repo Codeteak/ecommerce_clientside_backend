@@ -34,15 +34,18 @@ if ! command -v docker >/dev/null 2>&1; then
   fi
 fi
 
-if ! command -v docker-compose >/dev/null 2>&1 && ! docker compose version >/dev/null 2>&1; then
-  if command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
-    install_pkg docker-compose-plugin
-  else
-    install_pkg docker-compose-plugin
-  fi
-fi
-
 systemctl enable docker
 systemctl start docker
+
+# Amazon Linux 2023 typically provides Compose via `docker compose` from Docker CLI.
+# Only install legacy docker-compose binary when neither variant is available.
+if ! docker compose version >/dev/null 2>&1 && ! command -v docker-compose >/dev/null 2>&1; then
+  echo "[before_install] docker compose not available; installing legacy docker-compose..."
+  if command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
+    install_pkg docker-compose
+  else
+    install_pkg docker-compose-plugin || install_pkg docker-compose
+  fi
+fi
 
 echo "[before_install] Done."
