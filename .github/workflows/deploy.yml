@@ -29,7 +29,6 @@ jobs:
         id: image_name
         run: echo "value=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
-      # ✅ FIX: Required for ARM builds
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -43,7 +42,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ✅ Multi-arch build (now stable with QEMU)
       - name: Build and push multi-arch image
         uses: docker/build-push-action@v6
         with:
@@ -61,53 +59,40 @@ jobs:
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ steps.image_name.outputs.value }}:${{ github.sha }}
           APP_DIR: /opt/clientside-ecommerce-api
-
           GHCR_USERNAME: ${{ github.actor }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
-
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
-          API_PUBLIC_URL: ${{ secrets.API_PUBLIC_URL }}
-          CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_CALLBACK_URL: ${{ secrets.GOOGLE_CALLBACK_URL }}
-
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: 22
           script_stop: true
-          envs: IMAGE,APP_DIR,GHCR_USERNAME,GHCR_PAT,DATABASE_URL,JWT_SECRET,JWT_REFRESH_SECRET,API_PUBLIC_URL,CORS_ORIGIN,REDIS_URL,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_CALLBACK_URL
-
+          envs: IMAGE,APP_DIR,GHCR_USERNAME,GHCR_PAT
           script: |
             set -euo pipefail
 
             echo "Starting deployment..."
-
             mkdir -p "${APP_DIR}"
             cd "${APP_DIR}"
 
             echo "Logging into GHCR..."
             echo "${GHCR_PAT}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
 
-            echo "Writing environment file..."
-            cat > .env.secret <<EOF
-            NODE_ENV=production
-            PORT=4100
-            DATABASE_URL=${DATABASE_URL}
-            JWT_SECRET=${JWT_SECRET}
-            JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-            API_PUBLIC_URL=${API_PUBLIC_URL}
-            CORS_ORIGIN=${CORS_ORIGIN}
-            REDIS_URL=${REDIS_URL}
-            GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-            GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-            GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
-            EOF
+            echo "Fetching Latest Secrets from AWS Secrets Manager..."
+            # Pulls JSON, converts to KEY=VALUE, and saves to .env.secret
+            aws secretsmanager get-secret-value \
+              --secret-id yaadro-ecom-prod-shop-api-runtime-env \
+              --region ap-south-1 \
+              --query SecretString \
+              --output text | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > .env.secret
+
+            echo "Adding Production Runtime Overrides..."
+            {
+              echo "NODE_ENV=production"
+              echo "PORT=4100"
+              echo "DATABASE_SSL_REJECT_UNAUTHORIZED=true"
+              echo "TRUST_PROXY=true"
+            } >> .env.secret
 
             echo "Pulling latest image..."
             docker pull "${IMAGE}"
@@ -115,7 +100,7 @@ jobs:
             echo "Stopping old container..."
             docker rm -f clientside-ecommerce-api || true
 
-            echo "Starting new container..."
+            echo "Starting new container with fresh secrets..."
             docker run -d \
               --name clientside-ecommerce-api \
               --restart unless-stopped \
