@@ -95,7 +95,7 @@ jobs:
             echo "${GHCR_PAT}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
 
             echo "Writing environment file..."
-            cat > .env <<EOF
+            cat > .env.secret <<EOF
             NODE_ENV=production
             PORT=4100
             DATABASE_URL=${DATABASE_URL}
@@ -119,7 +119,7 @@ jobs:
             docker run -d \
               --name clientside-ecommerce-api \
               --restart unless-stopped \
-              --env-file .env \
+              --env-file .env.secret \
               -p 4100:4100 \
               "${IMAGE}"
 
