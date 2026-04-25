@@ -9,7 +9,7 @@ services:
     init: true
 
     env_file:
-      - .env
+      - .env.secret
 
     environment:
       PORT: "4100"
