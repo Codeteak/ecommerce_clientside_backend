@@ -1,8 +1,6 @@
 services:
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: "${ECR_IMAGE_URI:?ECR_IMAGE_URI is required}"
     container_name: clientside-ecommerce-api
     init: true
     env_file:

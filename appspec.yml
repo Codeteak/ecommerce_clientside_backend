@@ -1,0 +1,31 @@
+version: 0.0
+os: linux
+
+files:
+  - source: /
+    destination: /home/deploy/yaadro/ecommerce_clientside_backend
+    overwrite: true
+
+permissions:
+  - object: /home/deploy/yaadro/ecommerce_clientside_backend
+    pattern: "**"
+    owner: deploy
+    group: deploy
+
+hooks:
+  BeforeInstall:
+    - location: scripts/cicd/before_install.sh
+      timeout: 300
+      runas: root
+  AfterInstall:
+    - location: scripts/cicd/after_install.sh
+      timeout: 900
+      runas: root
+  ApplicationStart:
+    - location: scripts/cicd/application_start.sh
+      timeout: 900
+      runas: root
+  ValidateService:
+    - location: scripts/cicd/validate_service.sh
+      timeout: 180
+      runas: root
