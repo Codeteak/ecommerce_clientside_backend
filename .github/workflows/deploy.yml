@@ -91,7 +91,7 @@ jobs:
             {
               echo "API_PUBLIC_URL=https://api.yaadro.online"
               echo "CORS_ORIGIN=https://yaadro.online"
-              echo "JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}"
+              echo "JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-$(openssl rand -base64 32)}"
               echo "JWT_ALLOWED_ALGORITHMS=[\"HS256\"]"
               echo "GOOGLE_OAUTH_AUTH_URL=https://accounts.google.com/o/oauth2/v2/auth"
               echo "GOOGLE_OAUTH_TOKEN_URL=https://oauth2.googleapis.com/token"
