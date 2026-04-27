@@ -17,7 +17,7 @@ export function createRequireCustomerJwt({
   shouldUseSessionCache = () => true
 }) {
   /**
-   * Requires `Authorization: Bearer <JWT>` from `POST /api/auth/oauth/jwt` (or a trusted JWT).
+   * Requires `Authorization: Bearer <JWT>` from OTP verification endpoints (or a trusted JWT).
    * Optionally re-checks DB so revoked/blocked users lose access before token expiry.
    *
    * Sets `req.customerAuth` with `{ userId, customerId, shopId?, role }`.

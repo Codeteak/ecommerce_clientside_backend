@@ -7,7 +7,6 @@ export function mountAuthRoutes(r, deps) {
     otpVerifyLimiter,
     validate,
     handlers,
-    oauthJwtBodySchema,
     otpRequestBodySchema,
     otpVerifyBodySchema,
     emailOtpRequestBodySchema,
@@ -38,5 +37,4 @@ export function mountAuthRoutes(r, deps) {
     validate({ body: emailOtpVerifyBodySchema }),
     handlers.emailOtpVerify
   );
-  r.post("/api/auth/oauth/jwt", authLimiter, validate({ body: oauthJwtBodySchema }), handlers.oauthJwt);
 }

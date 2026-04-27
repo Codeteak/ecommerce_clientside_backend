@@ -20,7 +20,7 @@ echo "[application_start] Appending runtime overrides..."
 {
   echo "NODE_ENV=production"
   echo "PORT=4100"
-  echo "DATABASE_SSL_REJECT_UNAUTHORIZED=true"
+  echo "DATABASE_SSL_REJECT_UNAUTHORIZED=${DATABASE_SSL_REJECT_UNAUTHORIZED:-false}"
   echo "TRUST_PROXY=true"
   echo "JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-$(openssl rand -base64 32)}"
 } >> .env

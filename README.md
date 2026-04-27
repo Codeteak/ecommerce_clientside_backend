@@ -37,13 +37,6 @@ API_PUBLIC_URL=http://localhost:4100
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
 DATABASE_SSL_REJECT_UNAUTHORIZED=false
 
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_OAUTH_AUTH_URL=https://accounts.google.com/o/oauth2/v2/auth
-GOOGLE_OAUTH_TOKEN_URL=https://oauth2.googleapis.com/token
-GOOGLE_OAUTH_USERINFO_URL=https://www.googleapis.com/oauth2/v3/userinfo
-GOOGLE_OAUTH_SCOPE=openid email profile
-
 JWT_SECRET=change_me_min_16_chars
 JWT_ISSUER=clientside-ecommerce
 JWT_AUDIENCE=clientside-ecommerce
@@ -61,7 +54,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Default port: **4100**. Ensure a **shop** row exists before customer registration / OAuth with `shopId`.
+Default port: **4100**. Ensure a **shop** row exists before customer registration with `shopId`.
 
 ## Postman
 

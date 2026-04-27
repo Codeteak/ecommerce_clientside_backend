@@ -1,12 +1,5 @@
 import { z } from "zod";
 
-/** Body optional: `{}` when using `storefront_oauth_exchange` cookie after Google callback. */
-export const oauthJwtBodySchema = z
-  .object({
-    shopId: z.string().uuid().optional()
-  })
-  .strict();
-
 const phoneSchema = z.string().regex(/^[0-9+][0-9]{7,31}$/, "Invalid phone format");
 const emailSchema = z.string().trim().toLowerCase().email("Invalid email format");
 

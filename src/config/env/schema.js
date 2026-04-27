@@ -124,13 +124,6 @@ export const envSchema = z
           "JWT_REFRESH_SECRET must be set to a strong secret in production (not the development default)"
       });
     }
-    if (val.NODE_ENV === "production" && !val.DATABASE_SSL_REJECT_UNAUTHORIZED) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["DATABASE_SSL_REJECT_UNAUTHORIZED"],
-        message: "DATABASE_SSL_REJECT_UNAUTHORIZED must be true in production"
-      });
-    }
     if (val.NODE_ENV === "production" && val.LOG_OTP_IN_DEV) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

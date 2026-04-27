@@ -1,51 +1,11 @@
 import { withClient, withTx } from "../../../infra/db/tx.js";
-import { oauthExchangeCookieOptions, verifyOAuthExchangeCookie } from "../../../infra/oauth/oauthExchangeCookie.js";
 import { logSecurityEvent } from "../../../infra/logging/apiLog.js";
 import { AppError } from "../../../domain/errors/AppError.js";
 
 /**
  * Purpose: This file handles authentication HTTP endpoints.
- * OAuth JWT exchange and OTP login handlers.
+ * OTP login handlers.
  */
-function oauthJwtHandler(ctx) {
-  return async (req, res, next) => {
-    const cookieOpts = oauthExchangeCookieOptions();
-    try {
-      const rawCookie = req.cookies?.storefront_oauth_exchange;
-      if (rawCookie) {
-        try {
-          const payload = verifyOAuthExchangeCookie(rawCookie);
-          const result = await withClient((client) =>
-            ctx.buildStorefrontSessionResponse(client, payload.sub, {
-              ip: req.ip,
-              userAgent: req.get("user-agent") || null
-            })
-          );
-          res.clearCookie("storefront_oauth_exchange", cookieOpts);
-          return res.json(result);
-        } catch {
-          res.clearCookie("storefront_oauth_exchange", cookieOpts);
-          return res.status(401).json({
-            error: {
-              code: "UNAUTHORIZED",
-              message:
-                "OAuth exchange cookie expired or invalid. Complete Google sign-in again."
-            }
-          });
-        }
-      }
-      return res.status(401).json({
-        error: {
-          code: "UNAUTHORIZED",
-          message: "Missing storefront_oauth_exchange cookie. Complete Google sign-in first."
-        }
-      });
-    } catch (err) {
-      next(err);
-    }
-  };
-}
-
 function otpRequestHandler(ctx) {
   return async (req, res, next) => {
     try {
@@ -152,15 +112,13 @@ export const authController = {
   otpVerify: (ctx) => otpVerifyHandler(ctx),
   emailOtpRequest: (ctx) => emailOtpRequestHandler(ctx),
   emailOtpVerify: (ctx) => emailOtpVerifyHandler(ctx),
-  oauthJwt: (ctx) => oauthJwtHandler(ctx),
 
   forCtx(ctx) {
     return {
       otpRequest: otpRequestHandler(ctx),
       otpVerify: otpVerifyHandler(ctx),
       emailOtpRequest: emailOtpRequestHandler(ctx),
-      emailOtpVerify: emailOtpVerifyHandler(ctx),
-      oauthJwt: oauthJwtHandler(ctx)
+      emailOtpVerify: emailOtpVerifyHandler(ctx)
     };
   }
 };

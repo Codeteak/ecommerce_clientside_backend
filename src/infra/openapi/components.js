@@ -59,13 +59,6 @@ export const schemas = {
     },
     required: ["error"]
   },
-  OauthJwtRequest: {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      shopId: { type: "string", format: "uuid" }
-    }
-  },
   OtpRequestBody: {
     type: "object",
     required: ["phone", "shopId"],
@@ -248,33 +241,6 @@ export const schemas = {
     properties: {
       addressId: { type: "string", format: "uuid" },
       notes: { type: "string", maxLength: 2000, nullable: true }
-    }
-  },
-  SocialSignInBody: {
-    type: "object",
-    required: ["provider"],
-    additionalProperties: false,
-    properties: {
-      provider: { type: "string", enum: ["google"] },
-      disableRedirect: { type: "boolean" },
-      callbackURL: { type: "string", format: "uri" },
-      additionalData: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          shopId: {
-            type: "string",
-            format: "uuid",
-            description: "Optional if `x-shop-id` is sent; header wins when both are present."
-          }
-        }
-      }
-    }
-  },
-  OauthUrlResponse: {
-    type: "object",
-    properties: {
-      url: { type: "string", format: "uri" }
     }
   }
 };

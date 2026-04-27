@@ -18,8 +18,7 @@ export function getOpenApiDocument(envSlice) {
     servers: [{ url: base, description: "Configured API host" }],
     tags: [
       { name: "Root", description: "Discovery and health" },
-      { name: "Auth", description: "OTP login and OAuth JWT exchange" },
-      { name: "OAuth", description: "Google OAuth2 flows" },
+      { name: "Auth", description: "OTP login" },
       { name: "Profile", description: "Authenticated `/api/me/profile`" },
       { name: "Storefront", description: "Location / service area" },
       { name: "Storefront catalog", description: "Public shop catalog" },
@@ -35,8 +34,7 @@ export function getOpenApiDocument(envSlice) {
           type: "http",
           scheme: "bearer",
           bearerFormat: "JWT",
-          description:
-            "Customer access token from POST /api/auth/otp/verify or POST /api/auth/oauth/jwt after Google OAuth"
+          description: "Customer access token from OTP verification endpoints"
         }
       },
       schemas,

@@ -3,7 +3,6 @@
 import { Router } from "express";
 import { authController } from "../controllers/authController.js";
 import { healthController } from "../controllers/healthController.js";
-import { oauthController } from "../controllers/oauthController.js";
 import { profileController } from "../controllers/profileController.js";
 import { storefrontAccountController } from "../controllers/storefrontAccountController.js";
 import { storefrontCartController } from "../controllers/storefrontCartController.js";
@@ -14,13 +13,11 @@ import { storefrontOrdersController } from "../controllers/storefrontOrdersContr
 import { createLimiter } from "../middleware/createLimiter.js";
 import { validate } from "../middleware/validate.js";
 import {
-  oauthJwtBodySchema,
   otpRequestBodySchema,
   otpVerifyBodySchema,
   emailOtpRequestBodySchema,
   emailOtpVerifyBodySchema
 } from "../validations/authSchemas.js";
-import { oauthSocialBodySchema } from "../validations/oauthSchemas.js";
 import { patchProfileBodySchema } from "../validations/profileSchemas.js";
 import { storefrontLocationBodySchema } from "../validations/storefrontSchemas.js";
 import {
@@ -39,7 +36,6 @@ import {
 } from "../validations/storefrontRestSchemas.js";
 import { mountAuthRoutes } from "./authRoutes.js";
 import { mountCoreRoutes } from "./coreRoutes.js";
-import { mountOauthRoutes } from "./oauthRoutes.js";
 import { mountProfileRoutes } from "./profileRoutes.js";
 import { mountStorefrontRoutes } from "./storefrontRoutes.js";
 
@@ -98,7 +94,6 @@ export function createRoutes(ctx) {
   });
 
   const authHandlers = authController.forCtx(ctx);
-  const oauthHandlers = oauthController.forCtx(ctx);
   const profileHandlers = profileController.forCtx(ctx);
   const healthHandlers = healthController.forCtx(ctx);
   const storefrontCtl = storefrontController.forCtx(ctx);
@@ -119,18 +114,10 @@ export function createRoutes(ctx) {
     otpVerifyLimiter,
     validate,
     handlers: authHandlers,
-    oauthJwtBodySchema,
     otpRequestBodySchema,
     otpVerifyBodySchema,
     emailOtpRequestBodySchema,
     emailOtpVerifyBodySchema
-  });
-
-  mountOauthRoutes(r, {
-    authLimiter,
-    validate,
-    handlers: oauthHandlers,
-    oauthSocialBodySchema
   });
 
   mountProfileRoutes(r, {

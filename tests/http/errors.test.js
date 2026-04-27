@@ -16,9 +16,9 @@ describe("HTTP errors", () => {
 
   it("returns 400 INVALID_JSON for malformed JSON body", async () => {
     const res = await request(app)
-      .post("/api/auth/oauth/jwt")
+      .post("/api/auth/otp/request")
       .set("Content-Type", "application/json")
-      .send('{"shopId":"00000000-0000-4000-8000-000000000001"}x')
+      .send('{"phone":"+919999999999","shopId":"00000000-0000-4000-8000-000000000001"}x')
       .expect(400);
 
     expect(res.body.error?.code).toBe("INVALID_JSON");

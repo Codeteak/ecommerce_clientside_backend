@@ -131,26 +131,6 @@ export function buildPaths() {
         }
       }
     },
-    "/api/auth/oauth/jwt": {
-      post: {
-        tags: ["Auth"],
-        summary: "Exchange OAuth cookie for JWT",
-        description: "Requires a valid `storefront_oauth_exchange` cookie from Google OAuth callback.",
-        parameters: [P.XShopId],
-        requestBody: {
-          content: { "application/json": { schema: { $ref: "#/components/schemas/OauthJwtRequest" } } }
-        },
-        responses: {
-          "200": {
-            description: "OK",
-            content: { "application/json": { schema: { $ref: "#/components/schemas/SessionResponse" } } }
-          },
-          "400": jsonErr,
-          "401": jsonErr,
-          "429": jsonErr
-        }
-      }
-    },
     "/api/auth/otp/request": {
       post: {
         tags: ["Auth"],
@@ -230,50 +210,6 @@ export function buildPaths() {
           "401": jsonErr,
           "404": jsonErr,
           "429": jsonErr
-        }
-      }
-    },
-    "/api/oauth/sign-in/social": {
-      post: {
-        tags: ["OAuth"],
-        summary: "Start Google OAuth",
-        description:
-          "Starts Google OAuth flow. Use `x-shop-id` header for tenant context (or `additionalData.shopId` in body).",
-        parameters: [P.XShopId],
-        requestBody: {
-          required: true,
-          content: { "application/json": { schema: { $ref: "#/components/schemas/SocialSignInBody" } } }
-        },
-        responses: {
-          "200": {
-            description: "Authorize URL (when disableRedirect true)",
-            content: { "application/json": { schema: { $ref: "#/components/schemas/OauthUrlResponse" } } }
-          },
-          "302": { description: "Redirect to Google" },
-          "400": jsonErr,
-          "429": jsonErr,
-          "503": jsonErr
-        }
-      }
-    },
-    "/api/oauth/callback/google": {
-      get: {
-        tags: ["OAuth"],
-        summary: "Google OAuth callback",
-        description:
-          "Google redirect URI. On success sets `storefront_oauth_exchange` cookie and redirects to callback URL.",
-        parameters: [
-          { name: "code", in: "query", schema: { type: "string" } },
-          { name: "state", in: "query", schema: { type: "string" } },
-          { name: "error", in: "query", schema: { type: "string" } },
-          { name: "error_description", in: "query", schema: { type: "string" } }
-        ],
-        responses: {
-          "302": { description: "Redirect to callback; sets storefront_oauth_exchange cookie" },
-          "400": jsonErr,
-          "401": jsonErr,
-          "429": jsonErr,
-          "503": jsonErr
         }
       }
     },

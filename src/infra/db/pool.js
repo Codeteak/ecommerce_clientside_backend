@@ -2,13 +2,21 @@ import pg from "pg";
 import { env } from "../../config/env.js";
 
 const { Pool } = pg;
+const rejectUnauthorized =
+  env.NODE_ENV === "production" && env.ALLOW_INSECURE_DB_SSL_IN_PRODUCTION
+    ? false
+    : env.DATABASE_SSL_REJECT_UNAUTHORIZED;
+const caPem =
+  typeof env.DATABASE_SSL_CA_PEM === "string" && env.DATABASE_SSL_CA_PEM.trim()
+    ? env.DATABASE_SSL_CA_PEM.replace(/\\n/g, "\n")
+    : undefined;
 
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
   max: env.DATABASE_POOL_MAX,
   idleTimeoutMillis: env.DATABASE_POOL_IDLE_TIMEOUT_MS,
   connectionTimeoutMillis: env.DATABASE_CONNECTION_TIMEOUT_MS,
-  ssl: env.DATABASE_SSL_REJECT_UNAUTHORIZED
-    ? { rejectUnauthorized: true }
+  ssl: rejectUnauthorized
+    ? { rejectUnauthorized: true, ...(caPem ? { ca: caPem } : {}) }
     : { rejectUnauthorized: false }
 });
