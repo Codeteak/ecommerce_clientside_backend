@@ -2,14 +2,15 @@ import pg from "pg";
 import { env } from "../../config/env.js";
 
 const { Pool } = pg;
-const rejectUnauthorized =
-  env.NODE_ENV === "production" && env.ALLOW_INSECURE_DB_SSL_IN_PRODUCTION
-    ? false
-    : env.DATABASE_SSL_REJECT_UNAUTHORIZED;
 const caPem =
   typeof env.DATABASE_SSL_CA_PEM === "string" && env.DATABASE_SSL_CA_PEM.trim()
     ? env.DATABASE_SSL_CA_PEM.replace(/\\n/g, "\n")
     : undefined;
+const hasCustomCa = Boolean(caPem);
+const rejectUnauthorized =
+  env.NODE_ENV === "production"
+    ? (hasCustomCa ? env.DATABASE_SSL_REJECT_UNAUTHORIZED : false)
+    : env.DATABASE_SSL_REJECT_UNAUTHORIZED;
 
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
