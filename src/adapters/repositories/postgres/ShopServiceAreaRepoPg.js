@@ -12,6 +12,7 @@ export class ShopServiceAreaRepoPg extends ShopServiceAreaRepo {
                 s.is_active,
                 s.is_blocked,
                 s.is_deleted,
+                s.service_area_radius_meters,
                 a.lat AS hub_lat,
                 a.lng AS hub_lng
            FROM shops s

@@ -128,7 +128,7 @@ export function createAppContext() {
   });
   const checkShopServiceArea = createCheckShopServiceArea({
     shopServiceAreaRepo,
-    maxRadiusM: env.SERVICE_AREA_RADIUS_METERS
+    defaultMaxRadiusM: env.SERVICE_AREA_RADIUS_METERS
   });
 
   const realtime = {

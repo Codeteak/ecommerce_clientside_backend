@@ -8,6 +8,7 @@ export class ShopServiceAreaRepo {
    *   is_active: boolean,
    *   is_blocked: boolean,
    *   is_deleted: boolean,
+ *   service_area_radius_meters: number|null,
    *   hub_lat: number|null,
    *   hub_lng: number|null
    * }|null>}

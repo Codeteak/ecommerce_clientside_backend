@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS shops (
   email TEXT,
   address_id UUID REFERENCES addresses(id) ON DELETE SET NULL,
   owner_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  service_area_radius_meters INTEGER NOT NULL DEFAULT 5000,
   is_blocked BOOLEAN NOT NULL DEFAULT false,
   is_deleted BOOLEAN NOT NULL DEFAULT false,
   inventory_tracking_enabled BOOLEAN NOT NULL DEFAULT false,
@@ -144,6 +145,11 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shops_email_len_chk') THEN
     ALTER TABLE shops ADD CONSTRAINT shops_email_len_chk CHECK (email IS NULL OR char_length(email) <= 254);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shops_service_area_radius_positive_chk') THEN
+    ALTER TABLE shops
+      ADD CONSTRAINT shops_service_area_radius_positive_chk
+      CHECK (service_area_radius_meters > 0);
   END IF;
 END $$;
 
@@ -182,6 +188,12 @@ END $$;
 
 -- Upgrade: `shops` without `owner_user_id` (column is inline on fresh CREATE).
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS owner_user_id UUID;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS service_area_radius_meters INTEGER;
+UPDATE shops
+SET service_area_radius_meters = 5000
+WHERE service_area_radius_meters IS NULL OR service_area_radius_meters <= 0;
+ALTER TABLE shops ALTER COLUMN service_area_radius_meters SET DEFAULT 5000;
+ALTER TABLE shops ALTER COLUMN service_area_radius_meters SET NOT NULL;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shops_owner_user_id_fkey') THEN

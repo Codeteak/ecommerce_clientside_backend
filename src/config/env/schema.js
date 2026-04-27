@@ -74,7 +74,7 @@ export const envSchema = z
     ALLOW_API_DOCS_IN_PRODUCTION: z.preprocess(boolFromEnv, z.boolean()),
     TRUST_PROXY: z.preprocess(boolFromEnv, z.boolean()),
     TRUST_PROXY_HOPS: z.coerce.number().int().positive().default(1),
-    SERVICE_AREA_RADIUS_METERS: z.coerce.number().int().positive(),
+    SERVICE_AREA_RADIUS_METERS: z.coerce.number().int().positive().default(5000),
     STOREFRONT_ROOT_DOMAIN: z.string().optional().default(""),
     OBJECT_STORAGE_PUBLIC_BASE_URL: z.string().optional().default(""),
     REDIS_URL: z.string().optional().default(""),

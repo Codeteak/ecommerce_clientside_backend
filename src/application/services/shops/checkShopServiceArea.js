@@ -4,9 +4,9 @@ import { shopAllowsCustomers } from "../auth/shopPolicy.js";
 
 /**
  * Purpose: Decide if a delivery point is within the configured radius of the shop’s address hub.
- * @param {{ shopServiceAreaRepo: import("../../ports/repositories/ShopServiceAreaRepo.js").ShopServiceAreaRepo, maxRadiusM: number }} deps
+ * @param {{ shopServiceAreaRepo: import("../../ports/repositories/ShopServiceAreaRepo.js").ShopServiceAreaRepo, defaultMaxRadiusM: number }} deps
  */
-export function createCheckShopServiceArea({ shopServiceAreaRepo, maxRadiusM }) {
+export function createCheckShopServiceArea({ shopServiceAreaRepo, defaultMaxRadiusM }) {
   function toFiniteNumber(value) {
     const normalized =
       typeof value === "string" ? value.trim().replace(",", ".") : value;
@@ -25,7 +25,7 @@ export function createCheckShopServiceArea({ shopServiceAreaRepo, maxRadiusM }) 
       return {
         inServiceArea: false,
         distanceM: null,
-        maxRadiusM,
+        maxRadiusM: defaultMaxRadiusM,
         code: "ADDRESS_COORDINATES_INVALID",
         message: "Address coordinates are invalid."
       };
@@ -47,7 +47,7 @@ export function createCheckShopServiceArea({ shopServiceAreaRepo, maxRadiusM }) 
       return {
         inServiceArea: false,
         distanceM: null,
-        maxRadiusM,
+        maxRadiusM: defaultMaxRadiusM,
         code: "SHOP_UNAVAILABLE",
         message: "This shop is not available for orders."
       };
@@ -59,11 +59,15 @@ export function createCheckShopServiceArea({ shopServiceAreaRepo, maxRadiusM }) 
       return {
         inServiceArea: false,
         distanceM: null,
-        maxRadiusM,
+        maxRadiusM: defaultMaxRadiusM,
         code: "SHOP_LOCATION_MISSING",
         message: "This shop has no delivery location configured."
       };
     }
+
+    const shopRadiusM = toFiniteNumber(row.service_area_radius_meters);
+    const maxRadiusM =
+      shopRadiusM != null && shopRadiusM > 0 ? Math.round(shopRadiusM) : defaultMaxRadiusM;
 
     const distanceM = haversineMeters(reqLat, reqLng, hubLat, hubLng);
     const roundedM = Math.round(distanceM);
