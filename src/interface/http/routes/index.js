@@ -10,6 +10,7 @@ import { storefrontCatalogController } from "../controllers/storefrontCatalogCon
 import { storefrontCheckoutController } from "../controllers/storefrontCheckoutController.js";
 import { storefrontController } from "../controllers/storefrontController.js";
 import { storefrontOrdersController } from "../controllers/storefrontOrdersController.js";
+import { shopController } from "../controllers/shopController.js";
 import { createLimiter } from "../middleware/createLimiter.js";
 import { validate } from "../middleware/validate.js";
 import {
@@ -20,6 +21,7 @@ import {
 } from "../validations/authSchemas.js";
 import { patchProfileBodySchema } from "../validations/profileSchemas.js";
 import { storefrontLocationBodySchema } from "../validations/storefrontSchemas.js";
+import { shopDomainQuerySchema } from "../validations/shopSchemas.js";
 import {
   storefrontCategoriesQuerySchema,
   storefrontProductsQuerySchema,
@@ -102,6 +104,9 @@ export function createRoutes(ctx) {
   const storefrontCheckout = storefrontCheckoutController.forCtx(ctx);
   const storefrontAccount = storefrontAccountController.forCtx(ctx);
   const storefrontOrders = storefrontOrdersController.forCtx(ctx);
+  const shopCtl = shopController;
+
+  r.get("/api/shops/resolve-by-domain", validate({ query: shopDomainQuerySchema }), shopCtl.resolveByDomain(ctx));
 
   mountCoreRoutes(r, {
     healthGet: healthHandlers.get,

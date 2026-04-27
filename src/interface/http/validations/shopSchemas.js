@@ -10,3 +10,9 @@ export const serviceAreaCheckBodySchema = z
     lng: z.number().gte(-180).lte(180)
   })
   .strict();
+
+export const shopDomainQuerySchema = z
+  .object({
+    domain: z.string().trim().min(1).max(255)
+  })
+  .strict();

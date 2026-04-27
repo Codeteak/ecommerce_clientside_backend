@@ -131,6 +131,39 @@ export function buildPaths() {
         }
       }
     },
+    "/api/shops/resolve-by-domain": {
+      get: {
+        tags: ["Shops"],
+        summary: "Resolve shop by domain",
+        description: "Returns the `shopId` for a matching `shops.domain` or `shops.custom_domain`.",
+        parameters: [
+          {
+            name: "domain",
+            in: "query",
+            required: true,
+            schema: { type: "string", minLength: 1, maxLength: 255 }
+          }
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    shopId: { type: "string", format: "uuid" }
+                  },
+                  required: ["shopId"]
+                }
+              }
+            }
+          },
+          "400": jsonErr,
+          "404": jsonErr
+        }
+      }
+    },
     "/api/auth/otp/request": {
       post: {
         tags: ["Auth"],

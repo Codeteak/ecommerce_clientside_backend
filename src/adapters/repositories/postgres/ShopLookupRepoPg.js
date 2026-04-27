@@ -29,4 +29,23 @@ export class ShopLookupRepoPg extends ShopLookupRepo {
       client.release();
     }
   }
+
+  async findShopIdByDomain(domain) {
+    const d = String(domain || "").trim().toLowerCase();
+    if (!d) return null;
+    const client = await pool.connect();
+    try {
+      const { rows } = await client.query(
+        `SELECT id
+           FROM shops
+          WHERE lower(domain) = lower($1)
+             OR lower(custom_domain) = lower($1)
+          LIMIT 1`,
+        [d]
+      );
+      return rows[0]?.id ?? null;
+    } finally {
+      client.release();
+    }
+  }
 }

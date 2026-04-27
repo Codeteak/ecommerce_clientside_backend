@@ -7,4 +7,8 @@ export class ShopLookupRepo {
   async findShopIdByCustomDomain(_hostLower) {
     throw new Error("Not implemented");
   }
+
+  async findShopIdByDomain(_domain) {
+    throw new Error("Not implemented");
+  }
 }
