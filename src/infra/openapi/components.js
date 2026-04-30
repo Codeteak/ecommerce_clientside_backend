@@ -255,9 +255,7 @@ export const schemas = {
   },
   CheckoutBody: {
     type: "object",
-    required: ["addressId"],
     properties: {
-      addressId: { type: "string", format: "uuid" },
       notes: { type: "string", maxLength: 2000, nullable: true }
     }
   }

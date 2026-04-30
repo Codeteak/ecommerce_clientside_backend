@@ -40,7 +40,6 @@ export const storefrontAddressPostSchema = z.object(addressFields);
 export const storefrontAddressPatchSchema = z.object(addressFields).partial();
 
 export const storefrontCheckoutBodySchema = z.object({
-  addressId: z.string().uuid(),
   notes: z.string().max(2000).optional().nullable()
 });
 

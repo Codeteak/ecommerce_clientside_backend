@@ -85,8 +85,7 @@ describe("checkoutStorefront validations", () => {
       {
         shopId: "00000000-0000-4000-8000-000000000001",
         customerId: "cust-1",
-        userId: "user-1",
-        addressId: "22222222-2222-4222-8222-222222222222"
+        userId: "user-1"
       }
     );
     expect(out).toMatchObject({
@@ -96,17 +95,16 @@ describe("checkoutStorefront validations", () => {
     expect(d.orderRepo.insertOrderWithItemsAndOutbox).toHaveBeenCalledTimes(1);
   });
 
-  it("fails when selected address does not belong to customer", async () => {
+  it("uses profile address even when a different addressId is provided", async () => {
     const d = deps();
     const run = createCheckoutStorefront(d);
-    await expect(
-      run({}, {
+    const out = await run({}, {
         shopId: "00000000-0000-4000-8000-000000000001",
         customerId: "cust-1",
         userId: "user-1",
         addressId: "33333333-3333-4333-8333-333333333333"
-      })
-    ).rejects.toMatchObject({ code: "ADDRESS_INVALID" });
+      });
+    expect(out).toMatchObject({ orderId: "order-1", total_minor: 120 });
   });
 
   it("fails when address is outside service area", async () => {
@@ -117,8 +115,7 @@ describe("checkoutStorefront validations", () => {
       run({}, {
         shopId: "00000000-0000-4000-8000-000000000001",
         customerId: "cust-1",
-        userId: "user-1",
-        addressId: "22222222-2222-4222-8222-222222222222"
+        userId: "user-1"
       })
     ).rejects.toMatchObject({ code: "ADDRESS_NOT_SERVICEABLE" });
   });
@@ -136,8 +133,7 @@ describe("checkoutStorefront validations", () => {
       run({}, {
         shopId: "00000000-0000-4000-8000-000000000001",
         customerId: "cust-1",
-        userId: "user-1",
-        addressId: "22222222-2222-4222-8222-222222222222"
+        userId: "user-1"
       })
     ).rejects.toMatchObject({ code: "PRODUCT_UNAVAILABLE" });
   });
@@ -157,7 +153,6 @@ describe("checkoutStorefront validations", () => {
         shopId: "00000000-0000-4000-8000-000000000001",
         customerId: "cust-1",
         userId: "user-1",
-        addressId: "22222222-2222-4222-8222-222222222222",
         idempotencyKey: "idem-key-12345678"
       }
     );
@@ -173,7 +168,6 @@ describe("checkoutStorefront validations", () => {
       shopId: "00000000-0000-4000-8000-000000000001",
       customerId: "cust-1",
       userId: "user-1",
-      addressId: "22222222-2222-4222-8222-222222222222",
       notes: "ring bell"
     });
 
@@ -212,7 +206,6 @@ describe("checkoutStorefront validations", () => {
         shopId: "00000000-0000-4000-8000-000000000001",
         customerId: "cust-1",
         userId: "user-1",
-        addressId: "22222222-2222-4222-8222-222222222222",
         idempotencyKey: "checkout-key-abcdefgh"
       }
     );
@@ -235,7 +228,6 @@ describe("checkoutStorefront validations", () => {
           shopId: "00000000-0000-4000-8000-000000000001",
           customerId: "cust-1",
           userId: "user-1",
-          addressId: "22222222-2222-4222-8222-222222222222",
           idempotencyKey: "short"
         }
       )
@@ -251,8 +243,7 @@ describe("checkoutStorefront validations", () => {
       {
         shopId: "00000000-0000-4000-8000-000000000001",
         customerId: "cust-1",
-        userId: "user-1",
-        addressId: "22222222-2222-4222-8222-222222222222"
+        userId: "user-1"
       }
     );
     expect(emitOrderPlaced).toHaveBeenCalledTimes(1);
@@ -277,8 +268,7 @@ describe("checkoutStorefront validations", () => {
       {
         shopId: "00000000-0000-4000-8000-000000000001",
         customerId: "cust-1",
-        userId: "user-1",
-        addressId: "22222222-2222-4222-8222-222222222222"
+        userId: "user-1"
       }
     );
     expect(out.orderId).toBe("order-1");

@@ -18,7 +18,6 @@ function postHandler(ctx) {
           shopId,
           customerId,
           userId,
-          addressId: req.body.addressId,
           notes: req.body?.notes ?? null,
           idempotencyKey,
           requestMeta: {

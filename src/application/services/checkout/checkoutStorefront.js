@@ -39,7 +39,7 @@ export function createCheckoutStorefront({
   emitOrderPlaced = null
 }) {
   return async function checkoutStorefront(client, input) {
-    const { shopId: shopRaw, customerId, userId, addressId, notes, requestMeta, idempotencyKey } = input;
+    const { shopId: shopRaw, customerId, userId, notes, requestMeta, idempotencyKey } = input;
     const shopId = requireShopId(shopRaw);
     const rawIdem = typeof idempotencyKey === "string" ? idempotencyKey.trim() : "";
     if (rawIdem && (rawIdem.length < 8 || rawIdem.length > 128)) {
@@ -75,9 +75,6 @@ export function createCheckoutStorefront({
       // Re-enable PHONE_REQUIRED once real OTP verification is live.
       if (!profile.address || !profile.address.id || !profile.address.line1) {
         throw checkoutError("ADDRESS_REQUIRED", "Delivery address is required");
-      }
-      if (String(profile.address.id) !== String(addressId)) {
-        throw checkoutError("ADDRESS_INVALID", "Selected address is invalid for this user");
       }
       if (profile.address.lat == null || profile.address.lng == null) {
         throw checkoutError("ADDRESS_COORDINATES_REQUIRED", "Selected address must include location coordinates");
