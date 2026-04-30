@@ -108,3 +108,11 @@ export const storefrontProductsQuerySchema = z.object({
 export const storefrontProductSlugParamSchema = z.object({
   slug: z.string().min(1).max(128)
 });
+
+export const storefrontProductIdParamSchema = z.object({
+  id: z.string().uuid()
+});
+
+export const storefrontCategorySlugParamSchema = z.object({
+  slug: z.string().min(1).max(128)
+});

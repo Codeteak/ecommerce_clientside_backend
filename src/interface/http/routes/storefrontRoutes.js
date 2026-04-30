@@ -25,6 +25,8 @@ export function mountStorefrontRoutes(r, deps) {
     storefrontCategoriesQuerySchema,
     storefrontProductsQuerySchema,
     storefrontProductSlugParamSchema,
+    storefrontProductIdParamSchema,
+    storefrontCategorySlugParamSchema,
     storefrontCartItemBodySchema,
     storefrontCartItemPatchSchema,
     storefrontCheckoutBodySchema,
@@ -41,118 +43,133 @@ export function mountStorefrontRoutes(r, deps) {
     invalidateShopCatalogCache
   } = deps;
 
-  r.post(
-    "/storefront/location/check",
-    authLimiter,
-    validate({ body: storefrontLocationBodySchema }),
-    storefrontCtl.checkLocation
-  );
-
-  r.get(
-    "/storefront/categories",
-    validate({ query: storefrontCategoriesQuerySchema }),
-    storefrontCat.listCategories
-  );
-  r.get(
-    "/storefront/products",
-    validate({ query: storefrontProductsQuerySchema }),
-    storefrontCat.listProducts
-  );
-  r.get(
-    "/storefront/products/:slug",
-    validate({ params: storefrontProductSlugParamSchema }),
-    storefrontCat.getProductBySlug
-  );
-
-  r.post("/storefront/cart", requireCustomerJwt, storefrontCart.getOrCreate);
-  r.get("/storefront/cart", requireCustomerJwt, storefrontCart.get);
-  r.post(
-    "/storefront/cart/items",
-    requireCustomerJwt,
-    cartMutateLimiter,
-    validate({ body: storefrontCartItemBodySchema }),
-    storefrontCart.addItem
-  );
-  r.patch(
-    "/storefront/cart/items/:itemId",
-    requireCustomerJwt,
-    cartMutateLimiter,
-    validate({ params: cartItemIdParamSchema, body: storefrontCartItemPatchSchema }),
-    storefrontCart.patchItem
-  );
-  r.delete(
-    "/storefront/cart/items/:itemId",
-    requireCustomerJwt,
-    cartMutateLimiter,
-    validate({ params: cartItemIdParamSchema }),
-    storefrontCart.deleteItem
-  );
-
-  r.post(
-    "/storefront/checkout",
-    authLimiter,
-    cartMutateLimiter,
-    requireCustomerJwt,
-    locationGuard,
-    validate({ body: storefrontCheckoutBodySchema }),
-    storefrontCheckout.post
-  );
-
-  r.post(
-    "/storefront/profile",
-    requireCustomerJwt,
-    profileMutateLimiter,
-    validate({ body: storefrontProfilePostSchema }),
-    storefrontAccount.postProfile
-  );
-  r.get("/storefront/address", requireCustomerJwt, storefrontAccount.getAddress);
-  r.post(
-    "/storefront/address",
-    requireCustomerJwt,
-    addressMutateLimiter,
-    validate({ body: storefrontAddressPostSchema }),
-    storefrontAccount.postAddress
-  );
-  r.patch(
-    "/storefront/address",
-    requireCustomerJwt,
-    addressMutateLimiter,
-    validate({ body: storefrontAddressPatchSchema }),
-    storefrontAccount.patchAddress
-  );
-
-  r.get(
-    "/storefront/orders",
-    requireCustomerJwt,
-    validate({ query: storefrontOrdersListQuerySchema }),
-    storefrontOrders.list
-  );
-
-  if (env.CATALOG_CACHE_INVALIDATE_TOKEN && typeof invalidateShopCatalogCache === "function") {
+  function mountForPrefix(prefix) {
     r.post(
-      "/storefront/catalog/cache/invalidate",
+      `${prefix}/location/check`,
       authLimiter,
-      validate({ body: storefrontCatalogCacheInvalidateBodySchema }),
-      (req, res, next) => {
-        const token = req.get("X-Catalog-Cache-Invalidate");
-        if (!token || token !== env.CATALOG_CACHE_INVALIDATE_TOKEN) {
-          return res.status(403).json({
-            error: {
-              code: "FORBIDDEN",
-              message: "Invalid or missing X-Catalog-Cache-Invalidate token"
-            }
-          });
+      validate({ body: storefrontLocationBodySchema }),
+      storefrontCtl.checkLocation
+    );
+
+    r.get(
+      `${prefix}/categories`,
+      validate({ query: storefrontCategoriesQuerySchema }),
+      storefrontCat.listCategories
+    );
+    r.get(
+      `${prefix}/categories/:slug`,
+      validate({ params: storefrontCategorySlugParamSchema }),
+      storefrontCat.getCategoryBySlug
+    );
+    r.get(
+      `${prefix}/products`,
+      validate({ query: storefrontProductsQuerySchema }),
+      storefrontCat.listProducts
+    );
+    r.get(
+      `${prefix}/products/:slug`,
+      validate({ params: storefrontProductSlugParamSchema }),
+      storefrontCat.getProductBySlug
+    );
+    r.get(
+      `${prefix}/products/id/:id`,
+      validate({ params: storefrontProductIdParamSchema }),
+      storefrontCat.getProductById
+    );
+
+    r.post(`${prefix}/cart`, requireCustomerJwt, storefrontCart.getOrCreate);
+    r.get(`${prefix}/cart`, requireCustomerJwt, storefrontCart.get);
+    r.post(
+      `${prefix}/cart/items`,
+      requireCustomerJwt,
+      cartMutateLimiter,
+      validate({ body: storefrontCartItemBodySchema }),
+      storefrontCart.addItem
+    );
+    r.patch(
+      `${prefix}/cart/items/:itemId`,
+      requireCustomerJwt,
+      cartMutateLimiter,
+      validate({ params: cartItemIdParamSchema, body: storefrontCartItemPatchSchema }),
+      storefrontCart.patchItem
+    );
+    r.delete(
+      `${prefix}/cart/items/:itemId`,
+      requireCustomerJwt,
+      cartMutateLimiter,
+      validate({ params: cartItemIdParamSchema }),
+      storefrontCart.deleteItem
+    );
+
+    r.post(
+      `${prefix}/checkout`,
+      authLimiter,
+      cartMutateLimiter,
+      requireCustomerJwt,
+      locationGuard,
+      validate({ body: storefrontCheckoutBodySchema }),
+      storefrontCheckout.post
+    );
+
+    r.post(
+      `${prefix}/profile`,
+      requireCustomerJwt,
+      profileMutateLimiter,
+      validate({ body: storefrontProfilePostSchema }),
+      storefrontAccount.postProfile
+    );
+    r.get(`${prefix}/address`, requireCustomerJwt, storefrontAccount.getAddress);
+    r.post(
+      `${prefix}/address`,
+      requireCustomerJwt,
+      addressMutateLimiter,
+      validate({ body: storefrontAddressPostSchema }),
+      storefrontAccount.postAddress
+    );
+    r.patch(
+      `${prefix}/address`,
+      requireCustomerJwt,
+      addressMutateLimiter,
+      validate({ body: storefrontAddressPatchSchema }),
+      storefrontAccount.patchAddress
+    );
+
+    r.get(
+      `${prefix}/orders`,
+      requireCustomerJwt,
+      validate({ query: storefrontOrdersListQuerySchema }),
+      storefrontOrders.list
+    );
+
+    if (env.CATALOG_CACHE_INVALIDATE_TOKEN && typeof invalidateShopCatalogCache === "function") {
+      r.post(
+        `${prefix}/catalog/cache/invalidate`,
+        authLimiter,
+        validate({ body: storefrontCatalogCacheInvalidateBodySchema }),
+        (req, res, next) => {
+          const token = req.get("X-Catalog-Cache-Invalidate");
+          if (!token || token !== env.CATALOG_CACHE_INVALIDATE_TOKEN) {
+            return res.status(403).json({
+              error: {
+                code: "FORBIDDEN",
+                message: "Invalid or missing X-Catalog-Cache-Invalidate token"
+              }
+            });
+          }
+          Promise.resolve(invalidateShopCatalogCache(req.body.shopId))
+            .then(() => res.status(204).send())
+            .catch(next);
         }
-        Promise.resolve(invalidateShopCatalogCache(req.body.shopId))
-          .then(() => res.status(204).send())
-          .catch(next);
-      }
+      );
+    }
+    r.get(
+      `${prefix}/orders/:id`,
+      requireCustomerJwt,
+      validate({ params: storefrontOrderIdParamSchema }),
+      storefrontOrders.getById
     );
   }
-  r.get(
-    "/storefront/orders/:id",
-    requireCustomerJwt,
-    validate({ params: storefrontOrderIdParamSchema }),
-    storefrontOrders.getById
-  );
+
+  mountForPrefix("/storefront");
+  mountForPrefix("/api/storefront");
 }

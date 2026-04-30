@@ -37,4 +37,9 @@ describe("Storefront products query validation", () => {
     expect(res.body.error?.code).toBe("VALIDATION_ERROR");
     expect(res.body.error?.message).toContain("shopId is required");
   });
+
+  it("applies the same validation under /api/storefront alias", async () => {
+    const res = await request(app).get("/api/storefront/products?sort_by=random").expect(400);
+    expect(res.body.error?.code).toBe("VALIDATION_ERROR");
+  });
 });

@@ -6,7 +6,7 @@ const jsonErr = {
   content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } }
 };
 
-const shopParams = [P.XShopId];
+const shopParams = [P.XShopId, P.XTenantId];
 
 export function buildPaths() {
   return {
@@ -507,6 +507,21 @@ export function buildPaths() {
         }
       }
     },
+    "/storefront/categories/{slug}": {
+      get: {
+        tags: ["Storefront catalog"],
+        summary: "Category by slug",
+        parameters: [...shopParams, P.Slug],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { type: "object" } } }
+          },
+          "400": jsonErr,
+          "404": jsonErr
+        }
+      }
+    },
     "/storefront/catalog/cache/invalidate": {
       post: {
         tags: ["Storefront catalog"],
@@ -604,11 +619,29 @@ export function buildPaths() {
       get: {
         tags: ["Storefront catalog"],
         summary: "Product by slug",
+        description: "Fetches one shop product by global product slug.",
         parameters: [...shopParams, P.Slug],
         responses: {
           "200": {
             description: "OK",
             content: { "application/json": { schema: { type: "object" } } }
+          },
+          "400": jsonErr,
+          "404": jsonErr
+        }
+      }
+    },
+    "/storefront/products/id/{id}": {
+      get: {
+        tags: ["Storefront catalog"],
+        summary: "Product by shop product ID",
+        description: "Fetches one shop product by `shop_products.id` (UUID).",
+        parameters: [...shopParams, P.ProductId],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { type: "object" } }
+            }
           },
           "400": jsonErr,
           "404": jsonErr
@@ -659,6 +692,7 @@ export function buildPaths() {
       post: {
         tags: ["Storefront cart"],
         summary: "Add cart line",
+        description: "Use `productId` as shop product UUID (`shop_products.id`).",
         security: [{ bearerAuth: [] }],
         parameters: [...shopParams],
         requestBody: {
@@ -839,7 +873,7 @@ export function buildPaths() {
       get: {
         tags: ["Storefront orders"],
         summary: "Order detail",
-        description: "Returns one order by `id` for authenticated customer and resolved shop.",
+        description: "Returns one order by `id` for authenticated customer and resolved shop. Use the `id` from `/storefront/orders` list response.",
         security: [{ bearerAuth: [] }],
         parameters: [...shopParams, P.OrderId],
         responses: {

@@ -35,9 +35,11 @@ export class CartRepoPg extends CartRepo {
     const { rows } = await client.query(
       `SELECT ci.id, ci.cart_id, ci.product_id, ci.title_snapshot, ci.quantity::text AS quantity,
               ci.unit_label, ci.unit_price_minor, ci.is_custom, ci.custom_note,
-              sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit
+              sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
+              gp.slug AS product_slug
          FROM cart_items ci
          LEFT JOIN shop_products sp ON sp.id = ci.product_id AND sp.shop_id = ci.shop_id
+         LEFT JOIN global_products gp ON gp.id = sp.global_product_id
         WHERE ci.cart_id = $1::uuid
         ORDER BY ci.id ASC`,
       [cartId]
@@ -59,9 +61,16 @@ export class CartRepoPg extends CartRepo {
     } = row;
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
-      `INSERT INTO cart_items (cart_id, shop_id, product_id, title_snapshot, quantity, unit_label, unit_price_minor, is_custom, custom_note)
-       VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9)
-       RETURNING id, cart_id, product_id, title_snapshot, quantity::text AS quantity, unit_label, unit_price_minor, is_custom, custom_note`,
+      `WITH ins AS (
+         INSERT INTO cart_items (cart_id, shop_id, product_id, title_snapshot, quantity, unit_label, unit_price_minor, is_custom, custom_note)
+         VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9)
+         RETURNING id, cart_id, shop_id, product_id, title_snapshot, quantity::text AS quantity, unit_label, unit_price_minor, is_custom, custom_note
+       )
+       SELECT ins.id, ins.cart_id, ins.product_id, ins.title_snapshot, ins.quantity, ins.unit_label, ins.unit_price_minor, ins.is_custom, ins.custom_note,
+              gp.slug AS product_slug
+         FROM ins
+         LEFT JOIN shop_products sp ON sp.id = ins.product_id AND sp.shop_id = ins.shop_id
+         LEFT JOIN global_products gp ON gp.id = sp.global_product_id`,
       [
         cartId,
         shopId,
@@ -80,7 +89,16 @@ export class CartRepoPg extends CartRepo {
   async updateCartItemQuantity(client, shopId, cartItemId, quantity) {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
-      `UPDATE cart_items SET quantity = $2 WHERE id = $1::uuid RETURNING id, quantity::text AS quantity`,
+      `WITH upd AS (
+         UPDATE cart_items
+            SET quantity = $2
+          WHERE id = $1::uuid
+          RETURNING id, quantity::text AS quantity, shop_id, product_id
+       )
+       SELECT upd.id, upd.quantity, gp.slug AS product_slug
+         FROM upd
+         LEFT JOIN shop_products sp ON sp.id = upd.product_id AND sp.shop_id = upd.shop_id
+         LEFT JOIN global_products gp ON gp.id = sp.global_product_id`,
       [cartItemId, quantity]
     );
     return rows[0] ?? null;

@@ -12,6 +12,7 @@ export class OrderRepoPg extends OrderRepo {
     return {
       id: row.id,
       product_id: row.product_id,
+      product_slug: row.product_slug,
       product_name_snapshot: row.product_name_snapshot,
       unit_label_snapshot: row.unit_label_snapshot,
       quantity: row.quantity,
@@ -124,10 +125,16 @@ export class OrderRepoPg extends OrderRepo {
       `SELECT oi.order_id, oi.id, oi.product_id, oi.product_name_snapshot, oi.unit_label_snapshot,
               oi.quantity::text AS quantity, oi.unit_price_minor_snapshot, oi.line_total_minor,
               oi.is_custom, oi.custom_note,
+              gp.slug AS product_slug,
               m.id AS image_media_id,
               m.storage_key AS image_storage_key,
               m.content_type AS image_content_type
          FROM order_items oi
+         LEFT JOIN shop_products sp
+           ON sp.id = oi.product_id
+          AND sp.shop_id = $2::uuid
+         LEFT JOIN global_products gp
+           ON gp.id = sp.global_product_id
          LEFT JOIN LATERAL (
            SELECT pi.media_asset_id
              FROM product_images pi
@@ -174,10 +181,16 @@ export class OrderRepoPg extends OrderRepo {
       `SELECT oi.id, oi.product_id, oi.product_name_snapshot, oi.unit_label_snapshot,
               quantity::text AS quantity, unit_price_minor_snapshot, line_total_minor,
               is_custom, custom_note,
+              gp.slug AS product_slug,
               m.id AS image_media_id,
               m.storage_key AS image_storage_key,
               m.content_type AS image_content_type
          FROM order_items oi
+         LEFT JOIN shop_products sp
+           ON sp.id = oi.product_id
+          AND sp.shop_id = $2::uuid
+         LEFT JOIN global_products gp
+           ON gp.id = sp.global_product_id
          LEFT JOIN LATERAL (
            SELECT pi.media_asset_id
              FROM product_images pi

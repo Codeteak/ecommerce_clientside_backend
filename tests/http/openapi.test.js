@@ -15,6 +15,7 @@ describe("OpenAPI / Swagger", () => {
     expect(res.body.info?.title).toBeTruthy();
     expect(res.body.paths?.["/health"]).toBeTruthy();
     expect(res.body.paths?.["/storefront/checkout"]?.post).toBeTruthy();
+    expect(res.body.paths?.["/storefront/products/id/{id}"]?.get).toBeTruthy();
     expect(res.body.paths?.["/api/auth/otp/request"]?.post).toBeTruthy();
     expect(res.body.paths?.["/api/auth/otp/verify"]?.post).toBeTruthy();
     expect(res.body.paths?.["/api/catalog/search"]?.get).toBeTruthy();

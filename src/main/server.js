@@ -140,6 +140,7 @@ export function createExpressApp(ctx) {
         "content-type",
         "authorization",
         "x-shop-id",
+        "x-tenant-id",
         "x-request-id",
         "x-metrics-token",
         "idempotency-key"

@@ -81,16 +81,54 @@ function getProductBySlugHandler(ctx) {
   };
 }
 
+function getProductByIdHandler(ctx) {
+  return async (req, res, next) => {
+    try {
+      const shopId = shopIdForStorefront(req);
+      const { id } = req.params;
+      const product = await ctx.storefrontCatalog.getProductById(shopId, id);
+      if (!product) {
+        throw new NotFoundError("Product not found");
+      }
+      setCatalogHttpCache(ctx, res);
+      res.json(product);
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+function getCategoryBySlugHandler(ctx) {
+  return async (req, res, next) => {
+    try {
+      const shopId = shopIdForStorefront(req);
+      const { slug } = req.params;
+      const category = await ctx.storefrontCatalog.getCategoryBySlug(shopId, slug);
+      if (!category) {
+        throw new NotFoundError("Category not found");
+      }
+      setCatalogHttpCache(ctx, res);
+      res.json(category);
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
 export const storefrontCatalogController = {
   listCategories: (ctx) => listCategoriesHandler(ctx),
   listProducts: (ctx) => listProductsHandler(ctx),
   getProductBySlug: (ctx) => getProductBySlugHandler(ctx),
+  getProductById: (ctx) => getProductByIdHandler(ctx),
+  getCategoryBySlug: (ctx) => getCategoryBySlugHandler(ctx),
 
   forCtx(ctx) {
     return {
       listCategories: listCategoriesHandler(ctx),
       listProducts: listProductsHandler(ctx),
-      getProductBySlug: getProductBySlugHandler(ctx)
+      getProductBySlug: getProductBySlugHandler(ctx),
+      getProductById: getProductByIdHandler(ctx),
+      getCategoryBySlug: getCategoryBySlugHandler(ctx)
     };
   }
 };

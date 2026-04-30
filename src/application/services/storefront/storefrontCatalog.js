@@ -123,6 +123,41 @@ export function createStorefrontCatalog({
           url: toPublicMediaUrl(g.storage_key)
         }))
       };
+    },
+
+    async getProductById(shopIdRaw, id) {
+      const shopId = requireShopId(shopIdRaw);
+      await ensureShopForCatalog(shopId);
+      const key = `shop:${shopId}:product:id:${String(id).toLowerCase()}`;
+      const data = await cached(key, async () => catalogRepo.getProductByIdStorefront(shopId, id));
+      if (!data) return null;
+      const { product, gallery } = data;
+      return {
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        unit: product.base_unit,
+        price_minor_per_unit: product.price_minor_per_unit,
+        offer_price_minor_per_unit: product.offer_price_minor_per_unit,
+        availability: product.availability,
+        category_id: product.category_id,
+        images: gallery.map((g) => ({
+          mediaAssetId: g.media_asset_id,
+          sortOrder: g.sort_order,
+          storageKey: g.storage_key,
+          contentType: g.content_type,
+          url: toPublicMediaUrl(g.storage_key)
+        }))
+      };
+    },
+
+    async getCategoryBySlug(shopIdRaw, slug) {
+      const shopId = requireShopId(shopIdRaw);
+      await ensureShopForCatalog(shopId);
+      const key = `shop:${shopId}:category:${String(slug).toLowerCase()}`;
+      const row = await cached(key, async () => catalogRepo.getCategoryBySlugStorefront(shopId, slug));
+      if (!row) return null;
+      return mapCategoryRow(row);
     }
   };
 }

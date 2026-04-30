@@ -5,7 +5,14 @@ export const parameters = {
     name: "x-shop-id",
     in: "header",
     description:
-      "Tenant shop UUID for cross-origin API clients. Also resolved from storefront host (subdomain/custom domain) when applicable.",
+      "Tenant shop UUID for API clients. Alias header `x-tenant-id` is also accepted. Shop can also be resolved from storefront host.",
+    schema: { type: "string", format: "uuid" }
+  },
+  XTenantId: {
+    name: "x-tenant-id",
+    in: "header",
+    description:
+      "Alias of `x-shop-id`. Send either header with the tenant shop UUID for cross-origin API clients.",
     schema: { type: "string", format: "uuid" }
   },
   Slug: {
@@ -13,6 +20,13 @@ export const parameters = {
     in: "path",
     required: true,
     schema: { type: "string", minLength: 1, maxLength: 128 }
+  },
+  ProductId: {
+    name: "id",
+    in: "path",
+    required: true,
+    description: "Shop product UUID (`shop_products.id`).",
+    schema: { type: "string", format: "uuid" }
   },
   CartItemId: {
     name: "itemId",
@@ -224,7 +238,11 @@ export const schemas = {
     type: "object",
     required: ["productId", "quantity"],
     properties: {
-      productId: { type: "string", format: "uuid" },
+      productId: {
+        type: "string",
+        format: "uuid",
+        description: "Shop product UUID (`shop_products.id`), not global product ID."
+      },
       quantity: { type: "number", exclusiveMinimum: 0 }
     }
   },

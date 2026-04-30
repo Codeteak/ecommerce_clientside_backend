@@ -56,12 +56,14 @@ describe("storefront cart addItem merge behavior", () => {
       listCartItems: vi.fn().mockResolvedValue([
         {
           id: "a",
+          product_slug: "apple",
           quantity: "2",
           unit_price_minor: 100,
           offer_price_minor_per_unit: "80"
         },
         {
           id: "b",
+          product_slug: "banana",
           quantity: "1",
           unit_price_minor: 50,
           offer_price_minor_per_unit: null
@@ -84,5 +86,6 @@ describe("storefront cart addItem merge behavior", () => {
       total_discount_minor: 40,
       currency: "INR"
     });
+    expect(out.items.map((it) => it.product_slug)).toEqual(["apple", "banana"]);
   });
 });

@@ -50,4 +50,16 @@ export class CatalogRepo {
     void _slug;
     throw new Error("Not implemented");
   }
+
+  async getProductByIdStorefront(_shopId, _id) {
+    void _shopId;
+    void _id;
+    throw new Error("Not implemented");
+  }
+
+  async getCategoryBySlugStorefront(_shopId, _slug) {
+    void _shopId;
+    void _slug;
+    throw new Error("Not implemented");
+  }
 }

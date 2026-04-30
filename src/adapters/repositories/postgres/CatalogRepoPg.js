@@ -503,5 +503,94 @@ export class CatalogRepoPg extends CatalogRepo {
       client.release();
     }
   }
+
+  async getProductByIdStorefront(shopId, id) {
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows: prodRows } = await client.query(
+        `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id,
+                gp.name, gp.slug, gp.base_unit, sp.status, sp.availability,
+                sp.price_minor_per_unit::text AS price_minor_per_unit,
+                sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
+                sp.created_at, sp.updated_at, sp.global_product_id
+           FROM shop_products sp
+           JOIN global_products gp ON gp.id = sp.global_product_id
+          WHERE sp.shop_id = $1::uuid
+            AND sp.id = $2::uuid
+            AND sp.status = 'active'
+          LIMIT 1`,
+        [shopId, id]
+      );
+      const product = prodRows[0];
+      if (!product) return null;
+
+      const { rows: galRows } = await client.query(
+        `SELECT spi.media_asset_id, spi.sort_order,
+                m.storage_key, m.content_type
+           FROM shop_product_images spi
+           JOIN media_assets m ON m.id = spi.media_asset_id
+          WHERE spi.shop_product_id = $1::uuid
+          ORDER BY spi.sort_order ASC
+          LIMIT 6`,
+        [product.id]
+      );
+
+      let gallery = galRows;
+      if (gallery.length === 0) {
+        const { rows: fallbackRows } = await client.query(
+          `SELECT gpi.media_asset_id, gpi.sort_order,
+                  m.storage_key, m.content_type
+             FROM global_product_images gpi
+             JOIN media_assets m ON m.id = gpi.media_asset_id
+            WHERE gpi.global_product_id = $1::uuid
+            ORDER BY gpi.sort_order ASC
+            LIMIT 6`,
+          [product.global_product_id]
+        );
+        gallery = fallbackRows;
+      }
+
+      return { product, gallery };
+    } finally {
+      client.release();
+    }
+  }
+
+  async getCategoryBySlugStorefront(shopId, slug) {
+    const norm = String(slug || "").trim().toLowerCase();
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `SELECT c.id, c.parent_id, c.name, c.slug, c.sort_order,
+                ma.id AS image_media_id,
+                ma.storage_key AS image_storage_key,
+                ma.content_type AS image_content_type
+           FROM global_categories c
+           LEFT JOIN LATERAL (
+             SELECT ei.media_asset_id
+               FROM entity_images ei
+              WHERE ei.shop_id = $1::uuid
+                AND ei.entity_type = 'category'
+                AND ei.entity_id = c.id
+              ORDER BY ei.updated_at DESC NULLS LAST
+              LIMIT 1
+           ) img ON true
+           LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
+          WHERE c.is_active = true
+            AND (
+              c.scope = 'shared'
+              OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
+            )
+            AND lower(c.slug) = $2
+          LIMIT 1`,
+        [shopId, norm]
+      );
+      return rows[0] ?? null;
+    } finally {
+      client.release();
+    }
+  }
 }
 

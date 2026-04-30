@@ -129,6 +129,11 @@ CREATE TABLE IF NOT EXISTS shops (
   deleted_at TIMESTAMPTZ
 );
 
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS domain TEXT;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS custom_domain TEXT;
+ALTER TABLE shops
+  ADD COLUMN IF NOT EXISTS service_area_radius_meters INTEGER NOT NULL DEFAULT 5000;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shops_public_id_len_chk') THEN
@@ -196,7 +201,6 @@ BEGIN
   END IF;
 END $$;
 
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS domain TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS shops_domain_uniq_idx ON shops (domain) WHERE domain IS NOT NULL;
 
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS owner_user_id UUID;
@@ -579,8 +583,8 @@ BEGIN
       loc_lng := NULL;
       IF r_shop.location IS NOT NULL THEN
         BEGIN
-          loc_lat := NULLIF((r_shop.location->>''lat''), '''')::double precision;
-          loc_lng := NULLIF((r_shop.location->>''lng''), '''')::double precision;
+          loc_lat := NULLIF((r_shop.location->>'lat'), '')::double precision;
+          loc_lng := NULLIF((r_shop.location->>'lng'), '')::double precision;
         EXCEPTION WHEN others THEN
           loc_lat := NULL;
           loc_lng := NULL;

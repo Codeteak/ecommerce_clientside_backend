@@ -25,7 +25,9 @@ import { shopDomainQuerySchema } from "../validations/shopSchemas.js";
 import {
   storefrontCategoriesQuerySchema,
   storefrontProductsQuerySchema,
-  storefrontProductSlugParamSchema
+  storefrontProductSlugParamSchema,
+  storefrontProductIdParamSchema,
+  storefrontCategorySlugParamSchema
 } from "../validations/storefrontCatalogSchemas.js";
 import {
   storefrontAddressPatchSchema,
@@ -145,6 +147,8 @@ export function createRoutes(ctx) {
     storefrontCategoriesQuerySchema,
     storefrontProductsQuerySchema,
     storefrontProductSlugParamSchema,
+    storefrontProductIdParamSchema,
+    storefrontCategorySlugParamSchema,
     storefrontCartItemBodySchema,
     storefrontCartItemPatchSchema,
     storefrontCheckoutBodySchema,
