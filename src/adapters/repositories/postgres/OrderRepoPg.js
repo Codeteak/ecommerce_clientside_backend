@@ -136,12 +136,21 @@ export class OrderRepoPg extends OrderRepo {
          LEFT JOIN global_products gp
            ON gp.id = sp.global_product_id
          LEFT JOIN LATERAL (
-           SELECT pi.media_asset_id
-             FROM product_images pi
-            WHERE pi.product_id = oi.product_id
-              AND pi.shop_id = $2::uuid
-            ORDER BY pi.sort_order ASC
+           SELECT spi.media_asset_id
+             FROM shop_product_images spi
+            WHERE spi.shop_product_id = sp.id
+            ORDER BY spi.sort_order ASC
             LIMIT 1
+         ) spimg ON true
+         LEFT JOIN LATERAL (
+           SELECT gpi.media_asset_id
+             FROM global_product_images gpi
+            WHERE gpi.global_product_id = gp.id
+            ORDER BY gpi.sort_order ASC
+            LIMIT 1
+         ) gpimg ON true
+         LEFT JOIN LATERAL (
+           SELECT COALESCE(spimg.media_asset_id, gpimg.media_asset_id) AS media_asset_id
          ) pimg ON true
          LEFT JOIN media_assets m ON m.id = pimg.media_asset_id
         WHERE oi.order_id = ANY($1::uuid[])
@@ -192,12 +201,21 @@ export class OrderRepoPg extends OrderRepo {
          LEFT JOIN global_products gp
            ON gp.id = sp.global_product_id
          LEFT JOIN LATERAL (
-           SELECT pi.media_asset_id
-             FROM product_images pi
-            WHERE pi.product_id = oi.product_id
-              AND pi.shop_id = $2::uuid
-            ORDER BY pi.sort_order ASC
+           SELECT spi.media_asset_id
+             FROM shop_product_images spi
+            WHERE spi.shop_product_id = sp.id
+            ORDER BY spi.sort_order ASC
             LIMIT 1
+         ) spimg ON true
+         LEFT JOIN LATERAL (
+           SELECT gpi.media_asset_id
+             FROM global_product_images gpi
+            WHERE gpi.global_product_id = gp.id
+            ORDER BY gpi.sort_order ASC
+            LIMIT 1
+         ) gpimg ON true
+         LEFT JOIN LATERAL (
+           SELECT COALESCE(spimg.media_asset_id, gpimg.media_asset_id) AS media_asset_id
          ) pimg ON true
          LEFT JOIN media_assets m ON m.id = pimg.media_asset_id
         WHERE oi.order_id = $1::uuid
