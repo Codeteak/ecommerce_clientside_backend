@@ -20,7 +20,7 @@ export function createRequestCustomerOtp({
   otpTtlSeconds = 300,
   otpResendSeconds = 60,
   otpRequestWindowSeconds = 900,
-  otpMaxRequestsPerWindow = 5
+  otpMaxRequestsPerWindow = 3
 }) {
   return async function requestCustomerOtp(client, input) {
     const phone = normalizePhone(input.phone);

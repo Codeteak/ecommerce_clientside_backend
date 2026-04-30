@@ -93,4 +93,22 @@ describe("customer email OTP auth", () => {
     expect(out.customer).toMatchObject({ id: "c-1" });
     expect(authRepo.consumeEmailOtpChallenge).toHaveBeenCalledWith({}, "eotp-1");
   });
+
+  it("blocks email OTP requests after 3 sends in the request window", async () => {
+    const authRepo = {
+      getShopById: vi.fn().mockResolvedValue(activeShop()),
+      findLatestEmailOtpChallenge: vi.fn().mockResolvedValue(null),
+      countEmailOtpChallengesSince: vi.fn().mockResolvedValue(3),
+      insertEmailOtpChallenge: vi.fn().mockResolvedValue({ id: "eotp-2" })
+    };
+    const otpSender = { sendOtp: vi.fn().mockResolvedValue(undefined) };
+    const run = createRequestCustomerEmailOtp({ authRepo, otpSender });
+
+    await expect(run({}, { email: "user@example.com", shopId })).rejects.toMatchObject({
+      name: "ValidationError",
+      message: "Too many OTP requests. Try again later."
+    });
+    expect(authRepo.insertEmailOtpChallenge).not.toHaveBeenCalled();
+    expect(otpSender.sendOtp).not.toHaveBeenCalled();
+  });
 });

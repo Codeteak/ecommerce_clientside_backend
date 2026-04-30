@@ -30,7 +30,7 @@ export function getDevLikeDefaults(nodeEnv) {
     OTP_TTL_SECONDS: "300",
     OTP_RESEND_SECONDS: "60",
     OTP_REQUEST_WINDOW_SECONDS: "900",
-    OTP_MAX_REQUESTS_PER_WINDOW: "5",
+    OTP_MAX_REQUESTS_PER_WINDOW: "3",
     OTP_MAX_ATTEMPTS: "5",
     LOG_OTP_IN_DEV: "true",
     SMTP_HOST: "",

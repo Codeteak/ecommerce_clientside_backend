@@ -26,7 +26,7 @@ export class SmtpOtpSender extends SmsSender {
   }
 
   async sendOtp({ to, code }) {
-    await withRetry(
+    const info = await withRetry(
       () =>
         this.transporter.sendMail({
           from: this.fromEmail,
@@ -42,6 +42,11 @@ export class SmtpOtpSender extends SmsSender {
         context: { recipient: to }
       }
     );
+
+    const rejected = Array.isArray(info?.rejected) ? info.rejected : [];
+    if (rejected.length > 0) {
+      throw new Error(`SMTP rejected OTP recipient: ${rejected.join(", ")}`);
+    }
 
     logger.info(
       {

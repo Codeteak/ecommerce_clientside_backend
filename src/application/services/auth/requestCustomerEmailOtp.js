@@ -18,7 +18,7 @@ export function createRequestCustomerEmailOtp({
   otpTtlSeconds = 300,
   otpResendSeconds = 60,
   otpRequestWindowSeconds = 900,
-  otpMaxRequestsPerWindow = 5
+  otpMaxRequestsPerWindow = 3
 }) {
   return async function requestCustomerEmailOtp(client, input) {
     const email = normalizeEmail(input.email);

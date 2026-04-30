@@ -101,7 +101,11 @@ export function createAppContext() {
         fromEmail: env.OTP_FROM_EMAIL,
         secure: env.SMTP_SECURE
       })
-    : smsSender;
+    : {
+        async sendOtp() {
+          throw new Error("Email OTP is not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS, and OTP_FROM_EMAIL.");
+        }
+      };
   const requestCustomerOtp = createRequestCustomerOtp({
     authRepo,
     smsSender,

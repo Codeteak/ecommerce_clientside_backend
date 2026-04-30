@@ -32,7 +32,7 @@ export const envSchema = z
     OTP_TTL_SECONDS: z.coerce.number().int().positive().default(300),
     OTP_RESEND_SECONDS: z.coerce.number().int().positive().default(60),
     OTP_REQUEST_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
-    OTP_MAX_REQUESTS_PER_WINDOW: z.coerce.number().int().positive().default(5),
+    OTP_MAX_REQUESTS_PER_WINDOW: z.coerce.number().int().positive().default(3),
     OTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     LOG_OTP_IN_DEV: z.preprocess(boolFromEnv, z.boolean()),
     SMTP_HOST: z.string().optional().default(""),
