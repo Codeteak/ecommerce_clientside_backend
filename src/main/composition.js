@@ -70,6 +70,17 @@ export function createAppContext() {
     shouldUseSessionCache: (req) =>
       req.method === "GET" && (req.path === "/api/me/profile" || req.path === "/storefront/cart")
   });
+  const requireCustomerJwt = env.DISABLE_CUSTOMER_AUTH
+    ? (req, _res, next) => {
+        req.customerAuth = {
+          userId: req.get("x-dev-user-id") || env.DEV_AUTH_USER_ID,
+          customerId: req.get("x-dev-customer-id") || env.DEV_AUTH_CUSTOMER_ID,
+          shopId: req.shopId || req.get("x-shop-id") || null,
+          role: "customer"
+        };
+        next();
+      }
+    : customerJwtMiddleware();
 
   const shopResolver = createShopResolver({
     shopLookupRepo,
@@ -177,7 +188,7 @@ export function createAppContext() {
     getCustomerProfile: getCustomerProfile({ authRepo }),
     updateCustomerProfile: updateCustomerProfile({ authRepo }),
     checkShopServiceArea,
-    requireCustomerJwt: customerJwtMiddleware(),
+    requireCustomerJwt,
     locationGuard: createLocationGuard(),
     storefrontCatalog,
     storefrontCart,
