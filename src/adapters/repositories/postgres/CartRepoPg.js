@@ -226,32 +226,6 @@ export class CartRepoPg extends CartRepo {
         );
       }
 
-      const { rows: invRows } = await client.query(
-        `SELECT stock_quantity
-           FROM inventory_items
-          WHERE shop_id = $1::uuid AND product_id = $2::uuid
-          FOR UPDATE`,
-        [shopId, line.product_id]
-      );
-      const inv = invRows[0];
-      if (inv) {
-        const qty = Number(line.quantity);
-        const upd = await client.query(
-          `UPDATE inventory_items
-              SET stock_quantity = stock_quantity - $3::numeric
-            WHERE shop_id = $1::uuid
-              AND product_id = $2::uuid
-              AND stock_quantity >= $3::numeric
-            RETURNING id`,
-          [shopId, line.product_id, qty]
-        );
-        if (!upd.rows.length) {
-          throw commitErr(
-            "INSUFFICIENT_STOCK",
-            "Not enough stock for one or more items. Please adjust quantities and try again."
-          );
-        }
-      }
     }
 
     for (const line of lines) {
