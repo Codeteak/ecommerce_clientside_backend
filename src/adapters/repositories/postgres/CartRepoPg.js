@@ -186,12 +186,6 @@ export class CartRepoPg extends CartRepo {
 
   async validateCartForCheckoutCommit(client, shopId, cartId) {
     await setTenantContext(client, shopId);
-    const { rows: shopRows } = await client.query(
-      `SELECT inventory_tracking_enabled FROM shops WHERE id = $1::uuid LIMIT 1`,
-      [shopId]
-    );
-    const inventoryTrackingEnabled = shopRows[0]?.inventory_tracking_enabled === true;
-
     const { rows: lines } = await client.query(
       `SELECT ci.id, ci.product_id, ci.quantity::text AS quantity, ci.unit_price_minor,
               ci.title_snapshot, ci.unit_label, ci.is_custom, ci.custom_note
@@ -232,32 +226,30 @@ export class CartRepoPg extends CartRepo {
         );
       }
 
-      if (inventoryTrackingEnabled) {
-        const { rows: invRows } = await client.query(
-          `SELECT stock_quantity
-             FROM inventory_items
-            WHERE shop_id = $1::uuid AND product_id = $2::uuid
-            FOR UPDATE`,
-          [shopId, line.product_id]
+      const { rows: invRows } = await client.query(
+        `SELECT stock_quantity
+           FROM inventory_items
+          WHERE shop_id = $1::uuid AND product_id = $2::uuid
+          FOR UPDATE`,
+        [shopId, line.product_id]
+      );
+      const inv = invRows[0];
+      if (inv) {
+        const qty = Number(line.quantity);
+        const upd = await client.query(
+          `UPDATE inventory_items
+              SET stock_quantity = stock_quantity - $3::numeric
+            WHERE shop_id = $1::uuid
+              AND product_id = $2::uuid
+              AND stock_quantity >= $3::numeric
+            RETURNING id`,
+          [shopId, line.product_id, qty]
         );
-        const inv = invRows[0];
-        if (inv) {
-          const qty = Number(line.quantity);
-          const upd = await client.query(
-            `UPDATE inventory_items
-                SET stock_quantity = stock_quantity - $3::numeric
-              WHERE shop_id = $1::uuid
-                AND product_id = $2::uuid
-                AND stock_quantity >= $3::numeric
-              RETURNING id`,
-            [shopId, line.product_id, qty]
+        if (!upd.rows.length) {
+          throw commitErr(
+            "INSUFFICIENT_STOCK",
+            "Not enough stock for one or more items. Please adjust quantities and try again."
           );
-          if (!upd.rows.length) {
-            throw commitErr(
-              "INSUFFICIENT_STOCK",
-              "Not enough stock for one or more items. Please adjust quantities and try again."
-            );
-          }
         }
       }
     }
