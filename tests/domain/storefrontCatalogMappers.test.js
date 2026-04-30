@@ -51,4 +51,35 @@ describe("storefrontCatalogMappers", () => {
     expect(out.images).toHaveLength(1);
     expect(out.category?.name).toBe("Dairy");
   });
+
+  it("falls back to global image_url when gallery assets are missing", () => {
+    const out = mapStorefrontProductRow({
+      id: "p2",
+      name: "Curd",
+      slug: "curd",
+      price_minor_per_unit: "120",
+      offer_price_minor_per_unit: "110",
+      availability: "in_stock",
+      base_unit: "kg",
+      thumb_media_id: null,
+      thumb_storage_key: null,
+      thumb_content_type: null,
+      product_images: "[]",
+      global_image_url: "https://cdn.example.com/global/curd.jpg",
+      category_slug: null,
+      category_parent_id: null,
+      category_name: null,
+      category_image_media_id: null,
+      category_image_storage_key: null,
+      category_image_content_type: null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      category_id: "c1"
+    });
+
+    expect(out.thumbnail?.url).toBe("https://cdn.example.com/global/curd.jpg");
+    expect(out.images).toHaveLength(1);
+    expect(out.images[0].url).toBe("https://cdn.example.com/global/curd.jpg");
+    expect(out.images[0]).not.toHaveProperty("mediaAssetId");
+    expect(out.images[0]).not.toHaveProperty("storageKey");
+  });
 });

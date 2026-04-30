@@ -48,4 +48,39 @@ describe("storefrontCatalog getProductById", () => {
     });
     expect(out.images).toHaveLength(1);
   });
+
+  it("falls back to global image_url and omits null image metadata", async () => {
+    const catalogRepo = {
+      getProductByIdStorefront: vi.fn().mockResolvedValue({
+        product: {
+          id: "11111111-1111-4111-8111-111111111111",
+          name: "Apple",
+          slug: "apple",
+          base_unit: "kg",
+          price_minor_per_unit: "100",
+          offer_price_minor_per_unit: "90",
+          availability: "in_stock",
+          category_id: "22222222-2222-4222-8222-222222222222",
+          global_image_url: "https://cdn.example.com/global/apple.jpg"
+        },
+        gallery: []
+      })
+    };
+    const storefrontCatalog = createStorefrontCatalog({
+      catalogRepo,
+      ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
+      catalogCache: { wrap: vi.fn((_k, _t, fn) => fn()) },
+      catalogCacheTtlSec: 0
+    });
+
+    const out = await storefrontCatalog.getProductById(
+      "00000000-0000-4000-8000-000000000001",
+      "11111111-1111-4111-8111-111111111111"
+    );
+
+    expect(out.images).toHaveLength(1);
+    expect(out.images[0].url).toBe("https://cdn.example.com/global/apple.jpg");
+    expect(out.images[0]).not.toHaveProperty("mediaAssetId");
+    expect(out.images[0]).not.toHaveProperty("storageKey");
+  });
 });

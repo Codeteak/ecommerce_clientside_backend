@@ -451,7 +451,7 @@ export class CatalogRepoPg extends CatalogRepo {
                 gp.name, gp.slug, gp.base_unit, sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
-                sp.created_at, sp.updated_at, sp.global_product_id
+                sp.created_at, sp.updated_at, sp.global_product_id, gp.image_url AS global_image_url
            FROM shop_products sp
            JOIN global_products gp ON gp.id = sp.global_product_id
           WHERE sp.shop_id = $1::uuid
@@ -513,7 +513,7 @@ export class CatalogRepoPg extends CatalogRepo {
                 gp.name, gp.slug, gp.base_unit, sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
-                sp.created_at, sp.updated_at, sp.global_product_id
+                sp.created_at, sp.updated_at, sp.global_product_id, gp.image_url AS global_image_url
            FROM shop_products sp
            JOIN global_products gp ON gp.id = sp.global_product_id
           WHERE sp.shop_id = $1::uuid

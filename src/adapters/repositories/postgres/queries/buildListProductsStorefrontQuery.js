@@ -45,6 +45,7 @@ export function buildListProductsStorefrontQuery({
           sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
           sp.created_at,
           sp.updated_at,
+          gp.image_url AS global_image_url,
           thumb.media_asset_id AS thumb_media_id,
           thumb.storage_key AS thumb_storage_key,
           thumb.content_type AS thumb_content_type,

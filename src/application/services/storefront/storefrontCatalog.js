@@ -21,6 +21,50 @@ export function createStorefrontCatalog({
 }) {
   const ttl = Number(catalogCacheTtlSec) || 0;
 
+  function mapProductDetailImage(g) {
+    const out = {
+      sortOrder: g.sort_order,
+      contentType: g.content_type,
+      url: g.url ?? toPublicMediaUrl(g.storage_key)
+    };
+    if (g.media_asset_id != null) {
+      out.mediaAssetId = g.media_asset_id;
+    }
+    if (g.storage_key != null) {
+      out.storageKey = g.storage_key;
+    }
+    return out;
+  }
+
+  function mapProductDetail(data) {
+    const { product, gallery } = data;
+    let images = gallery.map(mapProductDetailImage);
+    const fallbackGlobalImageUrl =
+      typeof product.global_image_url === "string" && product.global_image_url.trim()
+        ? product.global_image_url.trim()
+        : null;
+    if (images.length === 0 && fallbackGlobalImageUrl) {
+      images = [
+        {
+          sortOrder: 0,
+          contentType: null,
+          url: fallbackGlobalImageUrl
+        }
+      ];
+    }
+    return {
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      unit: product.base_unit,
+      price_minor_per_unit: product.price_minor_per_unit,
+      offer_price_minor_per_unit: product.offer_price_minor_per_unit,
+      availability: product.availability,
+      category_id: product.category_id,
+      images
+    };
+  }
+
   async function cached(key, fn) {
     if (ttl <= 0) {
       return fn();
@@ -105,24 +149,7 @@ export function createStorefrontCatalog({
       const key = `shop:${shopId}:product:${String(slug).toLowerCase()}`;
       const data = await cached(key, async () => catalogRepo.getProductBySlugStorefront(shopId, slug));
       if (!data) return null;
-      const { product, gallery } = data;
-      return {
-        id: product.id,
-        name: product.name,
-        slug: product.slug,
-        unit: product.base_unit,
-        price_minor_per_unit: product.price_minor_per_unit,
-        offer_price_minor_per_unit: product.offer_price_minor_per_unit,
-        availability: product.availability,
-        category_id: product.category_id,
-        images: gallery.map((g) => ({
-          mediaAssetId: g.media_asset_id,
-          sortOrder: g.sort_order,
-          storageKey: g.storage_key,
-          contentType: g.content_type,
-          url: toPublicMediaUrl(g.storage_key)
-        }))
-      };
+      return mapProductDetail(data);
     },
 
     async getProductById(shopIdRaw, id) {
@@ -131,24 +158,7 @@ export function createStorefrontCatalog({
       const key = `shop:${shopId}:product:id:${String(id).toLowerCase()}`;
       const data = await cached(key, async () => catalogRepo.getProductByIdStorefront(shopId, id));
       if (!data) return null;
-      const { product, gallery } = data;
-      return {
-        id: product.id,
-        name: product.name,
-        slug: product.slug,
-        unit: product.base_unit,
-        price_minor_per_unit: product.price_minor_per_unit,
-        offer_price_minor_per_unit: product.offer_price_minor_per_unit,
-        availability: product.availability,
-        category_id: product.category_id,
-        images: gallery.map((g) => ({
-          mediaAssetId: g.media_asset_id,
-          sortOrder: g.sort_order,
-          storageKey: g.storage_key,
-          contentType: g.content_type,
-          url: toPublicMediaUrl(g.storage_key)
-        }))
-      };
+      return mapProductDetail(data);
     },
 
     async getCategoryBySlug(shopIdRaw, slug) {
