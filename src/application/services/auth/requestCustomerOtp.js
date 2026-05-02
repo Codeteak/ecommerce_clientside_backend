@@ -1,5 +1,6 @@
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
+import { logger } from "../../../config/logger.js";
 import { randomInt } from "node:crypto";
 import { hashOtpCode } from "../../../infra/security/otpHasher.js";
 import { shopAllowsCustomers } from "./shopPolicy.js";
@@ -53,14 +54,32 @@ export function createRequestCustomerOtp({
     const codeHash = await hashOtpCode(code);
     const expiresAtIso = new Date(now.getTime() + otpTtlSeconds * 1000).toISOString();
 
-    await authRepo.insertOtpChallenge(client, {
+    const challenge = await authRepo.insertOtpChallenge(client, {
       phone,
       shopId,
       codeHash,
       expiresAtIso
     });
 
-    await smsSender.sendOtp({ to: phone, code });
+    const shopLabel = String(shop.name || shop.slug || "our store").trim() || "our store";
+    try {
+      await smsSender.sendOtp({ to: phone, code, shopName: shopLabel });
+    } catch (err) {
+      try {
+        await authRepo.consumeOtpChallenge(client, challenge.id);
+      } catch (consumeErr) {
+        logger.error(
+          {
+            event: "otp.challenge.consume_after_send_failed",
+            challengeId: challenge.id,
+            consumeErr: consumeErr?.message,
+            originalErr: err?.message
+          },
+          "Failed to consume OTP challenge after SMS send error"
+        );
+      }
+      throw err;
+    }
 
     return {
       ok: true,

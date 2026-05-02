@@ -14,11 +14,12 @@ export class ConsoleSmsSender extends SmsSender {
     this.nodeEnv = nodeEnv;
   }
 
-  async sendOtp({ to, code }) {
+  async sendOtp({ to, code, shopName }) {
     const payload = {
       event: "api.auth.otp.sent",
       provider: "console",
-      phoneMasked: maskPhone(to)
+      phoneMasked: maskPhone(to),
+      shopName: shopName ? String(shopName).slice(0, 80) : undefined
     };
     if (this.nodeEnv !== "production" && this.logOtpInDev) {
       payload.code = code;

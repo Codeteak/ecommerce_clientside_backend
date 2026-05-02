@@ -35,6 +35,7 @@ import { createStorefrontCart } from "../application/services/storefront/storefr
 import { createCheckoutStorefront } from "../application/services/checkout/checkoutStorefront.js";
 import { logger } from "../config/logger.js";
 import { ConsoleSmsSender } from "../adapters/sms/consoleSmsSender.js";
+import { Msg91SmsSender } from "../adapters/sms/msg91SmsSender.js";
 import { SmtpOtpSender } from "../adapters/sms/smtpOtpSender.js";
 import { createSessionCache } from "../utils/sessionCache.js";
 
@@ -99,10 +100,18 @@ export function createAppContext() {
   const storefrontCart = createStorefrontCart({ cartRepo, ensureShopForCatalog });
   const assertCustomerShopAccess = createAssertCustomerShopAccess({ authRepo });
   const updateStorefrontProfile = createUpdateStorefrontProfile({ authRepo });
-  const smsSender = new ConsoleSmsSender({
-    nodeEnv: env.NODE_ENV,
-    logOtpInDev: env.LOG_OTP_IN_DEV
-  });
+  const msg91Key = env.MSG_AUTH_KEY?.trim() || "";
+  const smsSender = msg91Key
+    ? new Msg91SmsSender({
+        authKey: msg91Key,
+        templateId: env.OTP_TEMPLATE_ID,
+        shortUrl: env.MSG91_SHORT_URL,
+        timeoutMs: env.MSG91_REQUEST_TIMEOUT_MS
+      })
+    : new ConsoleSmsSender({
+        nodeEnv: env.NODE_ENV,
+        logOtpInDev: env.LOG_OTP_IN_DEV
+      });
   const emailOtpSender = env.SMTP_HOST
     ? new SmtpOtpSender({
         host: env.SMTP_HOST,

@@ -6,6 +6,14 @@ dotenv.config();
 
 function rawEnv() {
   const src = { ...process.env };
+  // AWS Secrets Manager uses MSG_AUTH_KEY; legacy local env may still set MSG91_AUTHKEY.
+  if (!String(src.MSG_AUTH_KEY || "").trim() && String(src.MSG91_AUTHKEY || "").trim()) {
+    src.MSG_AUTH_KEY = src.MSG91_AUTHKEY;
+  }
+  // Prefer OTP_TEMPLATE_ID; legacy env files may still use MSG91_TEMPLATE_ID.
+  if (!String(src.OTP_TEMPLATE_ID || "").trim() && String(src.MSG91_TEMPLATE_ID || "").trim()) {
+    src.OTP_TEMPLATE_ID = src.MSG91_TEMPLATE_ID;
+  }
   const nodeEnv = src.NODE_ENV || "development";
   const devLikeDefaults = getDevLikeDefaults(nodeEnv);
 
@@ -62,6 +70,10 @@ export const env = {
   SMTP_PASS: parsed.data.SMTP_PASS || "",
   SMTP_SECURE: parsed.data.SMTP_SECURE ?? false,
   OTP_FROM_EMAIL: parsed.data.OTP_FROM_EMAIL?.trim() || "",
+  MSG_AUTH_KEY: parsed.data.MSG_AUTH_KEY?.trim() || "",
+  OTP_TEMPLATE_ID: parsed.data.OTP_TEMPLATE_ID?.trim() || "69f592e0bd83b71e690c8cd2",
+  MSG91_SHORT_URL: parsed.data.MSG91_SHORT_URL ?? "0",
+  MSG91_REQUEST_TIMEOUT_MS: parsed.data.MSG91_REQUEST_TIMEOUT_MS ?? 15_000,
   JWT_PREVIOUS_SECRET: parsed.data.JWT_PREVIOUS_SECRET?.trim() || "",
   JWT_PREVIOUS_REFRESH_SECRET: parsed.data.JWT_PREVIOUS_REFRESH_SECRET?.trim() || "",
   STOREFRONT_DELIVERY_FEE_MINOR: parsed.data.STOREFRONT_DELIVERY_FEE_MINOR ?? 0,

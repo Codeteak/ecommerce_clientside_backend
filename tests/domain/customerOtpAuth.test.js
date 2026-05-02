@@ -4,10 +4,13 @@ import { createVerifyCustomerOtp } from "../../src/application/services/auth/ver
 import { hashOtpCode } from "../../src/infra/security/otpHasher.js";
 
 const shopId = "c0000001-0000-4000-8000-000000000001";
+/** Matches `shops` row shape from `getShopById`; `name` is passed to SMS as `shopName` (MSG91 VAR2). */
+const mockShopDisplayName = "Fixture Shop";
 
 function activeShop() {
   return {
     id: shopId,
+    name: mockShopDisplayName,
     status: "active",
     is_active: true,
     is_blocked: false,
@@ -33,6 +36,24 @@ describe("customer OTP auth", () => {
     const smsArg = smsSender.sendOtp.mock.calls[0][0];
     expect(smsArg.to).toBe("+919999999999");
     expect(String(smsArg.code)).toMatch(/^\d{6}$/);
+    expect(smsArg.shopName).toBe(mockShopDisplayName);
+  });
+
+  it("consumes OTP challenge when SMS send fails", async () => {
+    const authRepo = {
+      getShopById: vi.fn().mockResolvedValue(activeShop()),
+      findLatestOtpChallenge: vi.fn().mockResolvedValue(null),
+      countOtpChallengesSince: vi.fn().mockResolvedValue(0),
+      insertOtpChallenge: vi.fn().mockResolvedValue({ id: "otp-fail-1" }),
+      consumeOtpChallenge: vi.fn().mockResolvedValue(undefined)
+    };
+    const smsSender = {
+      sendOtp: vi.fn().mockRejectedValue(new Error("SMS down"))
+    };
+    const run = createRequestCustomerOtp({ authRepo, smsSender });
+
+    await expect(run({}, { phone: "+919999999999", shopId })).rejects.toThrow("SMS down");
+    expect(authRepo.consumeOtpChallenge).toHaveBeenCalledWith({}, "otp-fail-1");
   });
 
   it("rejects OTP request during resend cooldown", async () => {
