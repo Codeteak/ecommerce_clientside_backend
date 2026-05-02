@@ -37,7 +37,13 @@ describe("sendMsg91FlowOtp", () => {
     const body = JSON.parse(init.body);
     expect(body.template_id).toBe("tpl-1");
     expect(body.recipients).toEqual([
-      { mobiles: "919876543210", VAR1: "123456", VAR2: "My Shop" }
+      {
+        mobiles: "919876543210",
+        otp: "123456",
+        name: "My Shop",
+        VAR1: "123456",
+        VAR2: "My Shop"
+      }
     ]);
     expect(init.headers.authkey).toBe("test-key");
   });

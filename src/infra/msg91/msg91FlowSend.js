@@ -30,8 +30,8 @@ export function normalizePhoneForMsg91(raw) {
  * @param {string} opts.authKey
  * @param {string} opts.templateId
  * @param {string} opts.mobileRaw — customer phone (any common format)
- * @param {string} opts.otp — 6-digit OTP (template ##otp## → VAR1)
- * @param {string} opts.shopDisplayName — shop name for template ##name## → VAR2
+ * @param {string} opts.otp — 6-digit OTP (maps to Flow vars `otp` and VAR1-style templates)
+ * @param {string} opts.shopDisplayName — shop label (maps to `name` and VAR2-style templates)
  * @param {string} [opts.shortUrl="0"]
  * @param {number} [opts.timeoutMs=15000]
  * @param {typeof fetch} [opts.fetchFn=fetch]
@@ -69,6 +69,10 @@ export async function sendMsg91FlowOtp({
         recipients: [
           {
             mobiles,
+            // Named vars match MSG91 Flow / DLT mapping (##otp## → `otp`, ##name## → `name`).
+            otp: String(otp),
+            name,
+            // Legacy / ordered templates that still use VAR1, VAR2 in the panel.
             VAR1: String(otp),
             VAR2: name
           }
