@@ -58,8 +58,10 @@ describe("provisionCustomerForOAuthShop", () => {
         is_deleted: false
       }),
       getShopById: vi.fn().mockResolvedValue(activeShop()),
-      getMembershipByCustomerAndShop: vi.fn().mockResolvedValue({
+      upsertCustomerShopMembership: vi.fn().mockResolvedValue({
         id: "m-2",
+        shop_id: shopId,
+        customer_id: "c-2",
         is_active: true,
         is_blocked: false,
         is_deleted: false
@@ -70,5 +72,38 @@ describe("provisionCustomerForOAuthShop", () => {
     expect(out.user.id).toBe("u-2");
     expect(out.customer.id).toBe("c-2");
     expect(out.shop.id).toBe(shopId);
+    expect(authRepo.upsertCustomerShopMembership).toHaveBeenCalledWith(
+      {},
+      { shop_id: shopId, customer_id: "c-2" }
+    );
+  });
+
+  it("rejects OAuth shop provisioning when membership is blocked", async () => {
+    const authRepo = {
+      isEmailUsedByActiveShopStaff: vi.fn().mockResolvedValue(false),
+      getUserByEmail: vi.fn().mockResolvedValue({
+        id: "u-2",
+        email: "customer@example.com",
+        is_active: true
+      }),
+      isUserActiveShopStaff: vi.fn().mockResolvedValue(false),
+      getCustomerByUserId: vi.fn().mockResolvedValue({
+        id: "c-2",
+        user_id: "u-2",
+        is_blocked: false,
+        is_deleted: false
+      }),
+      getShopById: vi.fn().mockResolvedValue(activeShop()),
+      upsertCustomerShopMembership: vi.fn().mockResolvedValue({
+        id: "m-2",
+        is_active: true,
+        is_blocked: true,
+        is_deleted: false
+      })
+    };
+    const run = provisionCustomerForOAuthShop({ authRepo });
+    await expect(
+      run({}, { email: "customer@example.com", displayName: "Customer", shopId })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 });

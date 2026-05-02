@@ -1,5 +1,6 @@
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
+import { logger } from "../../../config/logger.js";
 import { randomInt } from "node:crypto";
 import { hashOtpCode } from "../../../infra/security/otpHasher.js";
 import { shopAllowsCustomers } from "./shopPolicy.js";
@@ -51,14 +52,31 @@ export function createRequestCustomerEmailOtp({
     const codeHash = await hashOtpCode(code);
     const expiresAtIso = new Date(now.getTime() + otpTtlSeconds * 1000).toISOString();
 
-    await authRepo.insertEmailOtpChallenge(client, {
+    const challenge = await authRepo.insertEmailOtpChallenge(client, {
       email,
       shopId,
       codeHash,
       expiresAtIso
     });
 
-    await otpSender.sendOtp({ to: email, code });
+    try {
+      await otpSender.sendOtp({ to: email, code });
+    } catch (err) {
+      try {
+        await authRepo.consumeEmailOtpChallenge(client, challenge.id);
+      } catch (consumeErr) {
+        logger.error(
+          {
+            event: "otp.email.challenge.consume_after_send_failed",
+            challengeId: challenge.id,
+            consumeErr: consumeErr?.message,
+            originalErr: err?.message
+          },
+          "Failed to consume email OTP challenge after send error"
+        );
+      }
+      throw err;
+    }
 
     return {
       ok: true,

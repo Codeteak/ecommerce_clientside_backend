@@ -132,14 +132,14 @@ describe("customer OTP auth", () => {
         is_deleted: false
       }),
       insertCustomer: vi.fn(),
-      getMembershipByCustomerAndShop: vi.fn().mockResolvedValue({
+      upsertCustomerShopMembership: vi.fn().mockResolvedValue({
         id: "m-1",
+        shop_id: shopId,
+        customer_id: "c-1",
         is_active: true,
         is_blocked: false,
         is_deleted: false
       }),
-      insertMembership: vi.fn(),
-      reactivateMembership: vi.fn(),
       getUserById: vi.fn().mockResolvedValue({
         id: "u-1",
         email: null,
@@ -157,6 +157,56 @@ describe("customer OTP auth", () => {
     expect(out.accessToken).toBeTypeOf("string");
     expect(out.customer).toMatchObject({ id: "c-1" });
     expect(authRepo.consumeOtpChallenge).toHaveBeenCalledWith({}, "otp-1");
+    expect(authRepo.upsertCustomerShopMembership).toHaveBeenCalledWith(
+      {},
+      { shop_id: shopId, customer_id: "c-1" }
+    );
+  });
+
+  it("rejects verify when shop membership is blocked", async () => {
+    const codeHash = await hashOtpCode("123456");
+    const authRepo = {
+      getShopById: vi.fn().mockResolvedValue(activeShop()),
+      isPhoneUsedByActiveShopStaff: vi.fn().mockResolvedValue(false),
+      findLatestOtpChallenge: vi.fn().mockResolvedValue({
+        id: "otp-1",
+        phone: "+919999999999",
+        shop_id: shopId,
+        code_hash: codeHash,
+        attempts: 0,
+        consumed_at: null,
+        expires_at: new Date(Date.now() + 60_000).toISOString()
+      }),
+      incrementOtpChallengeAttempts: vi.fn(),
+      consumeOtpChallenge: vi.fn().mockResolvedValue(undefined),
+      getUserByPhone: vi.fn().mockResolvedValue({
+        id: "u-1",
+        email: null,
+        phone: "+919999999999",
+        registration_source: "phone_otp",
+        is_active: true
+      }),
+      insertUser: vi.fn(),
+      getCustomerByUserId: vi.fn().mockResolvedValue({
+        id: "c-1",
+        user_id: "u-1",
+        display_name: null,
+        is_blocked: false,
+        is_deleted: false
+      }),
+      insertCustomer: vi.fn(),
+      upsertCustomerShopMembership: vi.fn().mockResolvedValue({
+        id: "m-1",
+        is_active: true,
+        is_blocked: true,
+        is_deleted: false
+      }),
+      isUserActiveShopStaff: vi.fn().mockResolvedValue(false)
+    };
+    const run = createVerifyCustomerOtp({ authRepo });
+    await expect(run({}, { phone: "+919999999999", shopId, code: "123456" })).rejects.toMatchObject({
+      code: "UNAUTHORIZED"
+    });
   });
 
   it("rejects verify when phone belongs to active shop staff", async () => {

@@ -12,6 +12,10 @@ function normalizeDisplayName(raw) {
   return val.length ? val : null;
 }
 
+/**
+ * Resolves an existing OAuth-linked user + customer for a storefront shop and ensures
+ * shop membership via `upsertCustomerShopMembership` (same semantics as OTP verify).
+ */
 export function provisionCustomerForOAuthShop({ authRepo }) {
   return async function runProvisionCustomerForOAuthShop(client, input) {
     const email = normalizeEmail(input?.email);
@@ -47,8 +51,11 @@ export function provisionCustomerForOAuthShop({ authRepo }) {
       throw new ValidationError("Shop is not available");
     }
 
-    const membership = await authRepo.getMembershipByCustomerAndShop(client, customer.id, shop.id);
-    if (!membership || membership.is_blocked || !membership.is_active || membership.is_deleted) {
+    const membership = await authRepo.upsertCustomerShopMembership(client, {
+      shop_id: shop.id,
+      customer_id: customer.id
+    });
+    if (membership.is_blocked) {
       throw new AuthError("Invalid credentials");
     }
 

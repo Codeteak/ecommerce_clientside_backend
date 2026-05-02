@@ -69,16 +69,12 @@ export function createVerifyCustomerEmailOtp({ authRepo, otpMaxAttempts = 5 }) {
       throw new AuthError("Invalid credentials");
     }
 
-    const membership = await authRepo.getMembershipByCustomerAndShop(client, customer.id, shop.id);
-    if (!membership) {
-      await authRepo.insertMembership(client, {
-        shop_id: shop.id,
-        customer_id: customer.id
-      });
-    } else if (membership.is_blocked) {
+    const membership = await authRepo.upsertCustomerShopMembership(client, {
+      shop_id: shop.id,
+      customer_id: customer.id
+    });
+    if (membership.is_blocked) {
       throw new AuthError("Invalid credentials");
-    } else if (!membership.is_active || membership.is_deleted) {
-      await authRepo.reactivateMembership(client, membership.id);
     }
 
     return buildStorefrontSessionResponse(authRepo, client, user.id, { ip, userAgent });

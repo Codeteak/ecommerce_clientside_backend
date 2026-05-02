@@ -174,6 +174,17 @@ export class CustomerAuthRepo {
     throw new Error("Not implemented");
   }
 
+  /**
+   * Ensures a membership row exists for (shop, customer): insert or reactivate soft-deleted /
+   * inactive rows. Preserves `is_blocked` on update so shop bans are not cleared by OTP.
+   * @returns {Promise<{ id: string, shop_id: string, customer_id: string, is_active: boolean, is_blocked: boolean, is_deleted: boolean }>}
+   */
+  async upsertCustomerShopMembership(_client, _row) {
+    void _client;
+    void _row;
+    throw new Error("Not implemented");
+  }
+
   async reactivateMembership(_client, _membershipId) {
     void _client;
     void _membershipId;

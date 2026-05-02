@@ -516,6 +516,21 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return rows[0];
   }
 
+  async upsertCustomerShopMembership(client, { shop_id, customer_id }) {
+    const { rows } = await client.query(
+      `INSERT INTO customer_shop_memberships (shop_id, customer_id, is_active, is_blocked, is_deleted)
+       VALUES ($1::uuid, $2::uuid, true, false, false)
+       ON CONFLICT (shop_id, customer_id) DO UPDATE SET
+         is_active = true,
+         is_deleted = false,
+         deleted_at = NULL,
+         updated_at = now()
+       RETURNING id, shop_id, customer_id, is_active, is_blocked, is_deleted`,
+      [shop_id, customer_id]
+    );
+    return rows[0];
+  }
+
   async reactivateMembership(client, membershipId) {
     await client.query(
       `UPDATE customer_shop_memberships

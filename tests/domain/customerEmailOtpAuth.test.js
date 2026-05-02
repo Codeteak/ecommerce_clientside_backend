@@ -35,6 +35,21 @@ describe("customer email OTP auth", () => {
     expect(String(senderArg.code)).toMatch(/^\d{6}$/);
   });
 
+  it("consumes email OTP challenge when send fails", async () => {
+    const authRepo = {
+      getShopById: vi.fn().mockResolvedValue(activeShop()),
+      findLatestEmailOtpChallenge: vi.fn().mockResolvedValue(null),
+      countEmailOtpChallengesSince: vi.fn().mockResolvedValue(0),
+      insertEmailOtpChallenge: vi.fn().mockResolvedValue({ id: "eotp-fail-1" }),
+      consumeEmailOtpChallenge: vi.fn().mockResolvedValue(undefined)
+    };
+    const otpSender = { sendOtp: vi.fn().mockRejectedValue(new Error("SMTP down")) };
+    const run = createRequestCustomerEmailOtp({ authRepo, otpSender });
+
+    await expect(run({}, { email: "user@example.com", shopId })).rejects.toThrow("SMTP down");
+    expect(authRepo.consumeEmailOtpChallenge).toHaveBeenCalledWith({}, "eotp-fail-1");
+  });
+
   it("verifies email OTP and provisions user/customer session", async () => {
     const codeHash = await hashOtpCode("123456");
     const authRepo = {
@@ -67,14 +82,14 @@ describe("customer email OTP auth", () => {
         is_deleted: false
       }),
       insertCustomer: vi.fn(),
-      getMembershipByCustomerAndShop: vi.fn().mockResolvedValue({
+      upsertCustomerShopMembership: vi.fn().mockResolvedValue({
         id: "m-1",
+        shop_id: shopId,
+        customer_id: "c-1",
         is_active: true,
         is_blocked: false,
         is_deleted: false
       }),
-      insertMembership: vi.fn(),
-      reactivateMembership: vi.fn(),
       getUserById: vi.fn().mockResolvedValue({
         id: "u-1",
         email: "user@example.com",
@@ -92,6 +107,10 @@ describe("customer email OTP auth", () => {
     expect(out.accessToken).toBeTypeOf("string");
     expect(out.customer).toMatchObject({ id: "c-1" });
     expect(authRepo.consumeEmailOtpChallenge).toHaveBeenCalledWith({}, "eotp-1");
+    expect(authRepo.upsertCustomerShopMembership).toHaveBeenCalledWith(
+      {},
+      { shop_id: shopId, customer_id: "c-1" }
+    );
   });
 
   it("blocks email OTP requests after 3 sends in the request window", async () => {
