@@ -19,7 +19,7 @@ Analyze the entire codebase and provide a **detailed, structured report** coveri
 ---
 
 ## 2. 📐 SOLID Principles
-
+ 
 For each principle, evaluate and give examples:
 
 * **S (Single Responsibility Principle)**
