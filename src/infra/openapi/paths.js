@@ -851,6 +851,8 @@ export function buildPaths() {
       get: {
         tags: ["Storefront orders"],
         summary: "List customer orders",
+        description:
+          "Each order includes `items` with catalog-resolved `image` (nullable for custom lines or products without media). Same shape as `/storefront/orders/{id}` line items.",
         security: [{ bearerAuth: [] }],
         parameters: [...shopParams, P.OrdersLimit],
         responses: {
@@ -858,10 +860,7 @@ export function buildPaths() {
             description: "OK",
             content: {
               "application/json": {
-                schema: {
-                  type: "object",
-                  properties: { orders: { type: "array", items: { type: "object" } } }
-                }
+                schema: { $ref: "#/components/schemas/StorefrontOrdersListResponse" }
               }
             }
           },
@@ -873,11 +872,19 @@ export function buildPaths() {
       get: {
         tags: ["Storefront orders"],
         summary: "Order detail",
-        description: "Returns one order by `id` for authenticated customer and resolved shop. Use the `id` from `/storefront/orders` list response.",
+        description:
+          "Returns one order by `id` for authenticated customer and resolved shop. Use the `id` from `/storefront/orders` list response. Line items include `image` when a shop product and media exist.",
         security: [{ bearerAuth: [] }],
         parameters: [...shopParams, P.OrderId],
         responses: {
-          "200": { description: "OK", content: { "application/json": { schema: { type: "object" } } } },
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/StorefrontOrderDetailResponse" }
+              }
+            }
+          },
           "401": jsonErr,
           "404": jsonErr
         }

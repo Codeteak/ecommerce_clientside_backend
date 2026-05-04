@@ -83,4 +83,39 @@ describe("storefrontCatalog getProductById", () => {
     expect(out.images[0]).not.toHaveProperty("mediaAssetId");
     expect(out.images[0]).not.toHaveProperty("storageKey");
   });
+
+  it("uses a shorter cache TTL for product detail than the default list TTL", async () => {
+    const catalogRepo = {
+      getProductByIdStorefront: vi.fn().mockResolvedValue({
+        product: {
+          id: "11111111-1111-4111-8111-111111111111",
+          name: "Apple",
+          slug: "apple",
+          base_unit: "kg",
+          price_minor_per_unit: "100",
+          offer_price_minor_per_unit: null,
+          availability: "in_stock",
+          category_id: "22222222-2222-4222-8222-222222222222"
+        },
+        gallery: []
+      })
+    };
+    const wrap = vi.fn((_k, t, fn) => {
+      expect(t).toBe(15);
+      return fn();
+    });
+    const storefrontCatalog = createStorefrontCatalog({
+      catalogRepo,
+      ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
+      catalogCache: { wrap },
+      catalogCacheTtlSec: 60
+    });
+
+    await storefrontCatalog.getProductById(
+      "00000000-0000-4000-8000-000000000001",
+      "11111111-1111-4111-8111-111111111111"
+    );
+
+    expect(wrap).toHaveBeenCalledTimes(1);
+  });
 });

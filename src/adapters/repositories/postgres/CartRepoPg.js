@@ -1,6 +1,10 @@
 import { CartRepo } from "../../../application/ports/repositories/CartRepo.js";
 import { AppError } from "../../../domain/errors/AppError.js";
 import { setTenantContext } from "../../../infra/db/tenantContext.js";
+import {
+  sellableAtPurchasePredicates,
+  sellableShopProductJoin
+} from "./queries/sellableShopProductSql.js";
 
 function commitErr(code, message) {
   return new AppError(message, { statusCode: 400, code });
@@ -123,11 +127,10 @@ export class CartRepoPg extends CartRepo {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
       `SELECT sp.id, gp.name, gp.base_unit, sp.price_minor_per_unit, sp.status, sp.availability
-         FROM shop_products sp
-         JOIN global_products gp ON gp.id = sp.global_product_id
+         ${sellableShopProductJoin}
         WHERE sp.id = $1::uuid
           AND sp.shop_id = $2::uuid
-          AND sp.status = 'active'`,
+          AND ${sellableAtPurchasePredicates}`,
       [productId, shopId]
     );
     return rows[0] ?? null;
@@ -200,19 +203,38 @@ export class CartRepoPg extends CartRepo {
     }
 
     const productLines = lines.filter((l) => !l.is_custom && l.product_id);
-    const sorted = [...productLines].sort((a, b) => String(a.product_id).localeCompare(String(b.product_id)));
+    const uniqueProductIds = [...new Set(productLines.map((l) => l.product_id))].sort((a, b) =>
+      String(a).localeCompare(String(b))
+    );
 
-    for (const line of sorted) {
-      const { rows: pRows } = await client.query(
-        `SELECT id, price_minor_per_unit, status, availability
-           FROM shop_products
-          WHERE id = $1::uuid
-            AND shop_id = $2::uuid
-          FOR UPDATE`,
-        [line.product_id, shopId]
+    /** @type {Map<string, { id: string, price_minor_per_unit: string, status: string, availability: string }>} */
+    const lockedById = new Map();
+    if (uniqueProductIds.length) {
+      const { rows: lockedRows } = await client.query(
+        `SELECT sp.id, sp.price_minor_per_unit::text AS price_minor_per_unit, sp.status, sp.availability
+           ${sellableShopProductJoin}
+          WHERE sp.shop_id = $1::uuid
+            AND sp.id = ANY($2::uuid[])
+            AND ${sellableAtPurchasePredicates}
+          ORDER BY sp.id
+          FOR UPDATE OF sp`,
+        [shopId, uniqueProductIds]
       );
-      const p = pRows[0];
-      if (!p || p.status !== "active" || p.availability !== "in_stock") {
+      if (lockedRows.length !== uniqueProductIds.length) {
+        throw commitErr(
+          "PRODUCT_UNAVAILABLE",
+          "One or more products are unavailable. Please refresh your cart."
+        );
+      }
+      for (const r of lockedRows) {
+        lockedById.set(String(r.id), r);
+      }
+    }
+
+    for (const line of lines) {
+      if (line.is_custom || !line.product_id) continue;
+      const p = lockedById.get(String(line.product_id));
+      if (!p) {
         throw commitErr(
           "PRODUCT_UNAVAILABLE",
           "One or more products are unavailable. Please refresh your cart."
@@ -225,7 +247,6 @@ export class CartRepoPg extends CartRepo {
           "A product price was updated. Please refresh your cart and try again."
         );
       }
-
     }
 
     for (const line of lines) {

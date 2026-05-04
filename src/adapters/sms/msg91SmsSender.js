@@ -4,24 +4,6 @@ import { ServiceUnavailableError } from "../../domain/errors/ServiceUnavailableE
 import { logger } from "../../config/logger.js";
 
 export class Msg91SmsSender extends SmsSender {
-  /**
-   * @param {object} opts
-   * @param {string} opts.authKey
-   * @param {string} opts.templateId — MSG91 Flow OTP template id (`OTP_TEMPLATE_ID`, DLT)
-   * @param {string} [opts.shortUrl="0"] — MSG91 short URL flag
-   * @param {number} [opts.timeoutMs=15000]
-   */
-  constructor({ authKey, templateId, shortUrl = "0", timeoutMs = 15_000 }) {
-    super();
-    this.authKey = authKey;
-    this.templateId = templateId;
-    this.shortUrl = shortUrl;
-    this.timeoutMs = timeoutMs;
-  }
-
-  /**
-   * @param {{ to: string, code: string, shopName?: string | null }} input
-   */
   async sendOtp(input) {
     const { to, code, shopName } = input;
     try {

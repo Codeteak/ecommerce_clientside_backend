@@ -258,5 +258,120 @@ export const schemas = {
     properties: {
       notes: { type: "string", maxLength: 2000, nullable: true }
     }
+  },
+  /** Resolved from live shop/global product media when `product_id` matches a shop product. */
+  StorefrontOrderLineItemImage: {
+    type: "object",
+    description:
+      "Primary product image for the line item. Omitted in JSON when null; when present, `url` may still be null if `OBJECT_STORAGE_PUBLIC_BASE_URL` is not set.",
+    properties: {
+      mediaAssetId: { type: "string", format: "uuid", nullable: true },
+      storageKey: { type: "string" },
+      contentType: { type: "string", nullable: true },
+      url: { type: "string", nullable: true, description: "Absolute public object URL when storage base URL is configured." }
+    },
+    required: ["storageKey"]
+  },
+  StorefrontOrderLineItem: {
+    type: "object",
+    properties: {
+      id: { type: "string", format: "uuid" },
+      product_id: { type: "string", format: "uuid", nullable: true },
+      product_slug: { type: "string", nullable: true },
+      product_name_snapshot: { type: "string" },
+      unit_label_snapshot: { type: "string" },
+      quantity: { type: "string", description: "Decimal quantity (Postgres numeric serialized as string)." },
+      unit_price_minor_snapshot: { type: "integer", description: "Minor units (e.g. paise)." },
+      line_total_minor: { type: "integer" },
+      is_custom: { type: "boolean" },
+      custom_note: { type: "string", nullable: true },
+      image: {
+        nullable: true,
+        allOf: [{ $ref: "#/components/schemas/StorefrontOrderLineItemImage" }]
+      }
+    },
+    required: [
+      "id",
+      "product_name_snapshot",
+      "unit_label_snapshot",
+      "quantity",
+      "unit_price_minor_snapshot",
+      "line_total_minor",
+      "is_custom",
+      "image"
+    ]
+  },
+  StorefrontOrderListEntry: {
+    type: "object",
+    description: "Order summary row from list endpoint, including nested line items.",
+    properties: {
+      id: { type: "string", format: "uuid" },
+      order_number: { type: "string" },
+      status: { type: "string" },
+      total_minor: {
+        description: "Order total in minor units; may be string when serialized from Postgres bigint.",
+        oneOf: [{ type: "integer" }, { type: "string" }]
+      },
+      currency: { type: "string" },
+      placed_at: { type: "string", format: "date-time" },
+      picker_id: { type: "string", format: "uuid", nullable: true },
+      picker_name: { type: "string", nullable: true },
+      items: {
+        type: "array",
+        items: { $ref: "#/components/schemas/StorefrontOrderLineItem" }
+      }
+    },
+    required: ["id", "order_number", "status", "total_minor", "currency", "placed_at", "items"]
+  },
+  StorefrontOrdersListResponse: {
+    type: "object",
+    properties: {
+      orders: { type: "array", items: { $ref: "#/components/schemas/StorefrontOrderListEntry" } }
+    },
+    required: ["orders"]
+  },
+  StorefrontOrderDetail: {
+    type: "object",
+    properties: {
+      id: { type: "string", format: "uuid" },
+      shop_id: { type: "string", format: "uuid" },
+      customer_id: { type: "string", description: "Customer identifier as stored on the order (text)." },
+      order_number: { type: "string" },
+      status: { type: "string" },
+      payment_method: { type: "string" },
+      subtotal_minor: { oneOf: [{ type: "integer" }, { type: "string" }] },
+      delivery_fee_minor: { oneOf: [{ type: "integer" }, { type: "string" }] },
+      total_minor: { oneOf: [{ type: "integer" }, { type: "string" }] },
+      currency: { type: "string" },
+      notes: { type: "string", nullable: true },
+      picker_id: { type: "string", format: "uuid", nullable: true },
+      picker_name: { type: "string", nullable: true },
+      placed_at: { type: "string", format: "date-time" },
+      accepted_at: { type: "string", format: "date-time", nullable: true },
+      out_for_delivery_at: { type: "string", format: "date-time", nullable: true },
+      delivered_at: { type: "string", format: "date-time", nullable: true },
+      rejected_at: { type: "string", format: "date-time", nullable: true }
+    },
+    required: [
+      "id",
+      "shop_id",
+      "customer_id",
+      "order_number",
+      "status",
+      "payment_method",
+      "subtotal_minor",
+      "delivery_fee_minor",
+      "total_minor",
+      "currency",
+      "placed_at"
+    ]
+  },
+  StorefrontOrderDetailResponse: {
+    type: "object",
+    properties: {
+      order: { $ref: "#/components/schemas/StorefrontOrderDetail" },
+      items: { type: "array", items: { $ref: "#/components/schemas/StorefrontOrderLineItem" } }
+    },
+    required: ["order", "items"]
   }
 };

@@ -60,6 +60,10 @@ export class CartRepo {
     throw new Error("Not implemented");
   }
 
+  /**
+   * Returns a product row for adding to cart, or null if missing / inactive / not in stock /
+   * not linked to global_products (same sellable rules as checkout).
+   */
   async getProductSnapshotForCart(_client, _shopId, _productId) {
     void _client;
     void _shopId;
@@ -100,8 +104,8 @@ export class CartRepo {
   }
 
   /**
-   * Locks product rows (ordered by product id), verifies live price vs cart line and availability,
-   * optionally decrements inventory when the shop has inventory tracking and a row exists.
+   * Locks sellable shop_product rows (join global_products, active + in_stock) in one round-trip,
+   * ordered by product id for stable lock ordering, verifies live price vs each cart line.
    * Call inside the checkout transaction before creating the order.
    */
   async validateCartForCheckoutCommit(_client, _shopId, _cartId) {
