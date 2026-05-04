@@ -1,4 +1,4 @@
-// Purpose: This file builds the app context by creating and wiring repos, services, and middleware.
+// Purpose: This file builds the app context by creating and wiring repos, services, and middleware..
 import { CatalogRepoPg } from "../adapters/repositories/postgres/CatalogRepoPg.js";
 import { CartRepoPg } from "../adapters/repositories/postgres/CartRepoPg.js";
 import { CustomerAuthRepoPg } from "../adapters/repositories/postgres/CustomerAuthRepoPg.js";
