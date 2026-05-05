@@ -71,6 +71,7 @@ export const env = {
   SMTP_SECURE: parsed.data.SMTP_SECURE ?? false,
   OTP_FROM_EMAIL: parsed.data.OTP_FROM_EMAIL?.trim() || "",
   MSG_AUTH_KEY: parsed.data.MSG_AUTH_KEY?.trim() || "",
+  // Single fallback source when env/secret is absent; keep this aligned with active MSG91 Flow template.
   OTP_TEMPLATE_ID: parsed.data.OTP_TEMPLATE_ID?.trim() || "69f592e0bd83b71e690c8cd2",
   MSG91_SHORT_URL: parsed.data.MSG91_SHORT_URL ?? "0",
   MSG91_REQUEST_TIMEOUT_MS: parsed.data.MSG91_REQUEST_TIMEOUT_MS ?? 15_000,

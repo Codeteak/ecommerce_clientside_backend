@@ -45,7 +45,7 @@ export const envSchema = z
     SMTP_SECURE: z.preprocess(boolFromEnv, z.boolean()),
     OTP_FROM_EMAIL: z.string().optional().default(""),
     MSG_AUTH_KEY: z.string().optional().default(""),
-    OTP_TEMPLATE_ID: z.string().min(1).default("69f592e0bd83b71e690c8cd2"),
+    OTP_TEMPLATE_ID: z.string().optional().default(""),
     MSG91_SHORT_URL: z.enum(["0", "1"]).default("0"),
     MSG91_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().max(30_000).default(15_000),
     DISABLE_RATE_LIMITING: z.preprocess(boolFromEnv, z.boolean()),
