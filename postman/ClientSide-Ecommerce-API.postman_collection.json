@@ -10,7 +10,7 @@
     "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:4100" },
+    { "key": "baseUrl", "value": "http://customer.yaadro.online" },
     { "key": "shopId", "value": "" },
     { "key": "phone", "value": "+919999999999" },
     { "key": "email", "value": "user@example.com" },
@@ -38,6 +38,41 @@
             "header": [],
             "url": "{{baseUrl}}/health",
             "description": "Liveness: `status`, `service`."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /health/ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health/ready",
+            "description": "Readiness probe for DB/cache dependencies."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/metrics",
+            "description": "In-process metrics endpoint. Add auth token headers if enforced by env."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Shops",
+      "item": [
+        {
+          "name": "GET /api/shops/resolve-by-domain",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/shops/resolve-by-domain?domain=customer.yaadro.online",
+            "description": "Resolve shop id by domain/custom_domain."
           },
           "response": []
         }
@@ -325,6 +360,34 @@
           "response": []
         },
         {
+          "name": "GET /storefront/categories/:slug",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
+            "url": "{{baseUrl}}/storefront/categories/sample-category",
+            "description": "Fetch one storefront category by slug."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /storefront/catalog/cache/invalidate",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-shop-id", "value": "{{shopId}}" },
+              { "key": "X-Catalog-Cache-Invalidate", "value": "" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shopId\": \"{{shopId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/storefront/catalog/cache/invalidate",
+            "description": "Invalidate storefront catalog cache for one shop. Requires X-Catalog-Cache-Invalidate token."
+          },
+          "response": []
+        },
+        {
           "name": "GET /storefront/products",
           "request": {
             "method": "GET",
@@ -341,6 +404,16 @@
             "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
             "url": "{{baseUrl}}/storefront/products/sample-slug",
             "description": "Fetch one storefront product by slug."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /storefront/products/id/:id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
+            "url": "{{baseUrl}}/storefront/products/id/00000000-0000-0000-0000-000000000000",
+            "description": "Fetch one storefront product by shop product id."
           },
           "response": []
         },
