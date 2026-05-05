@@ -9,6 +9,7 @@ import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
  */
 export class OrderRepoPg extends OrderRepo {
   mapOrderItemRow(row) {
+    const hasGlobalImageUrl = typeof row.global_image_url === "string" && row.global_image_url !== "";
     return {
       id: row.id,
       product_id: row.product_id,
@@ -21,14 +22,16 @@ export class OrderRepoPg extends OrderRepo {
       is_custom: row.is_custom,
       custom_note: row.custom_note,
       image:
-        row.image_storage_key != null
-          ? {
-              mediaAssetId: row.image_media_id,
-              storageKey: row.image_storage_key,
-              contentType: row.image_content_type,
-              url: toPublicMediaUrl(row.image_storage_key)
-            }
-          : null
+        hasGlobalImageUrl
+          ? { url: row.global_image_url }
+          : row.image_storage_key != null
+            ? {
+                mediaAssetId: row.image_media_id,
+                storageKey: row.image_storage_key,
+                contentType: row.image_content_type,
+                url: toPublicMediaUrl(row.image_storage_key)
+              }
+            : null
     };
   }
 
@@ -126,6 +129,7 @@ export class OrderRepoPg extends OrderRepo {
               oi.quantity::text AS quantity, oi.unit_price_minor_snapshot, oi.line_total_minor,
               oi.is_custom, oi.custom_note,
               gp.slug AS product_slug,
+              gp.image_url AS global_image_url,
               m.id AS image_media_id,
               m.storage_key AS image_storage_key,
               m.content_type AS image_content_type
@@ -191,6 +195,7 @@ export class OrderRepoPg extends OrderRepo {
               quantity::text AS quantity, unit_price_minor_snapshot, line_total_minor,
               is_custom, custom_note,
               gp.slug AS product_slug,
+              gp.image_url AS global_image_url,
               m.id AS image_media_id,
               m.storage_key AS image_storage_key,
               m.content_type AS image_content_type

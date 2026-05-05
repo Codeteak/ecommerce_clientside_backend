@@ -41,16 +41,23 @@ export function createStorefrontCatalog({
   function mapProductDetail(data) {
     const { product, gallery } = data;
     let images = gallery.map(mapProductDetailImage);
-    const fallbackGlobalImageUrl =
-      typeof product.global_image_url === "string" && product.global_image_url.trim()
-        ? product.global_image_url.trim()
-        : null;
-    if (images.length === 0 && fallbackGlobalImageUrl) {
+    const globalImageUrl =
+      typeof product.global_image_url === "string" && product.global_image_url !== "" ? product.global_image_url : null;
+    if (images.length === 0 && globalImageUrl) {
       images = [
         {
           sortOrder: 0,
           contentType: null,
-          url: fallbackGlobalImageUrl
+          url: globalImageUrl
+        }
+      ];
+    }
+    if (globalImageUrl) {
+      images = [
+        {
+          sortOrder: 0,
+          contentType: null,
+          url: globalImageUrl
         }
       ];
     }

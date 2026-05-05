@@ -88,4 +88,31 @@ describe("storefront cart addItem merge behavior", () => {
     });
     expect(out.items.map((it) => it.product_slug)).toEqual(["apple", "banana"]);
   });
+
+  it("passes through item image payload from cart repository", async () => {
+    const cartRepo = {
+      findCartByShopAndCustomerId: vi.fn().mockResolvedValue({
+        id: "11111111-1111-4111-8111-111111111111"
+      }),
+      insertCart: vi.fn(),
+      listCartItems: vi.fn().mockResolvedValue([
+        {
+          id: "a",
+          product_slug: "apple",
+          quantity: "1",
+          unit_price_minor: 100,
+          offer_price_minor_per_unit: "90",
+          image: { url: "  https://cdn.example.com/global/apple.jpg  " }
+        }
+      ])
+    };
+    const service = createStorefrontCart({
+      cartRepo,
+      ensureShopForCatalog: vi.fn().mockResolvedValue(undefined)
+    });
+    const out = await service.getCartContents({}, "00000000-0000-4000-8000-000000000001", {
+      customerId: "cust-1"
+    });
+    expect(out.items[0].image).toEqual({ url: "  https://cdn.example.com/global/apple.jpg  " });
+  });
 });

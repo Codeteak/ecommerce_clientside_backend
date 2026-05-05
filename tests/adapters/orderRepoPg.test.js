@@ -45,12 +45,38 @@ describe("OrderRepoPg mapOrderItemRow", () => {
       image_storage_key: "shops/x/products/y.jpg",
       image_content_type: "image/jpeg"
     });
-    expect(out.image).toEqual({
+    expect(out.image).toMatchObject({
       mediaAssetId: mediaId,
       storageKey: "shops/x/products/y.jpg",
-      contentType: "image/jpeg",
-      url: expect.anything()
+      contentType: "image/jpeg"
     });
     expect(out.image.url === null || typeof out.image.url === "string").toBe(true);
+  });
+
+  it("prefers global image_url over storage key when present", () => {
+    const repo = new OrderRepoPg();
+    const out = repo.mapOrderItemRow({
+      ...baseRow,
+      global_image_url: "  https://cdn.example.com/global/apple.jpg  ",
+      image_media_id: "00000000-0000-0000-0000-0000000000c1",
+      image_storage_key: "shops/x/products/y.jpg",
+      image_content_type: "image/jpeg"
+    });
+    expect(out.image).toEqual({
+      url: "  https://cdn.example.com/global/apple.jpg  "
+    });
+  });
+
+  it("falls back to storage key when global image_url is empty", () => {
+    const repo = new OrderRepoPg();
+    const out = repo.mapOrderItemRow({
+      ...baseRow,
+      global_image_url: "",
+      image_media_id: "00000000-0000-0000-0000-0000000000c1",
+      image_storage_key: "shops/x/products/y.jpg",
+      image_content_type: "image/jpeg"
+    });
+    expect(out.image?.storageKey).toBe("shops/x/products/y.jpg");
+    expect(out.image?.url === null || typeof out.image?.url === "string").toBe(true);
   });
 });

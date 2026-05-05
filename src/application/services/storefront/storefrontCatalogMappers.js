@@ -33,8 +33,7 @@ export function mapStorefrontCategoryRow(r) {
 
 export function mapStorefrontProductRow(r) {
   const thumbUrl = toPublicMediaUrl(r.thumb_storage_key);
-  const fallbackGlobalImageUrl =
-    typeof r.global_image_url === "string" && r.global_image_url.trim() ? r.global_image_url.trim() : null;
+  const globalImageUrl = typeof r.global_image_url === "string" && r.global_image_url !== "" ? r.global_image_url : null;
   const categoryImageUrl = toPublicMediaUrl(r.category_image_storage_key);
   let productImages = [];
   if (Array.isArray(r.product_images)) {
@@ -47,18 +46,29 @@ export function mapStorefrontProductRow(r) {
       productImages = [];
     }
   }
-  if (productImages.length === 0 && fallbackGlobalImageUrl) {
+  if (productImages.length === 0 && globalImageUrl) {
     productImages = [
       {
         media_asset_id: null,
         sort_order: 0,
         storage_key: null,
         content_type: null,
-        url: fallbackGlobalImageUrl
+        url: globalImageUrl
       }
     ];
   }
-  const thumbnailUrl = thumbUrl ?? fallbackGlobalImageUrl;
+  if (globalImageUrl) {
+    productImages = [
+      {
+        media_asset_id: null,
+        sort_order: 0,
+        storage_key: null,
+        content_type: null,
+        url: globalImageUrl
+      }
+    ];
+  }
+  const thumbnailUrl = globalImageUrl ?? thumbUrl;
   return {
     id: r.id,
     name: r.name,

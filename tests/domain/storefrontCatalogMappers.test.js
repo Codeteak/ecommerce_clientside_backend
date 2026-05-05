@@ -82,4 +82,83 @@ describe("storefrontCatalogMappers", () => {
     expect(out.images[0]).not.toHaveProperty("mediaAssetId");
     expect(out.images[0]).not.toHaveProperty("storageKey");
   });
+
+  it("prefers global image_url over R2 gallery and preserves exact whitespace", () => {
+    const out = mapStorefrontProductRow({
+      id: "p3",
+      name: "Bread",
+      slug: "bread",
+      price_minor_per_unit: "60",
+      offer_price_minor_per_unit: "55",
+      availability: "in_stock",
+      base_unit: "pack",
+      thumb_media_id: "m9",
+      thumb_storage_key: "products/bread.jpg",
+      thumb_content_type: "image/jpeg",
+      product_images: JSON.stringify([
+        {
+          media_asset_id: "m9",
+          sort_order: 0,
+          storage_key: "products/bread.jpg",
+          content_type: "image/jpeg"
+        }
+      ]),
+      global_image_url: "  https://cdn.example.com/global/bread.jpg  ",
+      category_slug: null,
+      category_parent_id: null,
+      category_name: null,
+      category_image_media_id: null,
+      category_image_storage_key: null,
+      category_image_content_type: null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      category_id: "c1"
+    });
+
+    expect(out.thumbnail?.url).toBe("  https://cdn.example.com/global/bread.jpg  ");
+    expect(out.images).toEqual([
+      {
+        sortOrder: 0,
+        contentType: null,
+        url: "  https://cdn.example.com/global/bread.jpg  "
+      }
+    ]);
+  });
+
+  it("falls back to R2 when global image_url is empty string", () => {
+    const out = mapStorefrontProductRow({
+      id: "p4",
+      name: "Paneer",
+      slug: "paneer",
+      price_minor_per_unit: "220",
+      offer_price_minor_per_unit: "200",
+      availability: "in_stock",
+      base_unit: "kg",
+      thumb_media_id: "m4",
+      thumb_storage_key: "products/paneer.jpg",
+      thumb_content_type: "image/jpeg",
+      product_images: JSON.stringify([
+        {
+          media_asset_id: "m4",
+          sort_order: 0,
+          storage_key: "products/paneer.jpg",
+          content_type: "image/jpeg"
+        }
+      ]),
+      global_image_url: "",
+      category_slug: null,
+      category_parent_id: null,
+      category_name: null,
+      category_image_media_id: null,
+      category_image_storage_key: null,
+      category_image_content_type: null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      category_id: "c1"
+    });
+
+    expect(out.thumbnail === null || out.thumbnail.storageKey === "products/paneer.jpg").toBe(true);
+    expect(out.images).toHaveLength(1);
+    expect(out.images[0].storageKey).toBe("products/paneer.jpg");
+    expect(out.images[0].mediaAssetId).toBe("m4");
+    expect(out.images[0].url === null || typeof out.images[0].url === "string").toBe(true);
+  });
 });

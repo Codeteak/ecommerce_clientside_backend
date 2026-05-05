@@ -20,6 +20,7 @@ export class CatalogRepoPg extends CatalogRepo {
         `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id, gp.name, gp.slug, gp.base_unit, sp.status,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.created_at, sp.updated_at,
+                gp.image_url AS global_image_url,
                 pm.id AS image_media_id,
                 pm.storage_key AS image_storage_key,
                 pm.content_type AS image_content_type,
@@ -71,14 +72,16 @@ export class CatalogRepoPg extends CatalogRepo {
       return rows.map((r) => ({
         ...r,
         image:
-          r.image_storage_key != null
-            ? {
-                mediaAssetId: r.image_media_id,
-                storageKey: r.image_storage_key,
-                contentType: r.image_content_type,
-                url: toPublicMediaUrl(r.image_storage_key)
-              }
-            : null,
+          typeof r.global_image_url === "string" && r.global_image_url !== ""
+            ? { url: r.global_image_url }
+            : r.image_storage_key != null
+              ? {
+                  mediaAssetId: r.image_media_id,
+                  storageKey: r.image_storage_key,
+                  contentType: r.image_content_type,
+                  url: toPublicMediaUrl(r.image_storage_key)
+                }
+              : null,
         category:
           r.category_slug != null
             ? {
@@ -175,6 +178,7 @@ export class CatalogRepoPg extends CatalogRepo {
         `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id, gp.name, gp.slug, gp.base_unit, sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.created_at, sp.updated_at,
+                gp.image_url AS global_image_url,
                 pm.id AS image_media_id,
                 pm.storage_key AS image_storage_key,
                 pm.content_type AS image_content_type,
@@ -232,14 +236,16 @@ export class CatalogRepoPg extends CatalogRepo {
       return rows.map((r) => ({
         ...r,
         image:
-          r.image_storage_key != null
-            ? {
-                mediaAssetId: r.image_media_id,
-                storageKey: r.image_storage_key,
-                contentType: r.image_content_type,
-                url: toPublicMediaUrl(r.image_storage_key)
-              }
-            : null,
+          typeof r.global_image_url === "string" && r.global_image_url !== ""
+            ? { url: r.global_image_url }
+            : r.image_storage_key != null
+              ? {
+                  mediaAssetId: r.image_media_id,
+                  storageKey: r.image_storage_key,
+                  contentType: r.image_content_type,
+                  url: toPublicMediaUrl(r.image_storage_key)
+                }
+              : null,
         category:
           r.category_slug != null
             ? {
