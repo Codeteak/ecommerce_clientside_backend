@@ -4,6 +4,21 @@ import { ServiceUnavailableError } from "../../domain/errors/ServiceUnavailableE
 import { logger } from "../../config/logger.js";
 
 export class Msg91SmsSender extends SmsSender {
+  /**
+   * @param {object} opts
+   * @param {string} opts.authKey
+   * @param {string} opts.templateId
+   * @param {string} [opts.shortUrl="0"]
+   * @param {number} [opts.timeoutMs=15000]
+   */
+  constructor({ authKey, templateId, shortUrl = "0", timeoutMs = 15_000 }) {
+    super();
+    this.authKey = authKey;
+    this.templateId = templateId;
+    this.shortUrl = shortUrl;
+    this.timeoutMs = timeoutMs;
+  }
+
   async sendOtp(input) {
     const { to, code, shopName } = input;
     try {

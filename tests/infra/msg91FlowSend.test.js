@@ -86,3 +86,53 @@ describe("sendMsg91FlowOtp", () => {
     ).rejects.toThrow(/non-JSON/);
   });
 });
+
+describe("Msg91SmsSender wiring", () => {
+  it("passes constructor config and otp payload to flow sender", async () => {
+    vi.resetModules();
+    const sendMsg91FlowOtpMock = vi.fn().mockResolvedValue({ type: "success" });
+    vi.doMock("../../src/infra/msg91/msg91FlowSend.js", () => ({
+      sendMsg91FlowOtp: sendMsg91FlowOtpMock
+    }));
+    const { Msg91SmsSender } = await import("../../src/adapters/sms/msg91SmsSender.js");
+
+    const sender = new Msg91SmsSender({
+      authKey: "k-1",
+      templateId: "tpl-1",
+      shortUrl: "1",
+      timeoutMs: 12_000
+    });
+    await sender.sendOtp({ to: "+919876543210", code: "123456", shopName: "Demo Shop" });
+
+    expect(sendMsg91FlowOtpMock).toHaveBeenCalledWith({
+      authKey: "k-1",
+      templateId: "tpl-1",
+      mobileRaw: "+919876543210",
+      otp: "123456",
+      shopDisplayName: "Demo Shop",
+      shortUrl: "1",
+      timeoutMs: 12_000
+    });
+  });
+
+  it("maps provider failures to service-unavailable error", async () => {
+    vi.resetModules();
+    const sendMsg91FlowOtpMock = vi.fn().mockRejectedValue(new Error("MSG91 HTTP 401"));
+    vi.doMock("../../src/infra/msg91/msg91FlowSend.js", () => ({
+      sendMsg91FlowOtp: sendMsg91FlowOtpMock
+    }));
+    const { Msg91SmsSender } = await import("../../src/adapters/sms/msg91SmsSender.js");
+
+    const sender = new Msg91SmsSender({
+      authKey: "k-2",
+      templateId: "tpl-2"
+    });
+
+    await expect(
+      sender.sendOtp({ to: "+919876543210", code: "123456", shopName: "Demo Shop" })
+    ).rejects.toMatchObject({
+      code: "SERVICE_UNAVAILABLE",
+      statusCode: 503
+    });
+  });
+});
