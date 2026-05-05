@@ -12,7 +12,7 @@ phases:
   pre_build:
     commands:
       - echo "Installing dependencies..."
-      - npm ci
+      - npm ci --include=dev
       - echo "Resolving AWS account and ECR repository..."
       - ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
       - ECR_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}"
@@ -26,7 +26,7 @@ phases:
   build:
     commands:
       - echo "Running tests..."
-      - npm test
+      - RUN_INTEGRATION_TESTS=0 NODE_ENV=test npm test
       - echo "Building and pushing ARM64 image ${ECR_URI}:${IMAGE_TAG}..."
       - docker buildx build --platform linux/arm64 -t "${ECR_URI}:${IMAGE_TAG}" -t "${ECR_URI}:latest" --push .
   post_build:

@@ -11,8 +11,10 @@ import { processOutboxBatch } from "../../src/application/services/outboxProcess
 import { createOutboxHandlers } from "../../src/application/services/outboxHandlers.js";
 import { logger } from "../../src/config/logger.js";
 
-const hasIntegrationEnv = Boolean(process.env.INTEGRATION_DATABASE_URL && process.env.INTEGRATION_REDIS_URL);
-const runDescribe = hasIntegrationEnv ? describe : describe.skip;
+const integrationEnabled =
+  (process.env.RUN_INTEGRATION_TESTS === "true" || process.env.RUN_INTEGRATION_TESTS === "1") &&
+  Boolean(process.env.INTEGRATION_DATABASE_URL && process.env.INTEGRATION_REDIS_URL);
+const runDescribe = integrationEnabled ? describe : describe.skip;
 
 runDescribe("integration: redis session cache and outbox processor", () => {
   let pool;
