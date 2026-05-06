@@ -25,6 +25,10 @@ function setCatalogHttpCache(ctx, res) {
 function listCategoriesHandler(ctx) {
   return async (req, res, next) => {
     try {
+      if (!req.shopId) {
+        res.json({ categories: [] });
+        return;
+      }
       const shopId = shopIdForStorefront(req);
       const parentId = req.query.parent_id ?? undefined;
       const categories = await ctx.storefrontCatalog.listCategories(shopId, {
@@ -42,6 +46,10 @@ function listCategoriesHandler(ctx) {
 function listProductsHandler(ctx) {
   return async (req, res, next) => {
     try {
+      if (!req.shopId) {
+        res.json({ categories: [], nextCursor: null });
+        return;
+      }
       const shopId = shopIdForStorefront(req);
       const result = await ctx.storefrontCatalog.listProducts(shopId, {
         categoryId: req.query.category_id,
@@ -67,6 +75,9 @@ function listProductsHandler(ctx) {
 function getProductBySlugHandler(ctx) {
   return async (req, res, next) => {
     try {
+      if (!req.shopId) {
+        throw new NotFoundError("Product not found");
+      }
       const shopId = shopIdForStorefront(req);
       const { slug } = req.params;
       const product = await ctx.storefrontCatalog.getProductBySlug(shopId, slug);
@@ -84,6 +95,9 @@ function getProductBySlugHandler(ctx) {
 function getProductByIdHandler(ctx) {
   return async (req, res, next) => {
     try {
+      if (!req.shopId) {
+        throw new NotFoundError("Product not found");
+      }
       const shopId = shopIdForStorefront(req);
       const { id } = req.params;
       const product = await ctx.storefrontCatalog.getProductById(shopId, id);

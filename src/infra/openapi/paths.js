@@ -250,7 +250,7 @@ export function buildPaths() {
       get: {
         tags: ["Catalog"],
         summary: "Legacy list categories",
-        description: "Legacy catalog categories endpoint under `/api/catalog`.",
+        description: "Legacy catalog categories endpoint under `/api/catalog` (shared global categories only).",
         parameters: [
           P.XShopId,
           {
@@ -283,7 +283,7 @@ export function buildPaths() {
       get: {
         tags: ["Catalog"],
         summary: "Legacy list products",
-        description: "Legacy catalog products endpoint under `/api/catalog`.",
+        description: "Legacy catalog products endpoint under `/api/catalog` (shared global products only).",
         parameters: [
           P.XShopId,
           {
@@ -316,7 +316,7 @@ export function buildPaths() {
       get: {
         tags: ["Catalog"],
         summary: "Legacy list items alias",
-        description: "Alias of `/api/catalog/products` returning the same payload shape.",
+        description: "Alias of `/api/catalog/products` returning the same payload shape (shared global products only).",
         parameters: [
           P.XShopId,
           {
@@ -349,7 +349,8 @@ export function buildPaths() {
       get: {
         tags: ["Catalog"],
         summary: "Legacy catalog search",
-        description: "Searches products/categories with independent sorting and pagination controls.",
+        description:
+          "Searches shared global products/categories with independent sorting and pagination controls.",
         parameters: [
           P.XShopId,
           { name: "type", in: "query", schema: { type: "string", enum: ["products", "categories", "both"] } },
@@ -479,7 +480,7 @@ export function buildPaths() {
         tags: ["Storefront catalog"],
         summary: "List categories",
         description:
-          "When `STOREFRONT_CATALOG_HTTP_CACHE_SEC` is set on the server, responses may include `Cache-Control` for CDN/browser caching. Use `all=true` to fetch the full category list in one request.",
+          "Lists shared global categories. When `STOREFRONT_CATALOG_HTTP_CACHE_SEC` is set on the server, responses may include `Cache-Control` for CDN/browser caching. Use `all=true` to fetch the full category list in one request.",
         parameters: [
           ...shopParams,
           {
@@ -562,7 +563,7 @@ export function buildPaths() {
         tags: ["Storefront catalog"],
         summary: "Search and list products",
         description:
-          "Returns products with product thumbnail image and embedded category object (`parent_id`, `name`, `slug`, `image`). Supports text search, filtering, sorting, and pagination.",
+          "Returns shared global products with one `thumbnail` and split `images[]` entries (each image independently addressable), plus embedded category object (`parent_id`, `name`, `slug`, `image`). Supports text search, filtering, sorting, and pagination.",
         parameters: [
           ...shopParams,
           { name: "category_id", in: "query", schema: { type: "string", format: "uuid" } },

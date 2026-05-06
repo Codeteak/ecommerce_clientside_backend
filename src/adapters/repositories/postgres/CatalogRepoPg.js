@@ -357,6 +357,14 @@ export class CatalogRepoPg extends CatalogRepo {
               c.scope = 'shared'
               OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
             )
+            AND EXISTS (
+              SELECT 1
+                FROM shop_products sp
+                JOIN global_products gp ON gp.id = sp.global_product_id
+               WHERE sp.shop_id = $1::uuid
+                 AND sp.status = 'active'
+                 AND gp.global_category_id = c.id
+            )
             AND (
               ($2::uuid IS NULL AND c.parent_id IS NULL)
               OR ($2::uuid IS NOT NULL AND c.parent_id = $2)
@@ -395,6 +403,14 @@ export class CatalogRepoPg extends CatalogRepo {
             AND (
               c.scope = 'shared'
               OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
+            )
+            AND EXISTS (
+              SELECT 1
+                FROM shop_products sp
+                JOIN global_products gp ON gp.id = sp.global_product_id
+               WHERE sp.shop_id = $1::uuid
+                 AND sp.status = 'active'
+                 AND gp.global_category_id = c.id
             )
           ORDER BY c.sort_order ASC, c.name ASC
           LIMIT 5000`,
@@ -588,6 +604,14 @@ export class CatalogRepoPg extends CatalogRepo {
             AND (
               c.scope = 'shared'
               OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
+            )
+            AND EXISTS (
+              SELECT 1
+                FROM shop_products sp
+                JOIN global_products gp ON gp.id = sp.global_product_id
+               WHERE sp.shop_id = $1::uuid
+                 AND sp.status = 'active'
+                 AND gp.global_category_id = c.id
             )
             AND lower(c.slug) = $2
           LIMIT 1`,

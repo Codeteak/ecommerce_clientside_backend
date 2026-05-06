@@ -127,6 +127,11 @@ export function buildListProductsStorefrontQuery({
      LEFT JOIN media_assets cma ON cma.id = cimg.media_asset_id
     WHERE sp.shop_id = $1::uuid
       AND sp.status = 'active'
+      AND c.is_active = true
+      AND (
+        c.scope = 'shared'
+        OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
+      )
       AND ($2::uuid IS NULL OR gp.global_category_id = $2)
       AND ($3::uuid IS NULL OR gp.global_brand_id = $3)
       AND ($4::text IS NULL OR gp.name ILIKE $4 ESCAPE '\\' OR gp.slug ILIKE $4 ESCAPE '\\')

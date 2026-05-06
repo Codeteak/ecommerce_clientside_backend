@@ -28,7 +28,7 @@ describe("storefrontCatalog getProductById", () => {
     const storefrontCatalog = createStorefrontCatalog({
       catalogRepo,
       ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
-      catalogCache: { wrap: vi.fn((_k, _t, fn) => fn()) },
+      catalogCache: { swr: vi.fn((_k, _t, fn) => fn()) },
       catalogCacheTtlSec: 0
     });
 
@@ -69,7 +69,7 @@ describe("storefrontCatalog getProductById", () => {
     const storefrontCatalog = createStorefrontCatalog({
       catalogRepo,
       ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
-      catalogCache: { wrap: vi.fn((_k, _t, fn) => fn()) },
+      catalogCache: { swr: vi.fn((_k, _t, fn) => fn()) },
       catalogCacheTtlSec: 0
     });
 
@@ -111,7 +111,7 @@ describe("storefrontCatalog getProductById", () => {
     const storefrontCatalog = createStorefrontCatalog({
       catalogRepo,
       ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
-      catalogCache: { wrap: vi.fn((_k, _t, fn) => fn()) },
+      catalogCache: { swr: vi.fn((_k, _t, fn) => fn()) },
       catalogCacheTtlSec: 0
     });
 
@@ -145,14 +145,14 @@ describe("storefrontCatalog getProductById", () => {
         gallery: []
       })
     };
-    const wrap = vi.fn((_k, t, fn) => {
-      expect(t).toBe(15);
+    const swr = vi.fn((_k, t, fn) => {
+      expect(t).toBe(1800);
       return fn();
     });
     const storefrontCatalog = createStorefrontCatalog({
       catalogRepo,
       ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
-      catalogCache: { wrap },
+      catalogCache: { swr },
       catalogCacheTtlSec: 60
     });
 
@@ -161,6 +161,6 @@ describe("storefrontCatalog getProductById", () => {
       "11111111-1111-4111-8111-111111111111"
     );
 
-    expect(wrap).toHaveBeenCalledTimes(1);
+    expect(swr).toHaveBeenCalledTimes(1);
   });
 });

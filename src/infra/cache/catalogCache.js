@@ -19,12 +19,47 @@ export function createCatalogCache({ redis }) {
       async wrap(_key, ttlSec, fn) {
         return fn();
       },
+      async swr(_key, ttlSec, fn) {
+        return fn();
+      },
       async invalidateShopCatalog(_shopId) {}
     };
   }
 
   function getClient() {
     return redis;
+  }
+
+  function toEnvelope(data) {
+    return { data, cachedAt: Date.now() };
+  }
+
+  function fromEnvelope(parsed) {
+    if (parsed && typeof parsed === "object" && "data" in parsed && "cachedAt" in parsed) {
+      return parsed;
+    }
+    return { data: parsed, cachedAt: Date.now() };
+  }
+
+  async function refreshInBackground({ c, key, lockKey, ttlSec, fn }) {
+    const lock = await withRetry(() => c.set(lockKey, "1", "EX", 30, "NX"), {
+      event: "catalog_cache_swr_lock_retry",
+      context: { cacheKey: key }
+    }).catch(() => null);
+    if (lock !== "OK") return;
+    void (async () => {
+      try {
+        const fresh = await fn();
+        await withRetry(() => c.set(key, JSON.stringify(toEnvelope(fresh)), "EX", ttlSec * 2), {
+          event: "catalog_cache_swr_set_retry",
+          context: { cacheKey: key, ttlSec }
+        });
+      } catch (err) {
+        logger.warn({ event: "catalog_cache_swr_refresh_error", cacheKey: key, err }, "Catalog SWR refresh failed");
+      } finally {
+        await c.del(lockKey).catch(() => {});
+      }
+    })();
   }
 
   return {
@@ -105,6 +140,39 @@ export function createCatalogCache({ redis }) {
       const v = await fn();
       await this.set(key, v, ttlSec);
       return v;
+    },
+
+    async swr(key, ttlSec, fn, { logLabel = "catalog", shopId = "unknown" } = {}) {
+      const c = getClient();
+      try {
+        const raw = await withRetry(() => c.get(key), {
+          event: "catalog_cache_swr_get_retry",
+          context: { cacheKey: key }
+        });
+        if (raw) {
+          const env = fromEnvelope(JSON.parse(raw));
+          const ageSec = Math.floor((Date.now() - Number(env.cachedAt || 0)) / 1000);
+          if (ageSec < ttlSec) {
+            console.log(`CACHE_HIT ${logLabel} shopId=${shopId}`);
+            return env.data;
+          }
+          console.log(`CACHE_HIT ${logLabel} shopId=${shopId}`);
+          await refreshInBackground({
+            c,
+            key,
+            lockKey: `lock:refresh:${key}`,
+            ttlSec,
+            fn
+          });
+          return env.data;
+        }
+      } catch (err) {
+        logger.warn({ event: "catalog_cache_swr_read_error", cacheKey: key, err }, "Catalog SWR read failed");
+      }
+
+      const fresh = await fn();
+      await this.set(key, toEnvelope(fresh), ttlSec * 2);
+      return fresh;
     },
 
     /**

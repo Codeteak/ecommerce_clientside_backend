@@ -1,0 +1,25 @@
+CREATE TABLE IF NOT EXISTS orders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  customer_id TEXT NOT NULL,
+  customer_name TEXT,
+  customer_phone TEXT,
+  customer_address TEXT,
+  order_number TEXT NOT NULL,
+  status TEXT NOT NULL CONSTRAINT orders_status_chk
+    CHECK (status IN ('pending', 'accepted', 'picking', 'ready', 'out_for_delivery', 'delivered', 'cancelled', 'rejected')),
+  payment_method TEXT NOT NULL DEFAULT 'cod',
+  subtotal_minor BIGINT NOT NULL,
+  delivery_fee_minor BIGINT NOT NULL DEFAULT 0,
+  total_minor BIGINT NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'INR',
+  picker_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  picker_name TEXT,
+  notes TEXT,
+  placed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  accepted_at TIMESTAMPTZ,
+  out_for_delivery_at TIMESTAMPTZ,
+  delivered_at TIMESTAMPTZ,
+  rejected_at TIMESTAMPTZ,
+  UNIQUE (shop_id, order_number)
+);

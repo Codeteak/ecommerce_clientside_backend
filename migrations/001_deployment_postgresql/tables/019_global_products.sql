@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS global_products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  scope TEXT NOT NULL CHECK (scope IN ('shared', 'private')),
+  owner_shop_id UUID REFERENCES shops(id) ON DELETE SET NULL,
+  global_category_id UUID REFERENCES global_categories(id) ON DELETE SET NULL,
+  global_brand_id UUID REFERENCES global_brands(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  base_unit TEXT NOT NULL,
+  description TEXT,
+  category_path TEXT,
+  upc TEXT,
+  specs TEXT,
+  image_url TEXT,
+  code TEXT,
+  code_type TEXT,
+  inferred BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

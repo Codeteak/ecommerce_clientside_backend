@@ -33,9 +33,9 @@ describe("Storefront products query validation", () => {
       .get(
         "/storefront/products?category_id=11111111-1111-4111-8111-111111111111&brand_id=22222222-2222-4222-8222-222222222222&search=apple&availability=in_stock&min_price_minor=100&max_price_minor=1000&sort_by=price&sort_order=desc&limit=20"
       )
-      .expect(400);
-    expect(res.body.error?.code).toBe("VALIDATION_ERROR");
-    expect(res.body.error?.message).toContain("shopId is required");
+      .expect(200);
+    expect(res.body).toHaveProperty("categories");
+    expect(Array.isArray(res.body.categories)).toBe(true);
   });
 
   it("applies the same validation under /api/storefront alias", async () => {

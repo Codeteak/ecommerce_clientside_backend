@@ -20,8 +20,7 @@ export function createStorefrontCatalog({
   catalogCacheTtlSec = 60
 }) {
   const ttl = Number(catalogCacheTtlSec) || 0;
-  /** Shorter TTL for single-product cache so availability/price stay fresher than list/category. */
-  const productDetailTtlSec = ttl <= 0 ? 0 : Math.min(ttl, 15);
+  const swrTtlSec = ttl > 0 ? 30 * 60 : 0;
 
   function mapProductDetailImage(g) {
     const out = {
@@ -74,12 +73,12 @@ export function createStorefrontCatalog({
     };
   }
 
-  async function cached(key, fn, ttlOverride = null) {
-    const effective = ttlOverride != null ? ttlOverride : ttl;
+  async function cachedSWR(shopId, key, label, fn, ttlOverride = null) {
+    const effective = ttlOverride != null ? ttlOverride : swrTtlSec;
     if (effective <= 0) {
       return fn();
     }
-    return catalogCache.wrap(key, effective, fn);
+    return catalogCache.swr(key, effective, fn, { logLabel: label, shopId });
   }
 
   return {
@@ -87,7 +86,7 @@ export function createStorefrontCatalog({
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
       const key = all ? `shop:${shopId}:categories:all` : `shop:${shopId}:categories:${parentId ?? "root"}`;
-      return cached(key, async () => {
+      return cachedSWR(shopId, key, "categories:list", async () => {
         const rows = all
           ? await catalogRepo.listAllCategoriesStorefront(shopId)
           : await catalogRepo.listCategoriesStorefront(shopId, { parentId });
@@ -120,7 +119,7 @@ export function createStorefrontCatalog({
       }
       const qPattern = toIlikePattern(search ?? null);
       const key = `shop:${shopId}:products:v3:${categoryId ?? "all"}:${brandId ?? "all"}:${qPattern ?? "q"}:${availability ?? "any"}:${minPriceMinor ?? "min"}:${maxPriceMinor ?? "max"}:${resolvedSortBy}:${resolvedSortOrder}:${lim}:cur:${cursor ?? "none"}:off:${offsetValue ?? "none"}`;
-      const items = await cached(key, async () => {
+      const items = await cachedSWR(shopId, key, "products:list", async () => {
         const rows = await catalogRepo.listProductsStorefront(shopId, {
           categoryId: categoryId ?? null,
           brandId: brandId ?? null,
@@ -147,8 +146,26 @@ export function createStorefrontCatalog({
               "utf8"
             ).toString("base64url")
           : null;
+      const mapped = page.map(mapProductRow);
+      const grouped = new Map();
+      for (const p of mapped) {
+        if (!p.category_id || !p.category) continue;
+        if (!grouped.has(p.category_id)) {
+          grouped.set(p.category_id, {
+            id: p.category_id,
+            name: p.category.name,
+            slug: p.category.slug,
+            parent_id: p.category.parent_id,
+            image: p.category.image,
+            products: []
+          });
+        }
+        const categoryProduct = { ...p };
+        delete categoryProduct.category;
+        grouped.get(p.category_id).products.push(categoryProduct);
+      }
       return {
-        products: page.map(mapProductRow),
+        categories: Array.from(grouped.values()),
         nextCursor
       };
     },
@@ -157,10 +174,12 @@ export function createStorefrontCatalog({
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
       const key = `shop:${shopId}:product:${String(slug).toLowerCase()}`;
-      const data = await cached(
+      const data = await cachedSWR(
+        shopId,
         key,
+        "products:detail:slug",
         async () => catalogRepo.getProductBySlugStorefront(shopId, slug),
-        productDetailTtlSec
+        swrTtlSec
       );
       if (!data) return null;
       return mapProductDetail(data);
@@ -170,10 +189,12 @@ export function createStorefrontCatalog({
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
       const key = `shop:${shopId}:product:id:${String(id).toLowerCase()}`;
-      const data = await cached(
+      const data = await cachedSWR(
+        shopId,
         key,
+        "products:detail:id",
         async () => catalogRepo.getProductByIdStorefront(shopId, id),
-        productDetailTtlSec
+        swrTtlSec
       );
       if (!data) return null;
       return mapProductDetail(data);
@@ -183,7 +204,13 @@ export function createStorefrontCatalog({
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
       const key = `shop:${shopId}:category:${String(slug).toLowerCase()}`;
-      const row = await cached(key, async () => catalogRepo.getCategoryBySlugStorefront(shopId, slug));
+      const row = await cachedSWR(
+        shopId,
+        key,
+        "categories:detail:slug",
+        async () => catalogRepo.getCategoryBySlugStorefront(shopId, slug),
+        swrTtlSec
+      );
       if (!row) return null;
       return mapCategoryRow(row);
     }
