@@ -5,6 +5,11 @@ import { z } from "zod";
  * storefront catalog endpoints so controllers receive safe input.
  */
 const uuidOpt = z.preprocess((v) => (v === "" || v == null ? undefined : v), z.string().uuid().optional());
+const uuidArrayOpt = z.preprocess((v) => {
+  if (v == null || v === "") return undefined;
+  if (Array.isArray(v)) return v;
+  return [v];
+}, z.array(z.string().uuid()).optional());
 const nonNegativeIntOpt = z.preprocess(
   (v) => (v === "" || v == null ? undefined : Number(v)),
   z.number().int().min(0).optional()
@@ -37,6 +42,9 @@ export const storefrontCategoriesQuerySchema = z
   });
 
 export const storefrontProductsQuerySchema = z.object({
+  shop_id: uuidOpt,
+  shop_ids: uuidArrayOpt,
+  "shop_ids[]": uuidArrayOpt,
   category_id: uuidOpt,
   brand_id: uuidOpt,
   search: z.preprocess((v) => {
@@ -59,7 +67,13 @@ export const storefrontProductsQuerySchema = z.object({
   sort_order: z.preprocess(
     (v) => (v === "" || v == null ? undefined : v),
     z.enum(["asc", "desc"]).optional()
-  )
+  ),
+  global_scope: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.enum(["shared", "private"]).optional()
+  ),
+  include_global_only: booleanOpt,
+  include_all_statuses: booleanOpt
 }).superRefine((data, ctx) => {
   if (
     Number.isInteger(data.min_price_minor) &&
@@ -102,6 +116,15 @@ export const storefrontProductsQuerySchema = z.object({
         message: "cursor is invalid"
       });
     }
+  }
+
+  const effectiveShopIds = data.shop_ids?.length ? data.shop_ids : data["shop_ids[]"];
+  if (data.shop_id && effectiveShopIds?.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["shop_ids"],
+      message: "Use either shop_id or shop_ids, not both"
+    });
   }
 });
 

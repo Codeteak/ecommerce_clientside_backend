@@ -171,6 +171,7 @@ export function createStorefrontCatalog({
         grouped.get(groupId).products.push(categoryProduct);
       }
       return {
+        products: mapped,
         categories: Array.from(grouped.values()),
         nextCursor
       };
