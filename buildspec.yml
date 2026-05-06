@@ -27,8 +27,14 @@ phases:
     commands:
       - echo "Running tests..."
       - RUN_INTEGRATION_TESTS=0 NODE_ENV=test npm test
+      - echo "Build environment diagnostics..."
+      - echo "PWD=$(pwd)"
+      - echo "CODEBUILD_SRC_DIR=${CODEBUILD_SRC_DIR}"
+      - ls -la
+      - docker version
+      - docker buildx ls
       - echo "Building and pushing ARM64 image ${ECR_URI}:${IMAGE_TAG}..."
-      - docker buildx build --progress=plain --platform linux/arm64 -t "${ECR_URI}:${IMAGE_TAG}" --push .
+      - docker buildx build --progress=plain --platform linux/arm64 --file "${CODEBUILD_SRC_DIR}/Dockerfile" -t "${ECR_URI}:${IMAGE_TAG}" --push "${CODEBUILD_SRC_DIR}"
       - |
         echo "Updating latest tag (best effort)..."
         docker buildx imagetools create -t "${ECR_URI}:latest" "${ECR_URI}:${IMAGE_TAG}" || \
