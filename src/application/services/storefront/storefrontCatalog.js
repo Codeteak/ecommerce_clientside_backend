@@ -149,20 +149,26 @@ export function createStorefrontCatalog({
       const mapped = page.map(mapProductRow);
       const grouped = new Map();
       for (const p of mapped) {
-        if (!p.category_id || !p.category) continue;
-        if (!grouped.has(p.category_id)) {
-          grouped.set(p.category_id, {
-            id: p.category_id,
-            name: p.category.name,
-            slug: p.category.slug,
-            parent_id: p.category.parent_id,
-            image: p.category.image,
+        const groupId = p.category_id ?? "uncategorized";
+        const groupMeta = p.category ?? {
+          name: "Uncategorized",
+          slug: null,
+          parent_id: null,
+          image: null
+        };
+        if (!grouped.has(groupId)) {
+          grouped.set(groupId, {
+            id: groupId,
+            name: groupMeta.name,
+            slug: groupMeta.slug,
+            parent_id: groupMeta.parent_id,
+            image: groupMeta.image,
             products: []
           });
         }
         const categoryProduct = { ...p };
         delete categoryProduct.category;
-        grouped.get(p.category_id).products.push(categoryProduct);
+        grouped.get(groupId).products.push(categoryProduct);
       }
       return {
         categories: Array.from(grouped.values()),

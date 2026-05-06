@@ -22,8 +22,8 @@ describe("buildListProductsStorefrontQuery", () => {
     expect(out.text).toContain("AND (sp.created_at, sp.id) < ($9::timestamptz, $10::uuid)");
     expect(out.text).toContain("FROM shop_products sp");
     expect(out.text).toContain("JOIN global_products gp");
-    expect(out.text).toContain("c.scope = 'shared'");
-    expect(out.text).toContain("c.scope = 'private' AND c.owner_shop_id = $1::uuid");
+    expect(out.text).not.toContain("c.scope = 'shared'");
+    expect(out.text).not.toContain("c.scope = 'private' AND c.owner_shop_id = $1::uuid");
     expect(out.text).not.toContain("OFFSET $");
     expect(out.values).toHaveLength(10);
   });
