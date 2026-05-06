@@ -28,7 +28,11 @@ phases:
       - echo "Running tests..."
       - RUN_INTEGRATION_TESTS=0 NODE_ENV=test npm test
       - echo "Building and pushing ARM64 image ${ECR_URI}:${IMAGE_TAG}..."
-      - docker buildx build --platform linux/arm64 -t "${ECR_URI}:${IMAGE_TAG}" -t "${ECR_URI}:latest" --push .
+      - docker buildx build --progress=plain --platform linux/arm64 -t "${ECR_URI}:${IMAGE_TAG}" --push .
+      - |
+        echo "Updating latest tag (best effort)..."
+        docker buildx imagetools create -t "${ECR_URI}:latest" "${ECR_URI}:${IMAGE_TAG}" || \
+        echo "Skipping latest tag update (likely ECR tag immutability)"
   post_build:
     commands:
       - printf '{"imageUri":"%s","imageTag":"%s","repository":"%s","builtAt":"%s"}\n' "${ECR_URI}:${IMAGE_TAG}" "${IMAGE_TAG}" "${ECR_URI}" "$(date -u +%FT%TZ)" > image-detail.json
