@@ -34,7 +34,23 @@ phases:
       - docker version
       - docker buildx ls
       - echo "Building and pushing ARM64 image ${ECR_URI}:${IMAGE_TAG}..."
-      - docker buildx build --progress=plain --platform linux/arm64 --file "${CODEBUILD_SRC_DIR}/Dockerfile" -t "${ECR_URI}:${IMAGE_TAG}" --push "${CODEBUILD_SRC_DIR}"
+      - |
+        docker buildx build \
+          --progress=plain \
+          --platform linux/arm64 \
+          --provenance=false \
+          --sbom=false \
+          --file "${CODEBUILD_SRC_DIR}/Dockerfile" \
+          -t "${ECR_URI}:${IMAGE_TAG}" \
+          --push "${CODEBUILD_SRC_DIR}" || \
+        docker buildx build \
+          --progress=plain \
+          --platform linux/arm64 \
+          --provenance=false \
+          --sbom=false \
+          --file "${CODEBUILD_SRC_DIR}/Dockerfile" \
+          -t "${ECR_URI}:${IMAGE_TAG}" \
+          --push "${CODEBUILD_SRC_DIR}"
       - |
         echo "Updating latest tag (best effort)..."
         docker buildx imagetools create -t "${ECR_URI}:latest" "${ECR_URI}:${IMAGE_TAG}" || \
