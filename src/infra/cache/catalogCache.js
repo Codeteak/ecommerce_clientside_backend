@@ -176,12 +176,14 @@ export function createCatalogCache({ redis }) {
     },
 
     /**
-     * Deletes all Redis keys for a shop’s catalog cache (`shop:<uuid>:*`).
-     * Use after admin catalog changes when Redis is enabled.
+     * Deletes Redis keys for catalog cache.
+     * - When `shopId` is provided: removes `shop:<shopId>:*`
+     * - When `shopId` is empty/null: removes `shop:*` (all shops)
      */
     async invalidateShopCatalog(shopId) {
       const c = getClient();
-      const pattern = `shop:${shopId}:*`;
+      const normShopId = String(shopId || "").trim();
+      const pattern = normShopId ? `shop:${normShopId}:*` : "shop:*";
       let cursor = "0";
       try {
         do {

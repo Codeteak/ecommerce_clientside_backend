@@ -20,7 +20,9 @@ export function createStorefrontCatalog({
   catalogCacheTtlSec = 60
 }) {
   const ttl = Number(catalogCacheTtlSec) || 0;
-  const swrTtlSec = ttl > 0 ? 30 * 60 : 0;
+  // Keep SWR freshness aligned with configured catalog TTL so updates
+  // are reflected within the expected minute-level window.
+  const swrTtlSec = ttl > 0 ? ttl : 0;
 
   function mapProductDetailImage(g) {
     const out = {
