@@ -59,6 +59,53 @@ export function createCheckoutStorefront({
     };
 
     try {
+      const assertAddressServiceable = async (profileAddress) => {
+        const service = await checkShopServiceArea({
+          shopId,
+          lat: Number(profileAddress.lat),
+          lng: Number(profileAddress.lng)
+        });
+        if (service.inServiceArea) return;
+
+        logger.warn(
+          {
+            event: "api.checkout.failed",
+            requestId: requestMeta?.requestId,
+            method: requestMeta?.method,
+            route: requestMeta?.route,
+            shopId,
+            userId,
+            customerId,
+            code: service.code || "ADDRESS_NOT_SERVICEABLE",
+            distanceM: service.distanceM ?? null,
+            maxRadiusM: service.maxRadiusM ?? null,
+            addressLat: Number(profileAddress.lat),
+            addressLng: Number(profileAddress.lng)
+          },
+          "Checkout serviceability rejected"
+        );
+        if (service.code === "SHOP_UNAVAILABLE") {
+          throw checkoutError("SHOP_UNAVAILABLE", service.message || "This shop is not available for orders.");
+        }
+        if (service.code === "SHOP_LOCATION_MISSING") {
+          throw checkoutError("SHOP_LOCATION_MISSING", service.message || "Shop delivery location is not configured.");
+        }
+        if (service.code === "ADDRESS_COORDINATES_INVALID") {
+          throw checkoutError(
+            "ADDRESS_COORDINATES_INVALID",
+            service.message || "Selected address coordinates are invalid."
+          );
+        }
+        const distanceInfo =
+          service.distanceM != null && service.maxRadiusM != null
+            ? ` (distance ${service.distanceM}m, max ${service.maxRadiusM}m)`
+            : "";
+        throw checkoutError(
+          "ADDRESS_NOT_SERVICEABLE",
+          `${service.message || "Selected address is not serviceable for delivery"}${distanceInfo}`
+        );
+      };
+
       const membership = await authRepo.getMembershipByCustomerAndShop(client, customerId, shopId);
       if (!membership?.is_active || membership.is_blocked || membership.is_deleted) {
         throw new ValidationError("No access to this shop");
@@ -79,44 +126,7 @@ export function createCheckoutStorefront({
       if (profile.address.lat == null || profile.address.lng == null) {
         throw checkoutError("ADDRESS_COORDINATES_REQUIRED", "Selected address must include location coordinates");
       }
-
-      const service = await checkShopServiceArea({
-        shopId,
-        lat: Number(profile.address.lat),
-        lng: Number(profile.address.lng)
-      });
-      if (!service.inServiceArea) {
-        logger.warn(
-          {
-            event: "api.checkout.failed",
-            requestId: requestMeta?.requestId,
-            method: requestMeta?.method,
-            route: requestMeta?.route,
-            shopId,
-            userId,
-            customerId,
-            code: service.code || "ADDRESS_NOT_SERVICEABLE",
-            distanceM: service.distanceM ?? null,
-            maxRadiusM: service.maxRadiusM ?? null,
-            addressLat: Number(profile.address.lat),
-            addressLng: Number(profile.address.lng)
-          },
-          "Checkout serviceability rejected"
-        );
-        if (service.code === "SHOP_UNAVAILABLE") {
-          throw checkoutError("SHOP_UNAVAILABLE", service.message || "This shop is not available for orders.");
-        }
-        if (service.code === "SHOP_LOCATION_MISSING") {
-          throw checkoutError("SHOP_LOCATION_MISSING", service.message || "Shop delivery location is not configured.");
-        }
-        if (service.code === "ADDRESS_COORDINATES_INVALID") {
-          throw checkoutError(
-            "ADDRESS_COORDINATES_INVALID",
-            service.message || "Selected address coordinates are invalid."
-          );
-        }
-        throw checkoutError("ADDRESS_NOT_SERVICEABLE", "Selected address is not serviceable for delivery");
-      }
+      await assertAddressServiceable(profile.address);
 
       const custKey = String(customerId);
 
@@ -176,6 +186,9 @@ export function createCheckoutStorefront({
       const delivery = Number(deliveryFeeMinor) || 0;
       const total = subtotal + delivery;
       const orderNumber = randomOrderNumber();
+
+      // Final gate right before order creation so checkout cannot bypass feasibility.
+      await assertAddressServiceable(profile.address);
 
       const customerName = profile.display_name || "";
 

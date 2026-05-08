@@ -34,6 +34,8 @@ describe("OrderRepoPg mapOrderItemRow", () => {
       image_content_type: "image/jpeg"
     });
     expect(out.image).toBeNull();
+    expect(out.image_url).toBeNull();
+    expect(out.thumbnail).toBeNull();
   });
 
   it("maps image object when storage key is present", () => {
@@ -51,6 +53,8 @@ describe("OrderRepoPg mapOrderItemRow", () => {
       contentType: "image/jpeg"
     });
     expect(out.image.url === null || typeof out.image.url === "string").toBe(true);
+    expect(out.image_url === null || typeof out.image_url === "string").toBe(true);
+    expect(out.thumbnail).toEqual(out.image);
   });
 
   it("prefers global image_url over storage key when present", () => {
@@ -65,6 +69,8 @@ describe("OrderRepoPg mapOrderItemRow", () => {
     expect(out.image).toEqual({
       url: "https://cdn.example.com/global/apple.jpg"
     });
+    expect(out.image_url).toBe("https://cdn.example.com/global/apple.jpg");
+    expect(out.thumbnail).toEqual({ url: "https://cdn.example.com/global/apple.jpg" });
   });
 
   it("falls back to storage key when global image_url is empty", () => {

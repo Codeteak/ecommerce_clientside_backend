@@ -191,7 +191,20 @@ export const schemas = {
     properties: {
       serviceable: { type: "boolean" },
       distanceM: { type: "integer", nullable: true },
-      maxRadiusM: { type: "integer", nullable: true }
+      maxRadiusM: { type: "integer", nullable: true },
+      shopLocation: {
+        oneOf: [
+          {
+            type: "object",
+            properties: {
+              lat: { type: "number" },
+              lng: { type: "number" }
+            },
+            required: ["lat", "lng"]
+          },
+          { type: "null" }
+        ]
+      }
     }
   },
   StorefrontAddress: {

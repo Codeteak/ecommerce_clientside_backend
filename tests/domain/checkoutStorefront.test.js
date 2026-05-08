@@ -109,7 +109,11 @@ describe("checkoutStorefront validations", () => {
 
   it("fails when address is outside service area", async () => {
     const d = deps();
-    d.checkShopServiceArea = vi.fn().mockResolvedValue({ inServiceArea: false });
+    d.checkShopServiceArea = vi.fn().mockResolvedValue({
+      inServiceArea: false,
+      distanceM: 6200,
+      maxRadiusM: 5000
+    });
     const run = createCheckoutStorefront(d);
     await expect(
       run({}, {
@@ -118,6 +122,13 @@ describe("checkoutStorefront validations", () => {
         userId: "user-1"
       })
     ).rejects.toMatchObject({ code: "ADDRESS_NOT_SERVICEABLE" });
+    await expect(
+      run({}, {
+        shopId: "00000000-0000-4000-8000-000000000001",
+        customerId: "cust-1",
+        userId: "user-1"
+      })
+    ).rejects.toMatchObject({ message: expect.stringContaining("distance 6200m, max 5000m") });
   });
 
   it("fails when any cart product is not in stock", async () => {
@@ -194,6 +205,7 @@ describe("checkoutStorefront validations", () => {
       orderId: "order-1",
       total_minor: 120
     });
+    expect(d.checkShopServiceArea).toHaveBeenCalledTimes(2);
     expect(d.orderRepo.insertCheckoutIdempotency).not.toHaveBeenCalled();
   });
 

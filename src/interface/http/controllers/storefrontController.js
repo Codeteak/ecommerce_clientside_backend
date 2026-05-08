@@ -26,7 +26,12 @@ function checkLocationHandler(ctx) {
         path: "/",
         maxAge: 24 * 60 * 60 * 1000
       });
-      res.json({ serviceable, distanceM: result.distanceM ?? null, maxRadiusM: result.maxRadiusM ?? null });
+      res.json({
+        serviceable,
+        distanceM: result.distanceM ?? null,
+        maxRadiusM: result.maxRadiusM ?? null,
+        shopLocation: result.shopLocation ?? null
+      });
     } catch (err) {
       next(err);
     }

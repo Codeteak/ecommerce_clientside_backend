@@ -33,6 +33,7 @@ describe("checkShopServiceArea", () => {
 
     expect(result.maxRadiusM).toBe(1000);
     expect(result.inServiceArea).toBe(true);
+    expect(result.shopLocation).toEqual({ lat: 12.9716, lng: 77.5946 });
   });
 
   it("falls back to default radius when shop radius is missing", async () => {
@@ -50,6 +51,7 @@ describe("checkShopServiceArea", () => {
 
     expect(result.maxRadiusM).toBe(5000);
     expect(result.inServiceArea).toBe(true);
+    expect(result.shopLocation).toEqual({ lat: 12.9716, lng: 77.5946 });
   });
 
   it("returns out-of-area when distance exceeds shop radius", async () => {
@@ -67,6 +69,7 @@ describe("checkShopServiceArea", () => {
 
     expect(result.maxRadiusM).toBe(1000);
     expect(result.inServiceArea).toBe(false);
+    expect(result.shopLocation).toEqual({ lat: 12.9716, lng: 77.5946 });
     expect(result.code).toBe("OUT_OF_AREA");
   });
 });

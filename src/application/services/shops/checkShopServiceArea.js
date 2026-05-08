@@ -26,6 +26,7 @@ export function createCheckShopServiceArea({ shopServiceAreaRepo, defaultMaxRadi
         inServiceArea: false,
         distanceM: null,
         maxRadiusM: defaultMaxRadiusM,
+        shopLocation: null,
         code: "ADDRESS_COORDINATES_INVALID",
         message: "Address coordinates are invalid."
       };
@@ -48,6 +49,7 @@ export function createCheckShopServiceArea({ shopServiceAreaRepo, defaultMaxRadi
         inServiceArea: false,
         distanceM: null,
         maxRadiusM: defaultMaxRadiusM,
+        shopLocation: null,
         code: "SHOP_UNAVAILABLE",
         message: "This shop is not available for orders."
       };
@@ -60,6 +62,7 @@ export function createCheckShopServiceArea({ shopServiceAreaRepo, defaultMaxRadi
         inServiceArea: false,
         distanceM: null,
         maxRadiusM: defaultMaxRadiusM,
+        shopLocation: null,
         code: "SHOP_LOCATION_MISSING",
         message: "This shop has no delivery location configured."
       };
@@ -77,6 +80,10 @@ export function createCheckShopServiceArea({ shopServiceAreaRepo, defaultMaxRadi
       inServiceArea,
       distanceM: roundedM,
       maxRadiusM,
+      shopLocation: {
+        lat: hubLat,
+        lng: hubLng
+      },
       code: inServiceArea ? "IN_AREA" : "OUT_OF_AREA",
       message: inServiceArea ? "Within delivery range." : "Outside delivery range."
     };

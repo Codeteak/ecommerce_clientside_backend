@@ -17,6 +17,17 @@ export class OrderRepoPg extends OrderRepo {
 
   mapOrderItemRow(row) {
     const globalImageUrl = this.resolveGlobalImageUrl(row.global_image_url);
+    const image =
+      globalImageUrl != null
+        ? { url: globalImageUrl }
+        : row.image_storage_key != null
+          ? {
+              mediaAssetId: row.image_media_id,
+              storageKey: row.image_storage_key,
+              contentType: row.image_content_type,
+              url: toPublicMediaUrl(row.image_storage_key)
+            }
+          : null;
     return {
       id: row.id,
       product_id: row.product_id,
@@ -28,17 +39,10 @@ export class OrderRepoPg extends OrderRepo {
       line_total_minor: row.line_total_minor,
       is_custom: row.is_custom,
       custom_note: row.custom_note,
-      image:
-        globalImageUrl != null
-          ? { url: globalImageUrl }
-          : row.image_storage_key != null
-            ? {
-                mediaAssetId: row.image_media_id,
-                storageKey: row.image_storage_key,
-                contentType: row.image_content_type,
-                url: toPublicMediaUrl(row.image_storage_key)
-              }
-            : null
+      image,
+      // Backward-compatible aliases used by some storefront clients.
+      image_url: image?.url ?? null,
+      thumbnail: image
     };
   }
 
