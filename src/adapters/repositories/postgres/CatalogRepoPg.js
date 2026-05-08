@@ -55,10 +55,12 @@ export class CatalogRepoPg extends CatalogRepo {
            LEFT JOIN LATERAL (
              SELECT ei.media_asset_id
                FROM entity_images ei
-              WHERE ei.shop_id = sp.shop_id
-                AND ei.entity_type = 'category'
+              WHERE ei.entity_type = 'category'
                 AND ei.entity_id = c.id
-              ORDER BY ei.updated_at DESC NULLS LAST
+              ORDER BY
+                (ei.shop_id = sp.shop_id) DESC,
+                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
+                ei.updated_at DESC NULLS LAST
               LIMIT 1
            ) cimg ON true
            LEFT JOIN media_assets cm ON cm.id = cimg.media_asset_id
@@ -119,10 +121,12 @@ export class CatalogRepoPg extends CatalogRepo {
            LEFT JOIN LATERAL (
              SELECT ei.media_asset_id
                FROM entity_images ei
-              WHERE ei.shop_id = $1::uuid
-                AND ei.entity_type = 'category'
+              WHERE ei.entity_type = 'category'
                 AND ei.entity_id = c.id
-              ORDER BY ei.updated_at DESC NULLS LAST
+              ORDER BY
+                (ei.shop_id = $1::uuid) DESC,
+                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
+                ei.updated_at DESC NULLS LAST
               LIMIT 1
            ) img ON true
            LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
@@ -213,10 +217,12 @@ export class CatalogRepoPg extends CatalogRepo {
            LEFT JOIN LATERAL (
              SELECT ei.media_asset_id
                FROM entity_images ei
-              WHERE ei.shop_id = sp.shop_id
-                AND ei.entity_type = 'category'
+              WHERE ei.entity_type = 'category'
                 AND ei.entity_id = c.id
-              ORDER BY ei.updated_at DESC NULLS LAST
+              ORDER BY
+                (ei.shop_id = sp.shop_id) DESC,
+                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
+                ei.updated_at DESC NULLS LAST
               LIMIT 1
            ) cimg ON true
            LEFT JOIN media_assets cm ON cm.id = cimg.media_asset_id
@@ -283,10 +289,12 @@ export class CatalogRepoPg extends CatalogRepo {
            LEFT JOIN LATERAL (
              SELECT ei.media_asset_id
                FROM entity_images ei
-              WHERE ei.shop_id = $1::uuid
-                AND ei.entity_type = 'category'
+              WHERE ei.entity_type = 'category'
                 AND ei.entity_id = c.id
-              ORDER BY ei.updated_at DESC NULLS LAST
+              ORDER BY
+                (ei.shop_id = $1::uuid) DESC,
+                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
+                ei.updated_at DESC NULLS LAST
               LIMIT 1
            ) img ON true
            LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
@@ -345,10 +353,12 @@ export class CatalogRepoPg extends CatalogRepo {
            LEFT JOIN LATERAL (
              SELECT ei.media_asset_id
                FROM entity_images ei
-              WHERE ei.shop_id = $1::uuid
-                AND ei.entity_type = 'category'
+              WHERE ei.entity_type = 'category'
                 AND ei.entity_id = c.id
-              ORDER BY ei.updated_at DESC NULLS LAST
+              ORDER BY
+                (ei.shop_id = $1::uuid) DESC,
+                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
+                ei.updated_at DESC NULLS LAST
               LIMIT 1
            ) img ON true
            LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
@@ -392,10 +402,12 @@ export class CatalogRepoPg extends CatalogRepo {
            LEFT JOIN LATERAL (
              SELECT ei.media_asset_id
                FROM entity_images ei
-              WHERE ei.shop_id = $1::uuid
-                AND ei.entity_type = 'category'
+              WHERE ei.entity_type = 'category'
                 AND ei.entity_id = c.id
-              ORDER BY ei.updated_at DESC NULLS LAST
+              ORDER BY
+                (ei.shop_id = $1::uuid) DESC,
+                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
+                ei.updated_at DESC NULLS LAST
               LIMIT 1
            ) img ON true
            LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
@@ -593,10 +605,12 @@ export class CatalogRepoPg extends CatalogRepo {
            LEFT JOIN LATERAL (
              SELECT ei.media_asset_id
                FROM entity_images ei
-              WHERE ei.shop_id = $1::uuid
-                AND ei.entity_type = 'category'
+              WHERE ei.entity_type = 'category'
                 AND ei.entity_id = c.id
-              ORDER BY ei.updated_at DESC NULLS LAST
+              ORDER BY
+                (ei.shop_id = $1::uuid) DESC,
+                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
+                ei.updated_at DESC NULLS LAST
               LIMIT 1
            ) img ON true
            LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
