@@ -147,21 +147,24 @@ export class OrderRepoPg extends OrderRepo {
          LEFT JOIN global_products gp
            ON gp.id = sp.global_product_id
          LEFT JOIN LATERAL (
-           SELECT spi.media_asset_id
-             FROM shop_product_images spi
-            WHERE spi.shop_product_id = sp.id
-            ORDER BY spi.sort_order ASC
+           WITH chosen_images AS (
+             SELECT spi.media_asset_id, spi.sort_order
+               FROM shop_product_images spi
+              WHERE spi.shop_product_id = sp.id
+             UNION ALL
+             SELECT gpi.media_asset_id, gpi.sort_order
+               FROM global_product_images gpi
+              WHERE gpi.global_product_id = sp.global_product_id
+                AND NOT EXISTS (
+                  SELECT 1
+                    FROM shop_product_images spi2
+                   WHERE spi2.shop_product_id = sp.id
+                )
+           )
+           SELECT ci.media_asset_id
+             FROM chosen_images ci
+            ORDER BY ci.sort_order ASC
             LIMIT 1
-         ) spimg ON true
-         LEFT JOIN LATERAL (
-           SELECT gpi.media_asset_id
-             FROM global_product_images gpi
-            WHERE gpi.global_product_id = gp.id
-            ORDER BY gpi.sort_order ASC
-            LIMIT 1
-         ) gpimg ON true
-         LEFT JOIN LATERAL (
-           SELECT COALESCE(spimg.media_asset_id, gpimg.media_asset_id) AS media_asset_id
          ) pimg ON true
          LEFT JOIN media_assets m ON m.id = pimg.media_asset_id
         WHERE oi.order_id = ANY($1::uuid[])
@@ -213,21 +216,24 @@ export class OrderRepoPg extends OrderRepo {
          LEFT JOIN global_products gp
            ON gp.id = sp.global_product_id
          LEFT JOIN LATERAL (
-           SELECT spi.media_asset_id
-             FROM shop_product_images spi
-            WHERE spi.shop_product_id = sp.id
-            ORDER BY spi.sort_order ASC
+           WITH chosen_images AS (
+             SELECT spi.media_asset_id, spi.sort_order
+               FROM shop_product_images spi
+              WHERE spi.shop_product_id = sp.id
+             UNION ALL
+             SELECT gpi.media_asset_id, gpi.sort_order
+               FROM global_product_images gpi
+              WHERE gpi.global_product_id = sp.global_product_id
+                AND NOT EXISTS (
+                  SELECT 1
+                    FROM shop_product_images spi2
+                   WHERE spi2.shop_product_id = sp.id
+                )
+           )
+           SELECT ci.media_asset_id
+             FROM chosen_images ci
+            ORDER BY ci.sort_order ASC
             LIMIT 1
-         ) spimg ON true
-         LEFT JOIN LATERAL (
-           SELECT gpi.media_asset_id
-             FROM global_product_images gpi
-            WHERE gpi.global_product_id = gp.id
-            ORDER BY gpi.sort_order ASC
-            LIMIT 1
-         ) gpimg ON true
-         LEFT JOIN LATERAL (
-           SELECT COALESCE(spimg.media_asset_id, gpimg.media_asset_id) AS media_asset_id
          ) pimg ON true
          LEFT JOIN media_assets m ON m.id = pimg.media_asset_id
         WHERE oi.order_id = $1::uuid
