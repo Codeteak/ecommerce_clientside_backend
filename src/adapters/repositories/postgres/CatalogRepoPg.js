@@ -53,14 +53,10 @@ export class CatalogRepoPg extends CatalogRepo {
            LEFT JOIN media_assets pm ON pm.id = pimg.media_asset_id
            LEFT JOIN global_categories c ON c.id = gp.global_category_id
            LEFT JOIN LATERAL (
-             SELECT ei.media_asset_id
-               FROM entity_images ei
-              WHERE ei.entity_type = 'category'
-                AND ei.entity_id = c.id
-              ORDER BY
-                (ei.shop_id = sp.shop_id) DESC,
-                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
-                ei.updated_at DESC NULLS LAST
+             SELECT gci.media_asset_id
+               FROM global_category_images gci
+              WHERE gci.global_category_id = c.id
+              ORDER BY gci.sort_order ASC, gci.created_at ASC
               LIMIT 1
            ) cimg ON true
            LEFT JOIN media_assets cm ON cm.id = cimg.media_asset_id
@@ -119,14 +115,10 @@ export class CatalogRepoPg extends CatalogRepo {
                 ma.content_type AS image_content_type
            FROM global_categories c
            LEFT JOIN LATERAL (
-             SELECT ei.media_asset_id
-               FROM entity_images ei
-              WHERE ei.entity_type = 'category'
-                AND ei.entity_id = c.id
-              ORDER BY
-                (ei.shop_id = $1::uuid) DESC,
-                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
-                ei.updated_at DESC NULLS LAST
+             SELECT gci.media_asset_id
+               FROM global_category_images gci
+              WHERE gci.global_category_id = c.id
+              ORDER BY gci.sort_order ASC, gci.created_at ASC
               LIMIT 1
            ) img ON true
            LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
@@ -215,14 +207,10 @@ export class CatalogRepoPg extends CatalogRepo {
            LEFT JOIN media_assets pm ON pm.id = pimg.media_asset_id
            LEFT JOIN global_categories c ON c.id = gp.global_category_id
            LEFT JOIN LATERAL (
-             SELECT ei.media_asset_id
-               FROM entity_images ei
-              WHERE ei.entity_type = 'category'
-                AND ei.entity_id = c.id
-              ORDER BY
-                (ei.shop_id = sp.shop_id) DESC,
-                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
-                ei.updated_at DESC NULLS LAST
+             SELECT gci.media_asset_id
+               FROM global_category_images gci
+              WHERE gci.global_category_id = c.id
+              ORDER BY gci.sort_order ASC, gci.created_at ASC
               LIMIT 1
            ) cimg ON true
            LEFT JOIN media_assets cm ON cm.id = cimg.media_asset_id
@@ -287,14 +275,10 @@ export class CatalogRepoPg extends CatalogRepo {
                 ma.content_type AS image_content_type
            FROM global_categories c
            LEFT JOIN LATERAL (
-             SELECT ei.media_asset_id
-               FROM entity_images ei
-              WHERE ei.entity_type = 'category'
-                AND ei.entity_id = c.id
-              ORDER BY
-                (ei.shop_id = $1::uuid) DESC,
-                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
-                ei.updated_at DESC NULLS LAST
+             SELECT gci.media_asset_id
+               FROM global_category_images gci
+              WHERE gci.global_category_id = c.id
+              ORDER BY gci.sort_order ASC, gci.created_at ASC
               LIMIT 1
            ) img ON true
            LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
@@ -351,14 +335,10 @@ export class CatalogRepoPg extends CatalogRepo {
                 ma.content_type AS image_content_type
            FROM global_categories c
            LEFT JOIN LATERAL (
-             SELECT ei.media_asset_id
-               FROM entity_images ei
-              WHERE ei.entity_type = 'category'
-                AND ei.entity_id = c.id
-              ORDER BY
-                (ei.shop_id = $1::uuid) DESC,
-                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
-                ei.updated_at DESC NULLS LAST
+             SELECT gci.media_asset_id
+               FROM global_category_images gci
+              WHERE gci.global_category_id = c.id
+              ORDER BY gci.sort_order ASC, gci.created_at ASC
               LIMIT 1
            ) img ON true
            LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
@@ -400,14 +380,10 @@ export class CatalogRepoPg extends CatalogRepo {
                 ma.content_type AS image_content_type
            FROM global_categories c
            LEFT JOIN LATERAL (
-             SELECT ei.media_asset_id
-               FROM entity_images ei
-              WHERE ei.entity_type = 'category'
-                AND ei.entity_id = c.id
-              ORDER BY
-                (ei.shop_id = $1::uuid) DESC,
-                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
-                ei.updated_at DESC NULLS LAST
+             SELECT gci.media_asset_id
+               FROM global_category_images gci
+              WHERE gci.global_category_id = c.id
+              ORDER BY gci.sort_order ASC, gci.created_at ASC
               LIMIT 1
            ) img ON true
            LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
@@ -603,14 +579,10 @@ export class CatalogRepoPg extends CatalogRepo {
                 ma.content_type AS image_content_type
            FROM global_categories c
            LEFT JOIN LATERAL (
-             SELECT ei.media_asset_id
-               FROM entity_images ei
-              WHERE ei.entity_type = 'category'
-                AND ei.entity_id = c.id
-              ORDER BY
-                (ei.shop_id = $1::uuid) DESC,
-                (c.owner_shop_id IS NOT NULL AND ei.shop_id = c.owner_shop_id) DESC,
-                ei.updated_at DESC NULLS LAST
+             SELECT gci.media_asset_id
+               FROM global_category_images gci
+              WHERE gci.global_category_id = c.id
+              ORDER BY gci.sort_order ASC, gci.created_at ASC
               LIMIT 1
            ) img ON true
            LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
