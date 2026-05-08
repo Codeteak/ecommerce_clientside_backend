@@ -8,8 +8,15 @@ import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
  * data, updates order state, and writes outbox events for downstream workers.
  */
 export class OrderRepoPg extends OrderRepo {
+  resolveGlobalImageUrl(raw) {
+    const value = typeof raw === "string" ? raw.trim() : "";
+    if (!value) return null;
+    if (/^https?:\/\//i.test(value)) return value;
+    return toPublicMediaUrl(value);
+  }
+
   mapOrderItemRow(row) {
-    const hasGlobalImageUrl = typeof row.global_image_url === "string" && row.global_image_url !== "";
+    const globalImageUrl = this.resolveGlobalImageUrl(row.global_image_url);
     return {
       id: row.id,
       product_id: row.product_id,
@@ -22,8 +29,8 @@ export class OrderRepoPg extends OrderRepo {
       is_custom: row.is_custom,
       custom_note: row.custom_note,
       image:
-        hasGlobalImageUrl
-          ? { url: row.global_image_url }
+        globalImageUrl != null
+          ? { url: globalImageUrl }
           : row.image_storage_key != null
             ? {
                 mediaAssetId: row.image_media_id,

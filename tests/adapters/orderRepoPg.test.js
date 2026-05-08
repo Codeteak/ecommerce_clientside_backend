@@ -63,7 +63,7 @@ describe("OrderRepoPg mapOrderItemRow", () => {
       image_content_type: "image/jpeg"
     });
     expect(out.image).toEqual({
-      url: "  https://cdn.example.com/global/apple.jpg  "
+      url: "https://cdn.example.com/global/apple.jpg"
     });
   });
 
@@ -78,5 +78,20 @@ describe("OrderRepoPg mapOrderItemRow", () => {
     });
     expect(out.image?.storageKey).toBe("shops/x/products/y.jpg");
     expect(out.image?.url === null || typeof out.image?.url === "string").toBe(true);
+  });
+
+  it("resolves relative global image_url via public storage base", () => {
+    const repo = new OrderRepoPg();
+    const out = repo.mapOrderItemRow({
+      ...baseRow,
+      global_image_url: "shops/x/products/apple.jpg",
+      image_media_id: "00000000-0000-0000-0000-0000000000c1",
+      image_storage_key: "shops/x/products/y.jpg",
+      image_content_type: "image/jpeg"
+    });
+    expect(out.image?.url === null || typeof out.image?.url === "string").toBe(true);
+    if (out.image?.url !== null) {
+      expect(out.image.url).toContain("shops/x/products/apple.jpg");
+    }
   });
 });

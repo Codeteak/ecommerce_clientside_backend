@@ -17,13 +17,20 @@ function commitErr(code, message) {
  * managing cart items, and merging guest carts into customer carts.
  */
 export class CartRepoPg extends CartRepo {
+  resolveGlobalImageUrl(raw) {
+    const value = typeof raw === "string" ? raw.trim() : "";
+    if (!value) return null;
+    if (/^https?:\/\//i.test(value)) return value;
+    return toPublicMediaUrl(value);
+  }
+
   mapCartItemRow(row) {
-    const hasGlobalImageUrl = typeof row.global_image_url === "string" && row.global_image_url !== "";
+    const globalImageUrl = this.resolveGlobalImageUrl(row.global_image_url);
     return {
       ...row,
       image:
-        hasGlobalImageUrl
-          ? { url: row.global_image_url }
+        globalImageUrl != null
+          ? { url: globalImageUrl }
           : row.image_storage_key != null
             ? {
                 mediaAssetId: row.image_media_id,
