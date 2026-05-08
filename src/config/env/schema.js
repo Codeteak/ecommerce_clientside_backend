@@ -64,7 +64,7 @@ export const envSchema = z
     JWT_ISSUER: z.string().min(1),
     JWT_AUDIENCE: z.string().min(1),
     JWT_EXPIRES_IN: z.string().min(1),
-    JWT_ACCESS_EXPIRES_IN: z.string().min(1).default("15m"),
+    JWT_ACCESS_EXPIRES_IN: z.string().min(1).default("7d"),
     JWT_REFRESH_EXPIRES_IN: z.string().min(1).default("30d"),
     JWT_KEY_ID: z.string().min(1).default("v1"),
     JWT_ALLOWED_ALGORITHMS: z

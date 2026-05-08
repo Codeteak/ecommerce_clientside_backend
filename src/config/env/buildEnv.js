@@ -36,7 +36,7 @@ function rawEnv() {
   }
 
   if (src.JWT_ACCESS_EXPIRES_IN === undefined || src.JWT_ACCESS_EXPIRES_IN === "") {
-    src.JWT_ACCESS_EXPIRES_IN = src.JWT_EXPIRES_IN || "15m";
+    src.JWT_ACCESS_EXPIRES_IN = src.JWT_EXPIRES_IN || "7d";
   }
 
   return src;
