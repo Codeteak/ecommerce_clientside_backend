@@ -129,7 +129,7 @@ describe("storefrontCatalog getProductById", () => {
     ]);
   });
 
-  it("uses a shorter cache TTL for product detail than the default list TTL", async () => {
+  it("uses configured storefront catalog cache TTL for product detail", async () => {
     const catalogRepo = {
       getProductByIdStorefront: vi.fn().mockResolvedValue({
         product: {
@@ -146,7 +146,7 @@ describe("storefrontCatalog getProductById", () => {
       })
     };
     const swr = vi.fn((_k, t, fn) => {
-      expect(t).toBe(1800);
+      expect(t).toBe(60);
       return fn();
     });
     const storefrontCatalog = createStorefrontCatalog({
