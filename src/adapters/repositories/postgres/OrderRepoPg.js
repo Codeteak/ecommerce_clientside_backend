@@ -203,7 +203,7 @@ export class OrderRepoPg extends OrderRepo {
          LEFT JOIN media_assets m ON m.id = pimg.media_asset_id
         WHERE oi.order_id = ANY($1::uuid[])
         ORDER BY oi.order_id ASC, oi.id ASC`,
-      [orderIds, shopId]
+      [orderIds]
     );
     // #region agent log
     this.debugLog({
@@ -290,7 +290,7 @@ export class OrderRepoPg extends OrderRepo {
          LEFT JOIN media_assets m ON m.id = pimg.media_asset_id
         WHERE oi.order_id = $1::uuid
         ORDER BY oi.id ASC`,
-      [orderId, shopId]
+      [orderId]
     );
     // #region agent log
     this.debugLog({
