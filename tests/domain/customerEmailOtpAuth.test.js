@@ -97,6 +97,7 @@ describe("customer email OTP auth", () => {
         registration_source: "google",
         is_active: true
       }),
+      insertRefreshToken: vi.fn().mockResolvedValue(undefined),
       listActiveShopsForCustomer: vi.fn().mockResolvedValue([{ id: shopId, name: "Demo", slug: "demo" }]),
       isUserActiveShopStaff: vi.fn().mockResolvedValue(false)
     };
