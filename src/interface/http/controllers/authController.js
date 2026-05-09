@@ -107,9 +107,38 @@ function emailOtpVerifyHandler(ctx) {
   };
 }
 
+function refreshHandler(ctx) {
+  return async (req, res, next) => {
+    try {
+      const out = await withTx((client) =>
+        ctx.rotateCustomerRefreshToken(client, {
+          refreshToken: req.body.refreshToken,
+          ip: req.ip,
+          userAgent: req.get("user-agent") || null
+        })
+      );
+      logSecurityEvent("auth.refresh.succeeded", req);
+      res.json(out);
+    } catch (err) {
+      const level = err instanceof AppError ? "warn" : "error";
+      logSecurityEvent(
+        "auth.refresh.failed",
+        req,
+        {
+          code: err?.code || "INTERNAL_ERROR",
+          message: err?.message
+        },
+        level
+      );
+      next(err);
+    }
+  };
+}
+
 export const authController = {
   otpRequest: (ctx) => otpRequestHandler(ctx),
   otpVerify: (ctx) => otpVerifyHandler(ctx),
+  refresh: (ctx) => refreshHandler(ctx),
   emailOtpRequest: (ctx) => emailOtpRequestHandler(ctx),
   emailOtpVerify: (ctx) => emailOtpVerifyHandler(ctx),
 
@@ -117,6 +146,7 @@ export const authController = {
     return {
       otpRequest: otpRequestHandler(ctx),
       otpVerify: otpVerifyHandler(ctx),
+      refresh: refreshHandler(ctx),
       emailOtpRequest: emailOtpRequestHandler(ctx),
       emailOtpVerify: emailOtpVerifyHandler(ctx)
     };

@@ -16,10 +16,15 @@ import { validate } from "../middleware/validate.js";
 import {
   otpRequestBodySchema,
   otpVerifyBodySchema,
+  refreshTokenBodySchema,
   emailOtpRequestBodySchema,
   emailOtpVerifyBodySchema
 } from "../validations/authSchemas.js";
-import { patchProfileBodySchema } from "../validations/profileSchemas.js";
+import {
+  patchProfileBodySchema,
+  phoneChangeRequestBodySchema,
+  phoneChangeVerifyBodySchema
+} from "../validations/profileSchemas.js";
 import { storefrontLocationBodySchema } from "../validations/storefrontSchemas.js";
 import { shopDomainQuerySchema } from "../validations/shopSchemas.js";
 import {
@@ -123,6 +128,7 @@ export function createRoutes(ctx) {
     handlers: authHandlers,
     otpRequestBodySchema,
     otpVerifyBodySchema,
+    refreshTokenBodySchema,
     emailOtpRequestBodySchema,
     emailOtpVerifyBodySchema
   });
@@ -156,6 +162,8 @@ export function createRoutes(ctx) {
     storefrontAddressPostSchema,
     storefrontAddressPatchSchema,
     storefrontOrderIdParamSchema,
+    phoneChangeRequestBodySchema,
+    phoneChangeVerifyBodySchema,
     storefrontCtl,
     storefrontCat,
     storefrontCart,

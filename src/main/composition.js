@@ -23,9 +23,12 @@ import { createRequestCustomerOtp } from "../application/services/auth/requestCu
 import { createVerifyCustomerOtp } from "../application/services/auth/verifyCustomerOtp.js";
 import { createRequestCustomerEmailOtp } from "../application/services/auth/requestCustomerEmailOtp.js";
 import { createVerifyCustomerEmailOtp } from "../application/services/auth/verifyCustomerEmailOtp.js";
+import { createRotateCustomerRefreshToken } from "../application/services/auth/rotateCustomerRefreshToken.js";
 import { getCustomerProfile } from "../application/services/profile/getCustomerProfile.js";
 import { updateCustomerProfile } from "../application/services/profile/updateCustomerProfile.js";
 import { createUpdateStorefrontProfile } from "../application/services/profile/updateStorefrontProfile.js";
+import { createRequestPhoneChangeOtp } from "../application/services/profile/requestPhoneChangeOtp.js";
+import { createVerifyPhoneChangeOtp } from "../application/services/profile/verifyPhoneChangeOtp.js";
 import { createCheckShopServiceArea } from "../application/services/shops/checkShopServiceArea.js";
 import { createEnsureShopForCatalog } from "../application/services/catalog/ensureShopForCatalog.js";
 import { createCatalogCache } from "../infra/cache/catalogCache.js";
@@ -150,6 +153,19 @@ export function createAppContext() {
     authRepo,
     otpMaxAttempts: env.OTP_MAX_ATTEMPTS
   });
+  const rotateCustomerRefreshToken = createRotateCustomerRefreshToken({ authRepo });
+  const requestPhoneChangeOtp = createRequestPhoneChangeOtp({
+    authRepo,
+    smsSender,
+    otpTtlSeconds: env.OTP_TTL_SECONDS,
+    otpResendSeconds: env.OTP_RESEND_SECONDS,
+    otpRequestWindowSeconds: env.OTP_REQUEST_WINDOW_SECONDS,
+    otpMaxRequestsPerWindow: env.OTP_MAX_REQUESTS_PER_WINDOW
+  });
+  const verifyPhoneChangeOtp = createVerifyPhoneChangeOtp({
+    authRepo,
+    otpMaxAttempts: env.OTP_MAX_ATTEMPTS
+  });
   const checkShopServiceArea = createCheckShopServiceArea({
     shopServiceAreaRepo,
     defaultMaxRadiusM: env.SERVICE_AREA_RADIUS_METERS
@@ -192,8 +208,11 @@ export function createAppContext() {
       }),
     requestCustomerOtp,
     verifyCustomerOtp,
+    rotateCustomerRefreshToken,
     requestCustomerEmailOtp,
     verifyCustomerEmailOtp,
+    requestPhoneChangeOtp,
+    verifyPhoneChangeOtp,
     getCustomerProfile: getCustomerProfile({ authRepo }),
     updateCustomerProfile: updateCustomerProfile({ authRepo }),
     checkShopServiceArea,

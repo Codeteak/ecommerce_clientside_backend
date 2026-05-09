@@ -15,11 +15,10 @@ export const storefrontCartItemPatchSchema = z.object({
 
 export const storefrontProfilePostSchema = z
   .object({
-    displayName: z.string().max(120).optional().nullable(),
-    phone: z.string().max(32).optional().nullable()
+    displayName: z.string().max(120).optional().nullable()
   })
-  .refine((b) => b.displayName !== undefined || b.phone !== undefined, {
-    message: "At least one of displayName or phone is required"
+  .refine((b) => b.displayName !== undefined, {
+    message: "displayName is required"
   });
 
 const addressFields = {

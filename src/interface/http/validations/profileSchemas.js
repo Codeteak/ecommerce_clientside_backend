@@ -43,3 +43,18 @@ export const patchProfileBodySchema = z
       });
     }
   });
+
+const phoneSchema = z.string().regex(/^[0-9+][0-9]{7,31}$/, "Invalid phone format");
+
+export const phoneChangeRequestBodySchema = z
+  .object({
+    newPhone: phoneSchema
+  })
+  .strict();
+
+export const phoneChangeVerifyBodySchema = z
+  .object({
+    newPhone: phoneSchema,
+    code: z.string().regex(/^\d{6}$/, "OTP code must be 6 digits")
+  })
+  .strict();

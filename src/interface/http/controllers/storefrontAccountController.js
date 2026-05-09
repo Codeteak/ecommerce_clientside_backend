@@ -82,18 +82,67 @@ function patchAddressHandler(ctx) {
   };
 }
 
+function requestPhoneChangeOtpHandler(ctx) {
+  return async (req, res, next) => {
+    try {
+      const shopId = requireShopId(req.shopId);
+      const { userId, customerId } = req.customerAuth;
+      await withClient((c) => ctx.assertCustomerShopAccess(c, shopId, customerId));
+      const out = await withTx((c) =>
+        ctx.requestPhoneChangeOtp(c, {
+          userId,
+          customerId,
+          shopId,
+          newPhone: req.body.newPhone
+        })
+      );
+      res.json(out);
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+function verifyPhoneChangeOtpHandler(ctx) {
+  return async (req, res, next) => {
+    try {
+      const shopId = requireShopId(req.shopId);
+      const { userId, customerId } = req.customerAuth;
+      await withClient((c) => ctx.assertCustomerShopAccess(c, shopId, customerId));
+      const out = await withTx((c) =>
+        ctx.verifyPhoneChangeOtp(c, {
+          userId,
+          customerId,
+          shopId,
+          newPhone: req.body.newPhone,
+          code: req.body.code,
+          ip: req.ip,
+          userAgent: req.get("user-agent") || null
+        })
+      );
+      res.json(out);
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
 export const storefrontAccountController = {
   postProfile: (ctx) => postProfileHandler(ctx),
   getAddress: (ctx) => getAddressHandler(ctx),
   postAddress: (ctx) => postAddressHandler(ctx),
   patchAddress: (ctx) => patchAddressHandler(ctx),
+  requestPhoneChangeOtp: (ctx) => requestPhoneChangeOtpHandler(ctx),
+  verifyPhoneChangeOtp: (ctx) => verifyPhoneChangeOtpHandler(ctx),
 
   forCtx(ctx) {
     return {
       postProfile: postProfileHandler(ctx),
       getAddress: getAddressHandler(ctx),
       postAddress: postAddressHandler(ctx),
-      patchAddress: patchAddressHandler(ctx)
+      patchAddress: patchAddressHandler(ctx),
+      requestPhoneChangeOtp: requestPhoneChangeOtpHandler(ctx),
+      verifyPhoneChangeOtp: verifyPhoneChangeOtpHandler(ctx)
     };
   }
 };

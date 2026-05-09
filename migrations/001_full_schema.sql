@@ -1270,3 +1270,47 @@ END $$;
 ALTER FUNCTION app.find_shared_catalog_gallery_asset_ids_by_slug(text) SET row_security = off;
 REVOKE ALL ON FUNCTION app.find_shared_catalog_gallery_asset_ids_by_slug(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.find_shared_catalog_gallery_asset_ids_by_slug(text) TO PUBLIC;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+      FROM information_schema.tables
+     WHERE table_schema = 'public'
+       AND table_name = 'customer_refresh_tokens'
+  ) AND NOT EXISTS (
+    SELECT 1
+      FROM information_schema.tables
+     WHERE table_schema = 'public'
+       AND table_name = 'auth_refresh_tokens'
+  ) THEN
+    ALTER TABLE customer_refresh_tokens RENAME TO auth_refresh_tokens;
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
+  shop_id UUID REFERENCES shops(id) ON DELETE CASCADE,
+  subject_type TEXT NOT NULL DEFAULT 'customer'
+    CHECK (subject_type IN ('customer', 'shop_staff', 'super_admin')),
+  token_hash TEXT NOT NULL UNIQUE,
+  jti UUID NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  consumed_at TIMESTAMPTZ,
+  replaced_by_token_hash TEXT,
+  issued_ip TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_refresh_tokens_user_subject
+  ON auth_refresh_tokens (user_id, subject_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_refresh_tokens_user_customer
+  ON auth_refresh_tokens (user_id, customer_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_refresh_tokens_user_shop
+  ON auth_refresh_tokens (user_id, shop_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_refresh_tokens_live
+  ON auth_refresh_tokens (token_hash, expires_at DESC)
+  WHERE consumed_at IS NULL;

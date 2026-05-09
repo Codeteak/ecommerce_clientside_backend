@@ -131,6 +131,24 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return rows.length > 0;
   }
 
+  async isPhoneUsedByAnotherActiveCustomer(client, phone, excludeUserId) {
+    const normalized = String(phone || "").trim();
+    if (!normalized) return false;
+    const { rows } = await client.query(
+      `SELECT 1
+         FROM users u
+         JOIN customers c ON c.user_id = u.id
+        WHERE u.phone = $1
+          AND u.id <> $2::uuid
+          AND u.is_active = true
+          AND c.is_blocked = false
+          AND c.is_deleted = false
+        LIMIT 1`,
+      [normalized, excludeUserId]
+    );
+    return rows.length > 0;
+  }
+
   async isUserActiveShopStaff(client, userId) {
     const { rows } = await client.query(
       `SELECT 1
@@ -545,5 +563,31 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
 
   async updateUserPhone(client, userId, phone) {
     await client.query(`UPDATE users SET phone = $2 WHERE id = $1`, [userId, phone]);
+  }
+
+  async insertRefreshToken(
+    client,
+    { userId, customerId = null, shopId = null, subjectType = "customer", tokenHash, jti, expiresAtIso, issuedIp, userAgent }
+  ) {
+    await client.query(
+      `INSERT INTO auth_refresh_tokens (
+         user_id, customer_id, shop_id, subject_type, token_hash, jti, expires_at, issued_ip, user_agent
+       ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7::timestamptz, $8, $9)`,
+      [userId, customerId, shopId, subjectType, tokenHash, jti, expiresAtIso, issuedIp, userAgent]
+    );
+  }
+
+  async consumeRefreshToken(client, currentTokenHash, nextTokenHash) {
+    const { rows } = await client.query(
+      `UPDATE auth_refresh_tokens
+          SET consumed_at = now(),
+              replaced_by_token_hash = $2
+        WHERE token_hash = $1
+          AND consumed_at IS NULL
+          AND expires_at > now()
+        RETURNING id`,
+      [currentTokenHash, nextTokenHash]
+    );
+    return rows[0] ?? null;
   }
 }

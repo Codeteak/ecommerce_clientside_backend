@@ -2,20 +2,22 @@ import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
 import { getTestApp } from "../helpers/testApp.js";
 
-describe("removed refresh/logout routes", () => {
+describe("auth refresh route validation", () => {
   let app;
 
   beforeAll(() => {
     app = getTestApp();
   });
 
-  it("returns 404 for /api/auth/refresh", async () => {
-    const res = await request(app).post("/api/auth/refresh").send({}).expect(404);
-    expect(res.body.error?.code).toBe("ROUTE_NOT_FOUND");
+  it("returns 400 for missing refreshToken body", async () => {
+    const res = await request(app).post("/api/auth/refresh").send({}).expect(400);
+    expect(res.body.error?.code).toBe("VALIDATION_ERROR");
   });
 
-  it("returns 404 for /api/auth/logout", async () => {
-    const res = await request(app).post("/api/auth/logout").send({}).expect(404);
-    expect(res.body.error?.code).toBe("ROUTE_NOT_FOUND");
+  it("is mounted at /api/auth/refresh (not 404)", async () => {
+    const res = await request(app)
+      .post("/api/auth/refresh")
+      .send({ refreshToken: "x".repeat(24) });
+    expect(res.status).not.toBe(404);
   });
 });

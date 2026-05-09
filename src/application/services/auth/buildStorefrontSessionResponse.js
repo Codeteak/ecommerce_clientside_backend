@@ -1,5 +1,10 @@
 import { AuthError } from "../../../domain/errors/AuthError.js";
-import { signCustomerAccessToken, verifyCustomerAccessToken } from "../../../infra/auth/jwt.js";
+import {
+  signCustomerAccessToken,
+  signCustomerRefreshToken,
+  verifyCustomerAccessToken,
+  verifyCustomerRefreshToken
+} from "../../../infra/auth/jwt.js";
 import { buildProfileFromShops } from "./customerProfile.js";
 import { hashToken } from "../../../infra/security/tokenHash.js";
 
@@ -38,9 +43,25 @@ export async function buildStorefrontSessionResponse(authRepo, client, userId, s
       ttlMs
     });
   }
+  const refresh = signCustomerRefreshToken({
+    userId: user.id,
+    customerId: customer.id
+  });
+  const refreshPayload = verifyCustomerRefreshToken(refresh.token);
+  await authRepo.insertRefreshToken(client, {
+    userId: user.id,
+    customerId: customer.id,
+    subjectType: "customer",
+    tokenHash: hashToken(refresh.token),
+    jti: refresh.jti,
+    expiresAtIso: new Date(Number(refreshPayload.exp) * 1000).toISOString(),
+    issuedIp: sessionMeta?.ip ?? null,
+    userAgent: sessionMeta?.userAgent ?? null
+  });
 
   return {
     accessToken,
+    refreshToken: refresh.token,
     role: "customer",
     user: {
       id: user.id,

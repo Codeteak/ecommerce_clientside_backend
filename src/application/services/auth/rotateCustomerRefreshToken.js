@@ -8,7 +8,12 @@ import { hashToken } from "../../../infra/security/tokenHash.js";
 
 export function createRotateCustomerRefreshToken({ authRepo }) {
   return async function rotateCustomerRefreshToken(client, { refreshToken, ip, userAgent }) {
-    const payload = verifyCustomerRefreshToken(refreshToken);
+    let payload;
+    try {
+      payload = verifyCustomerRefreshToken(refreshToken);
+    } catch (_err) {
+      throw new AuthError("Invalid or expired token");
+    }
     const currentHash = hashToken(refreshToken);
 
     const nextRefresh = signCustomerRefreshToken({
@@ -26,6 +31,7 @@ export function createRotateCustomerRefreshToken({ authRepo }) {
     await authRepo.insertRefreshToken(client, {
       userId: payload.sub,
       customerId: payload.customerId,
+      subjectType: "customer",
       tokenHash: nextHash,
       jti: nextRefresh.jti,
       expiresAtIso: new Date(Number(nextPayload.exp) * 1000).toISOString(),

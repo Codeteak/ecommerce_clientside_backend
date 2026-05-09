@@ -47,6 +47,13 @@ export class CustomerAuthRepo {
     throw new Error("Not implemented");
   }
 
+  async isPhoneUsedByAnotherActiveCustomer(_client, _phone, _excludeUserId) {
+    void _client;
+    void _phone;
+    void _excludeUserId;
+    throw new Error("Not implemented");
+  }
+
   async isUserActiveShopStaff(_client, _userId) {
     void _client;
     void _userId;
@@ -195,6 +202,19 @@ export class CustomerAuthRepo {
     void _client;
     void _userId;
     void _phone;
+    throw new Error("Not implemented");
+  }
+
+  async insertRefreshToken(_client, _row) {
+    void _client;
+    void _row;
+    throw new Error("Not implemented");
+  }
+
+  async consumeRefreshToken(_client, _currentTokenHash, _nextTokenHash) {
+    void _client;
+    void _currentTokenHash;
+    void _nextTokenHash;
     throw new Error("Not implemented");
   }
 }

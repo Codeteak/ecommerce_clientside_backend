@@ -33,6 +33,8 @@ export function mountStorefrontRoutes(r, deps) {
     storefrontProfilePostSchema,
     storefrontAddressPostSchema,
     storefrontAddressPatchSchema,
+    phoneChangeRequestBodySchema,
+    phoneChangeVerifyBodySchema,
     storefrontOrderIdParamSchema,
     storefrontCtl,
     storefrontCat,
@@ -132,6 +134,20 @@ export function mountStorefrontRoutes(r, deps) {
       addressMutateLimiter,
       validate({ body: storefrontAddressPatchSchema }),
       storefrontAccount.patchAddress
+    );
+    r.post(
+      `${prefix}/phone/change/request-otp`,
+      requireCustomerJwt,
+      profileMutateLimiter,
+      validate({ body: phoneChangeRequestBodySchema }),
+      storefrontAccount.requestPhoneChangeOtp
+    );
+    r.post(
+      `${prefix}/phone/change/verify-otp`,
+      requireCustomerJwt,
+      profileMutateLimiter,
+      validate({ body: phoneChangeVerifyBodySchema }),
+      storefrontAccount.verifyPhoneChangeOtp
     );
 
     r.get(

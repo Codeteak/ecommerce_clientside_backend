@@ -9,6 +9,7 @@ export function mountAuthRoutes(r, deps) {
     handlers,
     otpRequestBodySchema,
     otpVerifyBodySchema,
+    refreshTokenBodySchema,
     emailOtpRequestBodySchema,
     emailOtpVerifyBodySchema
   } = deps;
@@ -24,6 +25,12 @@ export function mountAuthRoutes(r, deps) {
     otpVerifyLimiter ?? authLimiter,
     validate({ body: otpVerifyBodySchema }),
     handlers.otpVerify
+  );
+  r.post(
+    "/api/auth/refresh",
+    otpVerifyLimiter ?? authLimiter,
+    validate({ body: refreshTokenBodySchema }),
+    handlers.refresh
   );
   r.post(
     "/api/auth/email-otp/request",
