@@ -17,6 +17,26 @@ function listHandler(ctx) {
         await ctx.assertCustomerShopAccess(c, shopId, customerId);
         return ctx.orderRepo.listOrdersForCustomer(c, shopId, String(customerId), { limit });
       });
+      // #region agent log
+      fetch("http://127.0.0.1:7565/ingest/29f3d452-098b-4360-9f3f-87401c89013c", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "285b0d" },
+        body: JSON.stringify({
+          sessionId: "285b0d",
+          runId: "pre-fix",
+          hypothesisId: "H4",
+          location: "src/interface/http/controllers/storefrontOrdersController.js:list",
+          message: "Order history response shape sample",
+          data: {
+            ordersCount: rows.length,
+            firstItemHasImage: Boolean(rows?.[0]?.items?.[0]?.image),
+            firstItemImageUrl: rows?.[0]?.items?.[0]?.image_url ?? null,
+            firstItemThumbnailUrl: rows?.[0]?.items?.[0]?.thumbnail?.url ?? null
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
       res.json({ orders: rows });
     } catch (err) {
       next(err);

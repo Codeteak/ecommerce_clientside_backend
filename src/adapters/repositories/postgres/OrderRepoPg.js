@@ -229,10 +229,18 @@ export class OrderRepoPg extends OrderRepo {
       itemsByOrderId.set(key, arr);
     }
 
-    return rows.map((row) => ({
-      ...row,
-      items: itemsByOrderId.get(String(row.id)) ?? []
-    }));
+    return rows.map((row) => {
+      const items = itemsByOrderId.get(String(row.id)) ?? [];
+      const leadImage = items.find((it) => it?.image?.url || it?.image_url)?.image ?? null;
+      return {
+        ...row,
+        items,
+        // Backward-compatible top-level aliases for order-history card UIs.
+        image: leadImage,
+        image_url: leadImage?.url ?? null,
+        thumbnail: leadImage
+      };
+    });
   }
 
   async getOrderByIdForCustomer(client, shopId, orderId, customerIdText) {
