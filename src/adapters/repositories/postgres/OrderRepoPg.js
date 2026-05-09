@@ -8,6 +8,16 @@ import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
  * data, updates order state, and writes outbox events for downstream workers.
  */
 export class OrderRepoPg extends OrderRepo {
+  debugLog(payload) {
+    // #region agent log
+    fetch("http://127.0.0.1:7565/ingest/29f3d452-098b-4360-9f3f-87401c89013c", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "285b0d" },
+      body: JSON.stringify({ sessionId: "285b0d", ...payload, timestamp: Date.now() })
+    }).catch(() => {});
+    // #endregion
+  }
+
   resolveGlobalImageUrl(raw) {
     const value = typeof raw === "string" ? raw.trim() : "";
     if (!value) return null;
@@ -28,6 +38,23 @@ export class OrderRepoPg extends OrderRepo {
               url: toPublicMediaUrl(row.image_storage_key)
             }
           : null;
+    if (!image) {
+      // #region agent log
+      this.debugLog({
+        runId: "pre-fix",
+        hypothesisId: "H2",
+        location: "src/adapters/repositories/postgres/OrderRepoPg.js:mapOrderItemRow",
+        message: "Order item resolved to null image",
+        data: {
+          orderItemId: row.id ?? null,
+          productId: row.product_id ?? null,
+          productSlug: row.product_slug ?? null,
+          globalImageUrlRaw: row.global_image_url ?? null,
+          imageStorageKey: row.image_storage_key ?? null
+        }
+      });
+      // #endregion
+    }
     return {
       id: row.id,
       product_id: row.product_id,
@@ -139,15 +166,18 @@ export class OrderRepoPg extends OrderRepo {
       `SELECT oi.order_id, oi.id, oi.product_id, oi.product_name_snapshot, oi.unit_label_snapshot,
               oi.quantity::text AS quantity, oi.unit_price_minor_snapshot, oi.line_total_minor,
               oi.is_custom, oi.custom_note,
+              sp.id AS shop_product_id,
               gp.slug AS product_slug,
               gp.image_url AS global_image_url,
               m.id AS image_media_id,
               m.storage_key AS image_storage_key,
               m.content_type AS image_content_type
          FROM order_items oi
+         LEFT JOIN orders o
+           ON o.id = oi.order_id
          LEFT JOIN shop_products sp
            ON sp.id = oi.product_id
-          AND sp.shop_id = $2::uuid
+          AND sp.shop_id = o.shop_id
          LEFT JOIN global_products gp
            ON gp.id = sp.global_product_id
          LEFT JOIN LATERAL (
@@ -175,6 +205,21 @@ export class OrderRepoPg extends OrderRepo {
         ORDER BY oi.order_id ASC, oi.id ASC`,
       [orderIds, shopId]
     );
+    // #region agent log
+    this.debugLog({
+      runId: "pre-fix",
+      hypothesisId: "H1",
+      location: "src/adapters/repositories/postgres/OrderRepoPg.js:listOrdersForCustomer",
+      message: "Order history query image-source diagnostics",
+      data: {
+        ordersCount: rows.length,
+        itemsCount: itemRows.length,
+        missingShopProductJoinCount: itemRows.filter((r) => !r.shop_product_id).length,
+        missingAllImageSourceCount: itemRows.filter((r) => !r.global_image_url && !r.image_storage_key).length,
+        customItemCount: itemRows.filter((r) => r.is_custom).length
+      }
+    });
+    // #endregion
 
     const itemsByOrderId = new Map();
     for (const row of itemRows) {
@@ -208,15 +253,18 @@ export class OrderRepoPg extends OrderRepo {
       `SELECT oi.id, oi.product_id, oi.product_name_snapshot, oi.unit_label_snapshot,
               quantity::text AS quantity, unit_price_minor_snapshot, line_total_minor,
               is_custom, custom_note,
+              sp.id AS shop_product_id,
               gp.slug AS product_slug,
               gp.image_url AS global_image_url,
               m.id AS image_media_id,
               m.storage_key AS image_storage_key,
               m.content_type AS image_content_type
          FROM order_items oi
+         LEFT JOIN orders o
+           ON o.id = oi.order_id
          LEFT JOIN shop_products sp
            ON sp.id = oi.product_id
-          AND sp.shop_id = $2::uuid
+          AND sp.shop_id = o.shop_id
          LEFT JOIN global_products gp
            ON gp.id = sp.global_product_id
          LEFT JOIN LATERAL (
@@ -244,6 +292,21 @@ export class OrderRepoPg extends OrderRepo {
         ORDER BY oi.id ASC`,
       [orderId, shopId]
     );
+    // #region agent log
+    this.debugLog({
+      runId: "pre-fix",
+      hypothesisId: "H3",
+      location: "src/adapters/repositories/postgres/OrderRepoPg.js:getOrderByIdForCustomer",
+      message: "Order detail query image-source diagnostics",
+      data: {
+        orderId,
+        itemsCount: items.length,
+        productIdNullCount: items.filter((r) => !r.product_id).length,
+        missingShopProductJoinCount: items.filter((r) => !r.shop_product_id).length,
+        missingAllImageSourceCount: items.filter((r) => !r.global_image_url && !r.image_storage_key).length
+      }
+    });
+    // #endregion
     return { order, items: items.map((row) => this.mapOrderItemRow(row)) };
   }
 
