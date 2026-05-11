@@ -26,19 +26,23 @@ export class CartRepoPg extends CartRepo {
 
   mapCartItemRow(row) {
     const globalImageUrl = this.resolveGlobalImageUrl(row.global_image_url);
+    const image =
+      globalImageUrl != null
+        ? { url: globalImageUrl }
+        : row.image_storage_key != null
+          ? {
+              mediaAssetId: row.image_media_id,
+              storageKey: row.image_storage_key,
+              contentType: row.image_content_type,
+              url: toPublicMediaUrl(row.image_storage_key)
+            }
+          : null;
     return {
       ...row,
-      image:
-        globalImageUrl != null
-          ? { url: globalImageUrl }
-          : row.image_storage_key != null
-            ? {
-                mediaAssetId: row.image_media_id,
-                storageKey: row.image_storage_key,
-                contentType: row.image_content_type,
-                url: toPublicMediaUrl(row.image_storage_key)
-              }
-            : null
+      image,
+      image_url: image?.url ?? null,
+      thumbnail_url: image?.url ?? null,
+      thumbnail: image?.url ?? null
     };
   }
 

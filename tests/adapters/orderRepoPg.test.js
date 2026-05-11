@@ -35,6 +35,7 @@ describe("OrderRepoPg mapOrderItemRow", () => {
     });
     expect(out.image).toBeNull();
     expect(out.image_url).toBeNull();
+    expect(out.thumbnail_url).toBeNull();
     expect(out.thumbnail).toBeNull();
   });
 
@@ -54,7 +55,8 @@ describe("OrderRepoPg mapOrderItemRow", () => {
     });
     expect(out.image.url === null || typeof out.image.url === "string").toBe(true);
     expect(out.image_url === null || typeof out.image_url === "string").toBe(true);
-    expect(out.thumbnail).toEqual(out.image);
+    expect(out.thumbnail_url === null || typeof out.thumbnail_url === "string").toBe(true);
+    expect(out.thumbnail).toBe(out.image_url);
   });
 
   it("prefers global image_url over storage key when present", () => {
@@ -70,7 +72,8 @@ describe("OrderRepoPg mapOrderItemRow", () => {
       url: "https://cdn.example.com/global/apple.jpg"
     });
     expect(out.image_url).toBe("https://cdn.example.com/global/apple.jpg");
-    expect(out.thumbnail).toEqual({ url: "https://cdn.example.com/global/apple.jpg" });
+    expect(out.thumbnail_url).toBe("https://cdn.example.com/global/apple.jpg");
+    expect(out.thumbnail).toBe("https://cdn.example.com/global/apple.jpg");
   });
 
   it("falls back to storage key when global image_url is empty", () => {

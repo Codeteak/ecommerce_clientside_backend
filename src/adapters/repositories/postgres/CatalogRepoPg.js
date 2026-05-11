@@ -348,12 +348,19 @@ export class CatalogRepoPg extends CatalogRepo {
               OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
             )
             AND EXISTS (
+              WITH RECURSIVE category_tree AS (
+                SELECT c.id
+                UNION ALL
+                SELECT child.id
+                  FROM global_categories child
+                  JOIN category_tree ct ON child.parent_id = ct.id
+              )
               SELECT 1
                 FROM shop_products sp
                 JOIN global_products gp ON gp.id = sp.global_product_id
                WHERE sp.shop_id = $1::uuid
                  AND sp.status = 'active'
-                 AND gp.global_category_id = c.id
+                 AND gp.global_category_id IN (SELECT id FROM category_tree)
             )
             AND (
               ($2::uuid IS NULL AND c.parent_id IS NULL)
@@ -393,12 +400,19 @@ export class CatalogRepoPg extends CatalogRepo {
               OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
             )
             AND EXISTS (
+              WITH RECURSIVE category_tree AS (
+                SELECT c.id
+                UNION ALL
+                SELECT child.id
+                  FROM global_categories child
+                  JOIN category_tree ct ON child.parent_id = ct.id
+              )
               SELECT 1
                 FROM shop_products sp
                 JOIN global_products gp ON gp.id = sp.global_product_id
                WHERE sp.shop_id = $1::uuid
                  AND sp.status = 'active'
-                 AND gp.global_category_id = c.id
+                 AND gp.global_category_id IN (SELECT id FROM category_tree)
             )
           ORDER BY c.sort_order ASC, c.name ASC
           LIMIT 5000`,
@@ -592,12 +606,19 @@ export class CatalogRepoPg extends CatalogRepo {
               OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
             )
             AND EXISTS (
+              WITH RECURSIVE category_tree AS (
+                SELECT c.id
+                UNION ALL
+                SELECT child.id
+                  FROM global_categories child
+                  JOIN category_tree ct ON child.parent_id = ct.id
+              )
               SELECT 1
                 FROM shop_products sp
                 JOIN global_products gp ON gp.id = sp.global_product_id
                WHERE sp.shop_id = $1::uuid
                  AND sp.status = 'active'
-                 AND gp.global_category_id = c.id
+                 AND gp.global_category_id IN (SELECT id FROM category_tree)
             )
             AND lower(c.slug) = $2
           LIMIT 1`,

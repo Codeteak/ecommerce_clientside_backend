@@ -67,9 +67,10 @@ export class OrderRepoPg extends OrderRepo {
       is_custom: row.is_custom,
       custom_note: row.custom_note,
       image,
-      // Backward-compatible aliases used by some storefront clients.
+      // Backward-compatible aliases used by storefront clients.
       image_url: image?.url ?? null,
-      thumbnail: image
+      thumbnail_url: image?.url ?? null,
+      thumbnail: image?.url ?? null
     };
   }
 
@@ -238,7 +239,8 @@ export class OrderRepoPg extends OrderRepo {
         // Backward-compatible top-level aliases for order-history card UIs.
         image: leadImage,
         image_url: leadImage?.url ?? null,
-        thumbnail: leadImage
+        thumbnail_url: leadImage?.url ?? null,
+        thumbnail: leadImage?.url ?? null
       };
     });
   }

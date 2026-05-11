@@ -34,7 +34,37 @@ export function buildListProductsStorefrontQuery({
     offsetClause = `OFFSET $${values.length}`;
   }
 
-  const text = `SELECT sp.id,
+  const text = `WITH RECURSIVE category_descendants AS (
+      SELECT c.id, c.parent_id
+        FROM global_categories c
+       WHERE c.id = $2::uuid
+      UNION ALL
+      SELECT c.id, c.parent_id
+        FROM global_categories c
+        JOIN category_descendants cd ON c.parent_id = cd.id
+    ),
+    category_direct_products AS (
+      SELECT EXISTS (
+        SELECT 1
+          FROM shop_products sp2
+          JOIN global_products gp2 ON gp2.id = sp2.global_product_id
+         WHERE sp2.shop_id = $1::uuid
+           AND sp2.status = 'active'
+           AND gp2.global_category_id = $2::uuid
+      ) AS has_direct
+    ),
+    effective_categories AS (
+      SELECT $2::uuid AS id
+       WHERE $2::uuid IS NOT NULL
+         AND (SELECT has_direct FROM category_direct_products)
+      UNION ALL
+      SELECT cd.id
+        FROM category_descendants cd
+       WHERE $2::uuid IS NOT NULL
+         AND NOT (SELECT has_direct FROM category_direct_products)
+         AND cd.id <> $2::uuid
+    )
+    SELECT sp.id,
           gp.global_category_id AS category_id,
           gp.name,
           gp.slug,
@@ -125,7 +155,10 @@ export function buildListProductsStorefrontQuery({
      LEFT JOIN media_assets cma ON cma.id = cimg.media_asset_id
     WHERE sp.shop_id = $1::uuid
       AND sp.status = 'active'
-      AND ($2::uuid IS NULL OR gp.global_category_id = $2)
+      AND (
+        $2::uuid IS NULL
+        OR gp.global_category_id IN (SELECT id FROM effective_categories)
+      )
       AND ($3::uuid IS NULL OR gp.global_brand_id = $3)
       AND ($4::text IS NULL OR gp.name ILIKE $4 ESCAPE '\\' OR gp.slug ILIKE $4 ESCAPE '\\')
       AND ($5::text IS NULL OR sp.availability = $5)
