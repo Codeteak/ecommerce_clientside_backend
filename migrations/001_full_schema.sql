@@ -1314,3 +1314,473 @@ CREATE INDEX IF NOT EXISTS idx_auth_refresh_tokens_user_shop
 CREATE INDEX IF NOT EXISTS idx_auth_refresh_tokens_live
   ON auth_refresh_tokens (token_hash, expires_at DESC)
   WHERE consumed_at IS NULL;
+
+-- Category images: product-like layering
+-- 1) shop_category_images (tenant override for private categories)
+-- 2) global_category_images (shared default across shops)
+CREATE TABLE IF NOT EXISTS global_category_images (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  global_category_id UUID NOT NULL REFERENCES global_categories(id) ON DELETE CASCADE,
+  media_asset_id UUID NOT NULL REFERENCES media_assets(id) ON DELETE RESTRICT,
+  sort_order SMALLINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT global_category_images_sort_order_chk CHECK (sort_order >= 0 AND sort_order < 6),
+  CONSTRAINT global_category_images_gc_sort_uidx UNIQUE (global_category_id, sort_order),
+  CONSTRAINT global_category_images_gc_asset_uidx UNIQUE (global_category_id, media_asset_id)
+);
+CREATE INDEX IF NOT EXISTS idx_global_category_images_gc_sort
+  ON global_category_images(global_category_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS shop_category_images (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  global_category_id UUID NOT NULL REFERENCES global_categories(id) ON DELETE CASCADE,
+  media_asset_id UUID NOT NULL REFERENCES media_assets(id) ON DELETE RESTRICT,
+  sort_order SMALLINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT shop_category_images_sort_order_chk CHECK (sort_order >= 0 AND sort_order < 6),
+  CONSTRAINT shop_category_images_sc_sort_uidx UNIQUE (shop_id, global_category_id, sort_order),
+  CONSTRAINT shop_category_images_sc_asset_uidx UNIQUE (shop_id, global_category_id, media_asset_id)
+);
+CREATE INDEX IF NOT EXISTS idx_shop_category_images_sc_sort
+  ON shop_category_images(shop_id, global_category_id, sort_order);
+
+-- Backfill old category bindings from `entity_images` into new layered tables.
+INSERT INTO global_category_images (id, global_category_id, media_asset_id, sort_order, created_at, updated_at)
+SELECT
+  gen_random_uuid(),
+  c.id,
+  e.media_asset_id,
+  0,
+  e.created_at,
+  e.updated_at
+FROM entity_images e
+JOIN global_categories c ON c.id = e.entity_id
+WHERE e.entity_type = 'category'
+  AND c.scope = 'shared'
+ON CONFLICT (global_category_id, sort_order) DO NOTHING;
+
+INSERT INTO shop_category_images (id, shop_id, global_category_id, media_asset_id, sort_order, created_at, updated_at)
+SELECT
+  gen_random_uuid(),
+  e.shop_id,
+  c.id,
+  e.media_asset_id,
+  0,
+  e.created_at,
+  e.updated_at
+FROM entity_images e
+JOIN global_categories c ON c.id = e.entity_id
+WHERE e.entity_type = 'category'
+  AND c.scope = 'private'
+  AND c.owner_shop_id = e.shop_id
+ON CONFLICT (shop_id, global_category_id, sort_order) DO NOTHING;
+
+ALTER TABLE global_category_images ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shop_category_images ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS global_category_images_tenant_isolation ON global_category_images;
+CREATE POLICY global_category_images_tenant_isolation ON global_category_images
+USING (
+  EXISTS (
+    SELECT 1
+    FROM global_categories gc
+    WHERE gc.id = global_category_images.global_category_id
+      AND (gc.scope = 'shared' OR gc.owner_shop_id = app.current_shop_uuid())
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM global_categories gc
+    WHERE gc.id = global_category_images.global_category_id
+      AND (gc.scope = 'shared' OR gc.owner_shop_id = app.current_shop_uuid())
+  )
+);
+
+DROP POLICY IF EXISTS shop_category_images_tenant_isolation ON shop_category_images;
+CREATE POLICY shop_category_images_tenant_isolation ON shop_category_images
+USING (
+  shop_id = app.current_shop_uuid()
+  AND EXISTS (
+    SELECT 1
+    FROM global_categories gc
+    WHERE gc.id = shop_category_images.global_category_id
+      AND gc.scope = 'private'
+      AND gc.owner_shop_id = app.current_shop_uuid()
+  )
+)
+WITH CHECK (
+  shop_id = app.current_shop_uuid()
+  AND EXISTS (
+    SELECT 1
+    FROM global_categories gc
+    WHERE gc.id = shop_category_images.global_category_id
+      AND gc.scope = 'private'
+      AND gc.owner_shop_id = app.current_shop_uuid()
+  )
+);
+
+ALTER TABLE global_category_images FORCE ROW LEVEL SECURITY;
+ALTER TABLE shop_category_images FORCE ROW LEVEL SECURITY;
+
+-- Resolve shop_staff by globally unique staff_login_code when HTTP request has no shop context.
+CREATE OR REPLACE FUNCTION app.lookup_shop_staff_by_login_code(p_code integer)
+RETURNS TABLE (
+  user_id uuid,
+  shop_id uuid,
+  role text,
+  email text,
+  phone text,
+  password_hash text,
+  staff_login_code integer
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT s.user_id, s.shop_id, s.role, u.email, u.phone, u.password_hash, u.staff_login_code
+  FROM shop_staff s
+  JOIN users u ON u.id = s.user_id
+  JOIN shops sh ON sh.id = s.shop_id
+    AND sh.is_active = true
+    AND sh.is_blocked = false
+    AND sh.is_deleted = false
+    AND sh.status = 'active'
+  WHERE s.is_active = true
+    AND s.is_blocked = false
+    AND s.is_deleted = false
+    AND s.status = 'active'
+    AND u.is_active = true
+    AND u.staff_login_code = p_code
+    AND s.role <> 'picker';
+$$;
+
+-- Cross-shop catalog image reuse.
+CREATE OR REPLACE FUNCTION app.find_fallback_media_asset_id_by_slug(p_entity_type text, p_slug text)
+RETURNS uuid
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
+DECLARE
+  v_id uuid;
+  v_norm text := lower(trim(p_slug));
+  v_gallery uuid[];
+BEGIN
+  IF v_norm = '' OR p_entity_type NOT IN ('category', 'product') THEN
+    RETURN NULL;
+  END IF;
+  IF p_entity_type = 'category' THEN
+    SELECT x.media_asset_id INTO v_id
+    FROM (
+      SELECT gci.media_asset_id, gci.updated_at, 0 AS pri
+      FROM global_category_images gci
+      JOIN global_categories c ON c.id = gci.global_category_id
+      WHERE lower(c.slug) = v_norm
+        AND (c.scope = 'shared' OR c.owner_shop_id = app.current_shop_uuid())
+
+      UNION ALL
+
+      SELECT sci.media_asset_id, sci.updated_at, 1 AS pri
+      FROM shop_category_images sci
+      JOIN global_categories c ON c.id = sci.global_category_id
+      WHERE lower(c.slug) = v_norm
+        AND sci.shop_id = app.current_shop_uuid()
+        AND c.scope = 'private'
+        AND c.owner_shop_id = sci.shop_id
+
+      UNION ALL
+
+      -- Legacy fallback during migration window.
+      SELECT e.media_asset_id, e.updated_at, 2 AS pri
+      FROM entity_images e
+      JOIN global_categories c ON c.id = e.entity_id
+      WHERE e.entity_type = 'category'
+        AND lower(c.slug) = v_norm
+        AND (c.scope = 'shared' OR e.shop_id = app.current_shop_uuid())
+    ) x
+    ORDER BY x.pri ASC, x.updated_at DESC NULLS LAST
+    LIMIT 1;
+    RETURN v_id;
+  END IF;
+
+  v_gallery := app.find_fallback_product_gallery_ids_by_slug(p_slug);
+  IF v_gallery IS NOT NULL AND cardinality(v_gallery) >= 1 THEN
+    RETURN v_gallery[1];
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+DO $$
+DECLARE
+  tbl_owner name;
+BEGIN
+  SELECT pg_catalog.pg_get_userbyid(c.relowner)::name INTO STRICT tbl_owner
+  FROM pg_catalog.pg_class c
+  JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public'
+    AND c.relname = 'global_category_images'
+    AND c.relkind = 'r'
+  LIMIT 1;
+  EXECUTE format(
+    'ALTER FUNCTION app.find_fallback_media_asset_id_by_slug(text, text) OWNER TO %I',
+    tbl_owner
+  );
+EXCEPTION
+  WHEN OTHERS THEN
+    EXECUTE 'ALTER FUNCTION app.find_fallback_media_asset_id_by_slug(text, text) OWNER TO postgres';
+END $$;
+
+ALTER FUNCTION app.find_fallback_media_asset_id_by_slug(text, text) SET row_security = off;
+REVOKE ALL ON FUNCTION app.find_fallback_media_asset_id_by_slug(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.find_fallback_media_asset_id_by_slug(text, text) TO PUBLIC;
+
+-- Shop promotions (timed overlays; baseline prices stay on shop_products).
+CREATE TABLE IF NOT EXISTS shop_promotion_settings (
+  shop_id UUID PRIMARY KEY REFERENCES shops(id) ON DELETE CASCADE,
+  promotions_paused BOOLEAN NOT NULL DEFAULT false,
+  default_overlap_mode TEXT NOT NULL DEFAULT 'priority'
+    CHECK (default_overlap_mode IN ('priority', 'best_for_customer')),
+  default_allow_coupon_after_auto BOOLEAN NOT NULL DEFAULT true,
+  first_coupon_eligibility_days INT NOT NULL DEFAULT 30
+    CHECK (first_coupon_eligibility_days >= 0 AND first_coupon_eligibility_days <= 365),
+  default_stack_sku_with_category BOOLEAN NOT NULL DEFAULT false,
+  default_stack_sku_with_cart BOOLEAN NOT NULL DEFAULT false,
+  default_stack_category_with_cart BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  updated_by UUID REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS promotions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'draft'
+    CHECK (status IN ('draft', 'active', 'paused')),
+  starts_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ NOT NULL,
+  priority SMALLINT NOT NULL DEFAULT 100,
+  overlap_mode TEXT
+    CHECK (overlap_mode IS NULL OR overlap_mode IN ('priority', 'best_for_customer')),
+  allow_coupon_after_auto BOOLEAN,
+  stack_sku_with_category BOOLEAN,
+  stack_sku_with_cart BOOLEAN,
+  stack_category_with_cart BOOLEAN,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  deleted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT promotions_window_chk CHECK (ends_at > starts_at),
+  CONSTRAINT promotions_name_len_chk CHECK (char_length(name) BETWEEN 1 AND 200)
+);
+
+CREATE INDEX IF NOT EXISTS idx_promotions_shop_active_window
+  ON promotions (shop_id, starts_at, ends_at)
+  WHERE is_deleted = false AND status = 'active';
+CREATE INDEX IF NOT EXISTS idx_promotions_shop_list
+  ON promotions (shop_id, is_deleted, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS promotion_products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  promotion_id UUID NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
+  shop_product_id UUID NOT NULL REFERENCES shop_products(id) ON DELETE CASCADE,
+  promo_price_minor_per_unit BIGINT NOT NULL CHECK (promo_price_minor_per_unit >= 0),
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  deleted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  UNIQUE (promotion_id, shop_product_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_promotion_products_shop_product
+  ON promotion_products (shop_id, shop_product_id)
+  WHERE is_deleted = false;
+CREATE INDEX IF NOT EXISTS idx_promotion_products_promotion
+  ON promotion_products (shop_id, promotion_id)
+  WHERE is_deleted = false;
+
+CREATE TABLE IF NOT EXISTS promotion_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  promotion_id UUID NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
+  rule_kind TEXT NOT NULL CHECK (rule_kind IN (
+    'cart_percent_off',
+    'cart_fixed_off',
+    'cart_fixed_off_if_subtotal_above',
+    'category_percent_off'
+  )),
+  percent_bps INT CHECK (percent_bps IS NULL OR (percent_bps >= 0 AND percent_bps <= 10000)),
+  amount_minor BIGINT CHECK (amount_minor IS NULL OR amount_minor >= 0),
+  min_subtotal_minor BIGINT CHECK (min_subtotal_minor IS NULL OR min_subtotal_minor >= 0),
+  global_category_id UUID REFERENCES global_categories(id) ON DELETE SET NULL,
+  max_discount_minor BIGINT CHECK (max_discount_minor IS NULL OR max_discount_minor >= 0),
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  deleted_by UUID REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_promotion_rules_promotion
+  ON promotion_rules (shop_id, promotion_id)
+  WHERE is_deleted = false;
+
+CREATE TABLE IF NOT EXISTS promotion_bundle_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  promotion_id UUID NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
+  scope TEXT NOT NULL CHECK (scope IN ('same_shop_product', 'global_category')),
+  shop_product_id UUID REFERENCES shop_products(id) ON DELETE CASCADE,
+  global_category_id UUID REFERENCES global_categories(id) ON DELETE SET NULL,
+  buy_qty INT NOT NULL CHECK (buy_qty > 0),
+  get_qty INT NOT NULL CHECK (get_qty > 0),
+  reward_type TEXT NOT NULL CHECK (reward_type IN ('free', 'percent_off_reward')),
+  reward_percent_bps INT CHECK (reward_percent_bps IS NULL OR (reward_percent_bps >= 0 AND reward_percent_bps <= 10000)),
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  deleted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT promotion_bundle_scope_chk CHECK (
+    (scope = 'same_shop_product' AND shop_product_id IS NOT NULL AND global_category_id IS NULL)
+    OR (scope = 'global_category' AND global_category_id IS NOT NULL AND shop_product_id IS NULL)
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_promotion_bundle_rules_promotion
+  ON promotion_bundle_rules (shop_id, promotion_id)
+  WHERE is_deleted = false;
+
+CREATE TABLE IF NOT EXISTS promotion_coupons (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  promotion_id UUID NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
+  code_normalized TEXT NOT NULL,
+  starts_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ NOT NULL,
+  max_redemptions_total INT CHECK (max_redemptions_total IS NULL OR max_redemptions_total > 0),
+  max_redemptions_per_customer INT CHECK (max_redemptions_per_customer IS NULL OR max_redemptions_per_customer > 0),
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  deleted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT promotion_coupons_window_chk CHECK (ends_at > starts_at),
+  CONSTRAINT promotion_coupons_code_len_chk CHECK (char_length(code_normalized) BETWEEN 1 AND 64)
+);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_class t ON c.conrelid = t.oid
+    WHERE t.relname = 'promotion_coupons' AND c.conname = 'promotion_coupons_shop_id_code_normalized_key'
+  ) THEN
+    ALTER TABLE promotion_coupons DROP CONSTRAINT promotion_coupons_shop_id_code_normalized_key;
+  END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_promotion_coupons_shop_code_active
+  ON promotion_coupons (shop_id, code_normalized)
+  WHERE is_deleted = false;
+
+CREATE TABLE IF NOT EXISTS promotion_redemptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  customer_id TEXT NOT NULL,
+  promotion_id UUID REFERENCES promotions(id) ON DELETE SET NULL,
+  coupon_id UUID REFERENCES promotion_coupons(id) ON DELETE SET NULL,
+  discount_minor BIGINT NOT NULL CHECK (discount_minor >= 0),
+  redeemed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT promotion_redemptions_ref_chk CHECK (promotion_id IS NOT NULL OR coupon_id IS NOT NULL)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_promotion_redemptions_order_coupon
+  ON promotion_redemptions (order_id, coupon_id)
+  WHERE coupon_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_promotion_redemptions_shop_customer
+  ON promotion_redemptions (shop_id, customer_id, redeemed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_promotion_redemptions_order
+  ON promotion_redemptions (order_id);
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS promotion_discount_total_minor BIGINT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS applied_promotion_ids JSONB;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code_normalized TEXT;
+
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS list_price_minor BIGINT;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS line_discount_minor BIGINT;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS applied_promotion_ids JSONB;
+
+ALTER TABLE shop_promotion_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE promotions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE promotion_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE promotion_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE promotion_bundle_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE promotion_coupons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE promotion_redemptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS shop_promotion_settings_tenant_isolation ON shop_promotion_settings;
+CREATE POLICY shop_promotion_settings_tenant_isolation ON shop_promotion_settings
+USING (shop_id = app.current_shop_uuid())
+WITH CHECK (shop_id = app.current_shop_uuid());
+
+DROP POLICY IF EXISTS promotions_tenant_isolation ON promotions;
+CREATE POLICY promotions_tenant_isolation ON promotions
+USING (shop_id = app.current_shop_uuid())
+WITH CHECK (shop_id = app.current_shop_uuid());
+
+DROP POLICY IF EXISTS promotion_products_tenant_isolation ON promotion_products;
+CREATE POLICY promotion_products_tenant_isolation ON promotion_products
+USING (shop_id = app.current_shop_uuid())
+WITH CHECK (shop_id = app.current_shop_uuid());
+
+DROP POLICY IF EXISTS promotion_rules_tenant_isolation ON promotion_rules;
+CREATE POLICY promotion_rules_tenant_isolation ON promotion_rules
+USING (shop_id = app.current_shop_uuid())
+WITH CHECK (shop_id = app.current_shop_uuid());
+
+DROP POLICY IF EXISTS promotion_bundle_rules_tenant_isolation ON promotion_bundle_rules;
+CREATE POLICY promotion_bundle_rules_tenant_isolation ON promotion_bundle_rules
+USING (shop_id = app.current_shop_uuid())
+WITH CHECK (shop_id = app.current_shop_uuid());
+
+DROP POLICY IF EXISTS promotion_coupons_tenant_isolation ON promotion_coupons;
+CREATE POLICY promotion_coupons_tenant_isolation ON promotion_coupons
+USING (shop_id = app.current_shop_uuid())
+WITH CHECK (shop_id = app.current_shop_uuid());
+
+DROP POLICY IF EXISTS promotion_redemptions_tenant_isolation ON promotion_redemptions;
+CREATE POLICY promotion_redemptions_tenant_isolation ON promotion_redemptions
+USING (shop_id = app.current_shop_uuid())
+WITH CHECK (shop_id = app.current_shop_uuid());
+
+ALTER TABLE shop_promotion_settings FORCE ROW LEVEL SECURITY;
+ALTER TABLE promotions FORCE ROW LEVEL SECURITY;
+ALTER TABLE promotion_products FORCE ROW LEVEL SECURITY;
+ALTER TABLE promotion_rules FORCE ROW LEVEL SECURITY;
+ALTER TABLE promotion_bundle_rules FORCE ROW LEVEL SECURITY;
+ALTER TABLE promotion_coupons FORCE ROW LEVEL SECURITY;
+ALTER TABLE promotion_redemptions FORCE ROW LEVEL SECURITY;
