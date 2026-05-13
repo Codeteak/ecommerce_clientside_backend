@@ -145,6 +145,39 @@ ALTER FUNCTION app.find_fallback_media_asset_id_by_slug(text, text) SET row_secu
 REVOKE ALL ON FUNCTION app.find_fallback_media_asset_id_by_slug(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.find_fallback_media_asset_id_by_slug(text, text) TO PUBLIC;
 
+ALTER TABLE promotion_coupons
+  ADD COLUMN IF NOT EXISTS min_subtotal_minor BIGINT
+    CHECK (min_subtotal_minor IS NULL OR min_subtotal_minor >= 0),
+  ADD COLUMN IF NOT EXISTS first_order_only BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS new_customer_only BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE shop_promotion_settings
+  ADD COLUMN IF NOT EXISTS max_coupons_per_order INT NOT NULL DEFAULT 1
+    CHECK (max_coupons_per_order >= 1 AND max_coupons_per_order <= 10),
+  ADD COLUMN IF NOT EXISTS allow_combine_auto_campaigns BOOLEAN NOT NULL DEFAULT true;
+
+COMMENT ON COLUMN promotion_coupons.min_subtotal_minor IS
+  'Minimum cart subtotal (minor units) before this coupon may apply; NULL = no minimum.';
+COMMENT ON COLUMN promotion_coupons.first_order_only IS
+  'If true, coupon only for customers with no prior completed orders (customer backend enforces).';
+COMMENT ON COLUMN promotion_coupons.new_customer_only IS
+  'If true, account age within shop first_coupon_eligibility_days (customer backend enforces).';
+COMMENT ON COLUMN shop_promotion_settings.max_coupons_per_order IS
+  'Max distinct coupon codes per order (customer backend enforces).';
+COMMENT ON COLUMN shop_promotion_settings.allow_combine_auto_campaigns IS
+  'If false, customer engine should apply automatic discounts from at most one winning campaign.';
+
+ALTER TABLE promotion_rules DROP CONSTRAINT IF EXISTS promotion_rules_rule_kind_check;
+ALTER TABLE promotion_rules
+  ADD CONSTRAINT promotion_rules_rule_kind_check
+  CHECK (rule_kind IN (
+    'cart_percent_off',
+    'cart_fixed_off',
+    'cart_fixed_off_if_subtotal_above',
+    'cart_percent_off_if_subtotal_above',
+    'category_percent_off'
+  ));
+
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS promotion_discount_total_minor BIGINT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS applied_promotion_ids JSONB;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code_normalized TEXT;

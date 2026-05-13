@@ -66,7 +66,25 @@ export class CustomerAuthRepo {
     throw new Error("Not implemented");
   }
 
+  /** @returns {Promise<{ created_at: string } | null>} */
+  async getCustomerCreatedAtById(_client, _customerId) {
+    void _client;
+    void _customerId;
+    throw new Error("Not implemented");
+  }
+
   async getMembershipByCustomerAndShop(_client, _customerId, _shopId) {
+    void _client;
+    void _customerId;
+    void _shopId;
+    throw new Error("Not implemented");
+  }
+
+  /**
+   * Active membership check plus shop row in one query (storefront access guards).
+   * @returns {Promise<{ membership: { is_active: boolean, is_blocked: boolean, is_deleted: boolean }, shop: Record<string, unknown> } | null>}
+   */
+  async getMembershipWithShopForCustomer(_client, _customerId, _shopId) {
     void _client;
     void _customerId;
     void _shopId;

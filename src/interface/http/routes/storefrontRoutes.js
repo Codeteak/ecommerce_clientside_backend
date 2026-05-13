@@ -18,7 +18,9 @@ export function mountStorefrontRoutes(r, deps) {
     cartMutateLimiter,
     profileMutateLimiter,
     addressMutateLimiter,
+    couponsListLimiter,
     requireCustomerJwt,
+    requireCustomerShopAccess,
     locationGuard,
     validate,
     storefrontLocationBodySchema,
@@ -36,12 +38,14 @@ export function mountStorefrontRoutes(r, deps) {
     phoneChangeRequestBodySchema,
     phoneChangeVerifyBodySchema,
     storefrontOrderIdParamSchema,
+    storefrontCouponsListQuerySchema,
     storefrontCtl,
     storefrontCat,
     storefrontCart,
     storefrontCheckout,
     storefrontAccount,
     storefrontOrders,
+    storefrontPromotions,
     invalidateShopCatalogCache
   } = deps;
 
@@ -155,6 +159,14 @@ export function mountStorefrontRoutes(r, deps) {
       requireCustomerJwt,
       validate({ query: storefrontOrdersListQuerySchema }),
       storefrontOrders.list
+    );
+    r.get(
+      `${prefix}/coupons`,
+      requireCustomerJwt,
+      couponsListLimiter,
+      requireCustomerShopAccess,
+      validate({ query: storefrontCouponsListQuerySchema }),
+      storefrontPromotions.listCoupons
     );
 
     if (env.CATALOG_CACHE_INVALIDATE_TOKEN && typeof invalidateShopCatalogCache === "function") {

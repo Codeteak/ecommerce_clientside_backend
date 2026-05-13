@@ -404,4 +404,17 @@ export class OrderRepoPg extends OrderRepo {
     );
     return rows[0] ?? null;
   }
+
+  async countDeliveredOrdersForCustomer(client, shopId, customerIdText) {
+    await setTenantContext(client, shopId);
+    const { rows } = await client.query(
+      `SELECT count(*)::int AS cnt
+         FROM orders
+        WHERE shop_id = $1::uuid
+          AND customer_id = $2
+          AND status = 'delivered'`,
+      [shopId, customerIdText]
+    );
+    return rows[0]?.cnt ?? 0;
+  }
 }

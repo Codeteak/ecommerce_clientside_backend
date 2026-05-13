@@ -5,10 +5,12 @@ import { CustomerAuthRepoPg } from "../adapters/repositories/postgres/CustomerAu
 import { OrderRepoPg } from "../adapters/repositories/postgres/OrderRepoPg.js";
 import { ShopLookupRepoPg } from "../adapters/repositories/postgres/ShopLookupRepoPg.js";
 import { ShopServiceAreaRepoPg } from "../adapters/repositories/postgres/ShopServiceAreaRepoPg.js";
+import { PromotionRepoPg } from "../adapters/repositories/postgres/PromotionRepoPg.js";
 import { env } from "../config/env.js";
 import { createShopResolver } from "../interface/http/middleware/shopResolver.js";
 import { createRequireCustomerJwt } from "../interface/http/middleware/requireCustomerJwt.js";
 import { createLocationGuard } from "../interface/http/middleware/locationGuard.js";
+import { createRequireCustomerShopAccess } from "../interface/http/middleware/requireCustomerShopAccess.js";
 import { createListCatalogItems } from "../application/services/catalog/listCatalogItems.js";
 import { createListCategories } from "../application/services/catalog/listCategories.js";
 import { createListProducts } from "../application/services/catalog/listProducts.js";
@@ -30,6 +32,7 @@ import { createUpdateStorefrontProfile } from "../application/services/profile/u
 import { createRequestPhoneChangeOtp } from "../application/services/profile/requestPhoneChangeOtp.js";
 import { createVerifyPhoneChangeOtp } from "../application/services/profile/verifyPhoneChangeOtp.js";
 import { createCheckShopServiceArea } from "../application/services/shops/checkShopServiceArea.js";
+import { createListApplicableCoupons } from "../application/services/promotions/listApplicableCoupons.js";
 import { createEnsureShopForCatalog } from "../application/services/catalog/ensureShopForCatalog.js";
 import { createCatalogCache } from "../infra/cache/catalogCache.js";
 import { getSharedRedisClient } from "../infra/redis/sharedRedis.js";
@@ -49,6 +52,7 @@ export function createAppContext() {
   const authRepo = new CustomerAuthRepoPg();
   const shopLookupRepo = new ShopLookupRepoPg();
   const shopServiceAreaRepo = new ShopServiceAreaRepoPg();
+  const promotionRepo = new PromotionRepoPg();
   const ensureShopForCatalog = createEnsureShopForCatalog({ authRepo });
   const sessionCache = createSessionCache({ redis: getSharedRedisClient() });
   const sessionValidityCache = {
@@ -102,7 +106,9 @@ export function createAppContext() {
 
   const storefrontCart = createStorefrontCart({ cartRepo, ensureShopForCatalog });
   const assertCustomerShopAccess = createAssertCustomerShopAccess({ authRepo });
+  const requireCustomerShopAccess = createRequireCustomerShopAccess({ authRepo });
   const updateStorefrontProfile = createUpdateStorefrontProfile({ authRepo });
+  const listApplicableCoupons = createListApplicableCoupons({ promotionRepo, authRepo, orderRepo });
   const msg91Key = env.MSG_AUTH_KEY?.trim() || "";
   const smsSender = msg91Key
     ? new Msg91SmsSender({
@@ -217,11 +223,13 @@ export function createAppContext() {
     updateCustomerProfile: updateCustomerProfile({ authRepo }),
     checkShopServiceArea,
     requireCustomerJwt,
+    requireCustomerShopAccess,
     locationGuard: createLocationGuard(),
     storefrontCatalog,
     storefrontCart,
     assertCustomerShopAccess,
     updateStorefrontProfile,
+    listApplicableCoupons,
     checkoutStorefront,
     storefrontCatalogHttpCacheSec: env.STOREFRONT_CATALOG_HTTP_CACHE_SEC,
     invalidateShopCatalogCache: (shopId) => catalogCache.invalidateShopCatalog(shopId),

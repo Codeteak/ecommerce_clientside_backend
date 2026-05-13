@@ -1554,6 +1554,9 @@ CREATE TABLE IF NOT EXISTS shop_promotion_settings (
   default_stack_sku_with_category BOOLEAN NOT NULL DEFAULT false,
   default_stack_sku_with_cart BOOLEAN NOT NULL DEFAULT false,
   default_stack_category_with_cart BOOLEAN NOT NULL DEFAULT false,
+  max_coupons_per_order INT NOT NULL DEFAULT 1
+    CHECK (max_coupons_per_order >= 1 AND max_coupons_per_order <= 10),
+  allow_combine_auto_campaigns BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -1623,6 +1626,7 @@ CREATE TABLE IF NOT EXISTS promotion_rules (
     'cart_percent_off',
     'cart_fixed_off',
     'cart_fixed_off_if_subtotal_above',
+    'cart_percent_off_if_subtotal_above',
     'category_percent_off'
   )),
   percent_bps INT CHECK (percent_bps IS NULL OR (percent_bps >= 0 AND percent_bps <= 10000)),
@@ -1678,6 +1682,9 @@ CREATE TABLE IF NOT EXISTS promotion_coupons (
   code_normalized TEXT NOT NULL,
   starts_at TIMESTAMPTZ NOT NULL,
   ends_at TIMESTAMPTZ NOT NULL,
+  min_subtotal_minor BIGINT CHECK (min_subtotal_minor IS NULL OR min_subtotal_minor >= 0),
+  first_order_only BOOLEAN NOT NULL DEFAULT false,
+  new_customer_only BOOLEAN NOT NULL DEFAULT false,
   max_redemptions_total INT CHECK (max_redemptions_total IS NULL OR max_redemptions_total > 0),
   max_redemptions_per_customer INT CHECK (max_redemptions_per_customer IS NULL OR max_redemptions_per_customer > 0),
   is_deleted BOOLEAN NOT NULL DEFAULT false,
@@ -1705,6 +1712,39 @@ END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_promotion_coupons_shop_code_active
   ON promotion_coupons (shop_id, code_normalized)
   WHERE is_deleted = false;
+
+ALTER TABLE promotion_coupons
+  ADD COLUMN IF NOT EXISTS min_subtotal_minor BIGINT
+    CHECK (min_subtotal_minor IS NULL OR min_subtotal_minor >= 0),
+  ADD COLUMN IF NOT EXISTS first_order_only BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS new_customer_only BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE shop_promotion_settings
+  ADD COLUMN IF NOT EXISTS max_coupons_per_order INT NOT NULL DEFAULT 1
+    CHECK (max_coupons_per_order >= 1 AND max_coupons_per_order <= 10),
+  ADD COLUMN IF NOT EXISTS allow_combine_auto_campaigns BOOLEAN NOT NULL DEFAULT true;
+
+COMMENT ON COLUMN promotion_coupons.min_subtotal_minor IS
+  'Minimum cart subtotal (minor units) before this coupon may apply; NULL = no minimum.';
+COMMENT ON COLUMN promotion_coupons.first_order_only IS
+  'If true, coupon only for customers with no prior completed orders (customer backend enforces).';
+COMMENT ON COLUMN promotion_coupons.new_customer_only IS
+  'If true, account age within shop first_coupon_eligibility_days (customer backend enforces).';
+COMMENT ON COLUMN shop_promotion_settings.max_coupons_per_order IS
+  'Max distinct coupon codes per order (customer backend enforces).';
+COMMENT ON COLUMN shop_promotion_settings.allow_combine_auto_campaigns IS
+  'If false, customer engine should apply automatic discounts from at most one winning campaign.';
+
+ALTER TABLE promotion_rules DROP CONSTRAINT IF EXISTS promotion_rules_rule_kind_check;
+ALTER TABLE promotion_rules
+  ADD CONSTRAINT promotion_rules_rule_kind_check
+  CHECK (rule_kind IN (
+    'cart_percent_off',
+    'cart_fixed_off',
+    'cart_fixed_off_if_subtotal_above',
+    'cart_percent_off_if_subtotal_above',
+    'category_percent_off'
+  ));
 
 CREATE TABLE IF NOT EXISTS promotion_redemptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

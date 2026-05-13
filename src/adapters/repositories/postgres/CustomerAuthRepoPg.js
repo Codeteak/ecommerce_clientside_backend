@@ -174,6 +174,17 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return rows[0] ?? null;
   }
 
+  async getCustomerCreatedAtById(client, customerId) {
+    const { rows } = await client.query(
+      `SELECT created_at
+         FROM customers
+        WHERE id = $1::uuid
+        LIMIT 1`,
+      [customerId]
+    );
+    return rows[0] ?? null;
+  }
+
   async getMembershipByCustomerAndShop(client, customerId, shopId) {
     const { rows } = await client.query(
       `SELECT id, shop_id, customer_id, is_active, is_blocked, is_deleted
@@ -182,6 +193,44 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
       [customerId, shopId]
     );
     return rows[0] ?? null;
+  }
+
+  async getMembershipWithShopForCustomer(client, customerId, shopId) {
+    const { rows } = await client.query(
+      `SELECT m.is_active AS membership_is_active,
+              m.is_blocked AS membership_is_blocked,
+              m.is_deleted AS membership_is_deleted,
+              s.id,
+              s.slug,
+              s.name,
+              s.is_active,
+              s.status,
+              s.is_blocked,
+              s.is_deleted
+         FROM customer_shop_memberships m
+         JOIN shops s ON s.id = m.shop_id
+        WHERE m.customer_id = $1 AND m.shop_id = $2
+        LIMIT 1`,
+      [customerId, shopId]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      membership: {
+        is_active: row.membership_is_active,
+        is_blocked: row.membership_is_blocked,
+        is_deleted: row.membership_is_deleted
+      },
+      shop: {
+        id: row.id,
+        slug: row.slug,
+        name: row.name,
+        is_active: row.is_active,
+        status: row.status,
+        is_blocked: row.is_blocked,
+        is_deleted: row.is_deleted
+      }
+    };
   }
 
   async listShopIdsForCustomer(client, customerId) {

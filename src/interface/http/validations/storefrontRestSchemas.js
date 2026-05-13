@@ -53,6 +53,14 @@ export const storefrontOrdersListQuerySchema = z.object({
   )
 });
 
+export const storefrontCouponsListQuerySchema = z.object({
+  code: z.string().trim().min(1).max(64).optional(),
+  cartSubtotalMinor: z.preprocess(
+    (v) => (v === undefined || v === "" ? undefined : Number(v)),
+    z.number().finite().int().min(0).optional()
+  )
+});
+
 export const storefrontCatalogCacheInvalidateBodySchema = z.object({
   shopId: z.string().uuid()
 });

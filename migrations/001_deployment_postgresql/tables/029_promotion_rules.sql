@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS promotion_rules (
     'cart_percent_off',
     'cart_fixed_off',
     'cart_fixed_off_if_subtotal_above',
+    'cart_percent_off_if_subtotal_above',
     'category_percent_off'
   )),
   percent_bps INT CHECK (percent_bps IS NULL OR (percent_bps >= 0 AND percent_bps <= 10000)),

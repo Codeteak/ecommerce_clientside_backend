@@ -10,6 +10,7 @@ import { storefrontCatalogController } from "../controllers/storefrontCatalogCon
 import { storefrontCheckoutController } from "../controllers/storefrontCheckoutController.js";
 import { storefrontController } from "../controllers/storefrontController.js";
 import { storefrontOrdersController } from "../controllers/storefrontOrdersController.js";
+import { storefrontPromotionsController } from "../controllers/storefrontPromotionsController.js";
 import { shopController } from "../controllers/shopController.js";
 import { createLimiter } from "../middleware/createLimiter.js";
 import { validate } from "../middleware/validate.js";
@@ -41,7 +42,8 @@ import {
   storefrontCartItemPatchSchema,
   storefrontCheckoutBodySchema,
   storefrontOrderIdParamSchema,
-  storefrontProfilePostSchema
+  storefrontProfilePostSchema,
+  storefrontCouponsListQuerySchema
 } from "../validations/storefrontRestSchemas.js";
 import { mountAuthRoutes } from "./authRoutes.js";
 import { mountCoreRoutes } from "./coreRoutes.js";
@@ -102,6 +104,14 @@ export function createRoutes(ctx) {
     keyGenerator: (req) => String(req.customerAuth?.userId || req.ip)
   });
 
+  const couponsListLimiter = createLimiter({
+    windowMs: 60 * 1000,
+    maxTest: 10_000,
+    maxProd: 120,
+    message: "Too many coupon requests. Try again later.",
+    keyGenerator: (req) => String(req.customerAuth?.userId || req.ip)
+  });
+
   const authHandlers = authController.forCtx(ctx);
   const profileHandlers = profileController.forCtx(ctx);
   const healthHandlers = healthController.forCtx(ctx);
@@ -111,6 +121,7 @@ export function createRoutes(ctx) {
   const storefrontCheckout = storefrontCheckoutController.forCtx(ctx);
   const storefrontAccount = storefrontAccountController.forCtx(ctx);
   const storefrontOrders = storefrontOrdersController.forCtx(ctx);
+  const storefrontPromotions = storefrontPromotionsController.forCtx(ctx);
   const shopCtl = shopController;
 
   r.get("/api/shops/resolve-by-domain", validate({ query: shopDomainQuerySchema }), shopCtl.resolveByDomain(ctx));
@@ -146,7 +157,9 @@ export function createRoutes(ctx) {
     cartMutateLimiter,
     profileMutateLimiter,
     addressMutateLimiter,
+    couponsListLimiter,
     requireCustomerJwt: ctx.requireCustomerJwt,
+    requireCustomerShopAccess: ctx.requireCustomerShopAccess,
     locationGuard: ctx.locationGuard,
     validate,
     storefrontLocationBodySchema,
@@ -162,6 +175,7 @@ export function createRoutes(ctx) {
     storefrontAddressPostSchema,
     storefrontAddressPatchSchema,
     storefrontOrderIdParamSchema,
+    storefrontCouponsListQuerySchema,
     phoneChangeRequestBodySchema,
     phoneChangeVerifyBodySchema,
     storefrontCtl,
@@ -170,6 +184,7 @@ export function createRoutes(ctx) {
     storefrontCheckout,
     storefrontAccount,
     storefrontOrders,
+    storefrontPromotions,
     invalidateShopCatalogCache: ctx.invalidateShopCatalogCache
   });
 

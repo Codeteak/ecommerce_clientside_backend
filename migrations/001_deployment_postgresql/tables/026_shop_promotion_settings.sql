@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS shop_promotion_settings (
   default_stack_sku_with_category BOOLEAN NOT NULL DEFAULT false,
   default_stack_sku_with_cart BOOLEAN NOT NULL DEFAULT false,
   default_stack_category_with_cart BOOLEAN NOT NULL DEFAULT false,
+  max_coupons_per_order INT NOT NULL DEFAULT 1
+    CHECK (max_coupons_per_order >= 1 AND max_coupons_per_order <= 10),
+  allow_combine_auto_campaigns BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by UUID REFERENCES users(id) ON DELETE SET NULL,

@@ -83,4 +83,12 @@ export class OrderRepo {
     void _customerIdText;
     throw new Error("Not implemented");
   }
+
+  /** Prior delivered orders for first-order-only coupon rules. */
+  async countDeliveredOrdersForCustomer(_client, _shopId, _customerIdText) {
+    void _client;
+    void _shopId;
+    void _customerIdText;
+    throw new Error("Not implemented");
+  }
 }
