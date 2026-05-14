@@ -66,4 +66,99 @@ export class PromotionRepoPg extends PromotionRepo {
     );
     return rows;
   }
+
+  async listActivePromotionProductOverlaysForShopProducts(client, shopId, shopProductIds) {
+    const ids = Array.isArray(shopProductIds) ? shopProductIds.map((x) => String(x)).filter(Boolean) : [];
+    if (ids.length === 0) {
+      return [];
+    }
+    await setTenantContext(client, shopId);
+    const { rows } = await client.query(
+      `SELECT pp.shop_product_id,
+              pp.promotion_id,
+              pp.promo_price_minor_per_unit::text AS promo_price_minor_per_unit,
+              p.priority,
+              p.overlap_mode,
+              p.ends_at
+         FROM promotion_products pp
+         JOIN promotions p
+           ON p.id = pp.promotion_id
+          AND p.shop_id = pp.shop_id
+        WHERE pp.shop_id = $1::uuid
+          AND pp.is_deleted = false
+          AND p.is_deleted = false
+          AND p.status = 'active'
+          AND p.starts_at <= now()
+          AND p.ends_at >= now()
+          AND pp.shop_product_id = ANY($2::uuid[])`,
+      [shopId, ids]
+    );
+    return rows;
+  }
+
+  async listActiveBundleRulesForShop(client, shopId) {
+    await setTenantContext(client, shopId);
+    const { rows } = await client.query(
+      `SELECT br.promotion_id,
+              br.scope,
+              br.shop_product_id,
+              br.global_category_id,
+              br.buy_qty,
+              br.get_qty,
+              br.reward_type,
+              br.reward_percent_bps,
+              p.ends_at
+         FROM promotion_bundle_rules br
+         JOIN promotions p
+           ON p.id = br.promotion_id
+          AND p.shop_id = br.shop_id
+        WHERE br.shop_id = $1::uuid
+          AND br.is_deleted = false
+          AND p.is_deleted = false
+          AND p.status = 'active'
+          AND p.starts_at <= now()
+          AND p.ends_at >= now()
+        ORDER BY br.updated_at DESC
+        LIMIT 200`,
+      [shopId]
+    );
+    return rows;
+  }
+
+  async listActiveBundleRulesForProduct(client, shopId, shopProductId, globalCategoryId) {
+    await setTenantContext(client, shopId);
+    const { rows } = await client.query(
+      `SELECT br.promotion_id,
+              br.scope,
+              br.shop_product_id,
+              br.global_category_id,
+              br.buy_qty,
+              br.get_qty,
+              br.reward_type,
+              br.reward_percent_bps,
+              p.ends_at
+         FROM promotion_bundle_rules br
+         JOIN promotions p
+           ON p.id = br.promotion_id
+          AND p.shop_id = br.shop_id
+        WHERE br.shop_id = $1::uuid
+          AND br.is_deleted = false
+          AND p.is_deleted = false
+          AND p.status = 'active'
+          AND p.starts_at <= now()
+          AND p.ends_at >= now()
+          AND (
+            (br.scope = 'same_shop_product' AND br.shop_product_id = $2::uuid)
+            OR (
+              br.scope = 'global_category'
+              AND $3::uuid IS NOT NULL
+              AND br.global_category_id = $3::uuid
+            )
+          )
+        ORDER BY br.updated_at DESC
+        LIMIT 50`,
+      [shopId, shopProductId, globalCategoryId]
+    );
+    return rows;
+  }
 }

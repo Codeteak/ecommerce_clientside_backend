@@ -1,3 +1,37 @@
+/*
+ * Migration: promotion plumbing, category images, RLS, and catalog helpers
+ * ================================================================
+ * This file does NOT create new promotion tables (those live in 026–032). It:
+ *
+ * 1) Category images — Copies legacy entity_images rows into global_category_images
+ *    and shop_category_images so category artwork lives in dedicated tables.
+ *
+ * 2) Security / tenancy — Enables RLS on promotion tables and related image tables;
+ *    policies restrict rows to app.current_shop_uuid() for API sessions.
+ *
+ * 3) Promotions schema drift — Adds coupon/shop columns and widens rule_kind CHECK;
+ *    aligns older databases with the canonical definitions in earlier migrations.
+ *
+ * 4) Orders snapshot — Adds columns on orders and order_items so each order stores
+ *    total promotion discount and which promotion IDs touched each line.
+ *
+ * 5) Functions — Staff lookup by login code; find_fallback_media_asset_id_by_slug
+ *    resolves category/product images across shared vs shop-scoped categories.
+ *
+ * Relationships (promotion-related parts):
+ *   promotion_coupons / shop_promotion_settings columns match 026 & 031 tables.
+ *   orders.applied_promotion_ids / coupon_code_normalized summarize checkout.
+ *   order_items list_price_minor, line_discount_minor, applied_promotion_ids
+ *   mirror line-level pricing for receipts and support.
+ *
+ * Example: After deploy, checkout writes orders.promotion_discount_total_minor,
+ * sets coupon_code_normalized from promotion_coupons.code_normalized, and inserts
+ * promotion_redemptions rows for auditing while RLS hides other shops' data.
+ */
+
+-- -----------------------------------------------------------------------------
+-- 1) Category images: backfill from legacy entity_images into layered tables
+-- -----------------------------------------------------------------------------
 -- Backfill old category bindings from `entity_images` into new layered tables.
 INSERT INTO global_category_images (id, global_category_id, media_asset_id, sort_order, created_at, updated_at)
 SELECT
@@ -29,6 +63,9 @@ WHERE e.entity_type = 'category'
   AND c.owner_shop_id = e.shop_id
 ON CONFLICT (shop_id, global_category_id, sort_order) DO NOTHING;
 
+-- -----------------------------------------------------------------------------
+-- 2) Staff auth helper (not promotion-specific; shared admin/API use)
+-- -----------------------------------------------------------------------------
 -- Resolve shop_staff by globally unique staff_login_code when HTTP request has no shop context.
 CREATE OR REPLACE FUNCTION app.lookup_shop_staff_by_login_code(p_code integer)
 RETURNS TABLE (
@@ -62,6 +99,9 @@ AS $$
     AND s.role <> 'picker';
 $$;
 
+-- -----------------------------------------------------------------------------
+-- 3) Catalog image fallback: pick best media_asset for category or product slug
+-- -----------------------------------------------------------------------------
 -- Cross-shop catalog image reuse.
 CREATE OR REPLACE FUNCTION app.find_fallback_media_asset_id_by_slug(p_entity_type text, p_slug text)
 RETURNS uuid
@@ -145,6 +185,9 @@ ALTER FUNCTION app.find_fallback_media_asset_id_by_slug(text, text) SET row_secu
 REVOKE ALL ON FUNCTION app.find_fallback_media_asset_id_by_slug(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.find_fallback_media_asset_id_by_slug(text, text) TO PUBLIC;
 
+-- -----------------------------------------------------------------------------
+-- 4) Promotion columns on existing installs (idempotent ADD COLUMN IF NOT EXISTS)
+-- -----------------------------------------------------------------------------
 ALTER TABLE promotion_coupons
   ADD COLUMN IF NOT EXISTS min_subtotal_minor BIGINT
     CHECK (min_subtotal_minor IS NULL OR min_subtotal_minor >= 0),
@@ -157,16 +200,17 @@ ALTER TABLE shop_promotion_settings
   ADD COLUMN IF NOT EXISTS allow_combine_auto_campaigns BOOLEAN NOT NULL DEFAULT true;
 
 COMMENT ON COLUMN promotion_coupons.min_subtotal_minor IS
-  'Minimum cart subtotal (minor units) before this coupon may apply; NULL = no minimum.';
+  'Minimum cart subtotal in minor currency units (e.g. cents) before this coupon can apply. NULL means no floor. Needed so codes like "20 off when you spend 50" are enforceable in checkout.';
 COMMENT ON COLUMN promotion_coupons.first_order_only IS
-  'If true, coupon only for customers with no prior completed orders (customer backend enforces).';
+  'When true, only customers with no prior completed orders may use the code. Stored here for merchandising rules; the customer-facing service must enforce it using order history.';
 COMMENT ON COLUMN promotion_coupons.new_customer_only IS
-  'If true, account age within shop first_coupon_eligibility_days (customer backend enforces).';
+  'When true, only customers whose account is newer than shop_promotion_settings.first_coupon_eligibility_days may use the code. Pairs with shop-level window; application enforces.';
 COMMENT ON COLUMN shop_promotion_settings.max_coupons_per_order IS
-  'Max distinct coupon codes per order (customer backend enforces).';
+  'Hard cap on how many different coupon codes may stack on one order. Prevents abuse and keeps UX predictable; checkout reads this from the shop row.';
 COMMENT ON COLUMN shop_promotion_settings.allow_combine_auto_campaigns IS
-  'If false, customer engine should apply automatic discounts from at most one winning campaign.';
+  'When false, automatic campaign discounts should not stack from multiple winning promotions—only one auto campaign applies. When true, engine may combine eligible automatic discounts per other stacking flags.';
 
+-- Keep rule_kind CHECK in sync with promotion_rules baseline (029) when upgrading older DBs.
 ALTER TABLE promotion_rules DROP CONSTRAINT IF EXISTS promotion_rules_rule_kind_check;
 ALTER TABLE promotion_rules
   ADD CONSTRAINT promotion_rules_rule_kind_check
@@ -178,14 +222,34 @@ ALTER TABLE promotion_rules
     'category_percent_off'
   ));
 
+-- -----------------------------------------------------------------------------
+-- 5) Order snapshots: persist how promotions changed totals at purchase time
+-- -----------------------------------------------------------------------------
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS promotion_discount_total_minor BIGINT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS applied_promotion_ids JSONB;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code_normalized TEXT;
+
+COMMENT ON COLUMN orders.promotion_discount_total_minor IS
+  'Sum of all promotion- and coupon-driven discounts for the order in minor units. Needed for accounting, refunds, and customer receipts without replaying pricing rules.';
+COMMENT ON COLUMN orders.applied_promotion_ids IS
+  'JSON array/object of promotion UUIDs that contributed to the order-level discount. Snapshot for analytics and dispute resolution; complements promotion_redemptions.';
+COMMENT ON COLUMN orders.coupon_code_normalized IS
+  'Primary coupon code applied on the order in normalized form (matches promotion_coupons.code_normalized). NULL if no code; helps support look up which campaign fired.';
 
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS list_price_minor BIGINT;
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS line_discount_minor BIGINT;
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS applied_promotion_ids JSONB;
 
+COMMENT ON COLUMN order_items.list_price_minor IS
+  'Unit or line list price before promotions in minor units. Lets you show "was / now" on invoices and recompute margin after discounts.';
+COMMENT ON COLUMN order_items.line_discount_minor IS
+  'Total discount applied to this line in minor units (promos, coupons, bundles). Separates promotional savings from tax/shipping logic.';
+COMMENT ON COLUMN order_items.applied_promotion_ids IS
+  'Which promotion IDs affected this line. Finer-grained than order-level totals; used when refunds must unwind specific campaign contributions.';
+
+-- -----------------------------------------------------------------------------
+-- 6) Row-level security: tenant isolation for category images and promotion data
+-- -----------------------------------------------------------------------------
 ALTER TABLE global_category_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shop_category_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shop_promotion_settings ENABLE ROW LEVEL SECURITY;

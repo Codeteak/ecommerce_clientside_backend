@@ -2,6 +2,8 @@
 This file builds SQL for storefront product listing with cursor and offset pagination.
 */
 
+import { SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL } from "../../../../application/services/catalog/catalogBaselineUnitSql.js";
+
 export function buildListProductsStorefrontQuery({
   shopId,
   categoryId,
@@ -162,8 +164,8 @@ export function buildListProductsStorefrontQuery({
       AND ($3::uuid IS NULL OR gp.global_brand_id = $3)
       AND ($4::text IS NULL OR gp.name ILIKE $4 ESCAPE '\\' OR gp.slug ILIKE $4 ESCAPE '\\')
       AND ($5::text IS NULL OR sp.availability = $5)
-      AND ($6::bigint IS NULL OR sp.offer_price_minor_per_unit >= $6)
-      AND ($7::bigint IS NULL OR sp.offer_price_minor_per_unit <= $7)
+      AND ($6::bigint IS NULL OR (${SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL}) >= $6)
+      AND ($7::bigint IS NULL OR (${SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL}) <= $7)
       ${cursorClause}
     ORDER BY ${orderBySql}
     LIMIT $8

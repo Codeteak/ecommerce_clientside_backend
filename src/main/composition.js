@@ -101,7 +101,9 @@ export function createAppContext() {
     catalogRepo,
     ensureShopForCatalog,
     catalogCache,
-    catalogCacheTtlSec: env.STOREFRONT_CATALOG_CACHE_TTL_SEC
+    catalogCacheTtlSec: env.STOREFRONT_CATALOG_CACHE_TTL_SEC,
+    pool,
+    promotionRepo
   });
 
   const storefrontCart = createStorefrontCart({ cartRepo, ensureShopForCatalog });

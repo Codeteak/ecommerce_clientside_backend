@@ -563,7 +563,7 @@ export function buildPaths() {
         tags: ["Storefront catalog"],
         summary: "Search and list products",
         description:
-          "Returns shared global products with one `thumbnail` and split `images[]` entries (each image independently addressable), plus embedded category object (`parent_id`, `name`, `slug`, `image`). Supports text search, filtering, sorting, and pagination.",
+          "Returns shop products with thumbnails, category metadata, and unit pricing (minor currency, string integers). **`actual_price_minor`** = list/MRP; **`offer_price_minor`** = catalog offer when set; **`promo_price_minor`** = campaign SKU replacement unit from `promotion_products` or null. **`total_price_minor`** = compare-at anchor (max of list and catalog baseline) for strikethrough UIs; **`final_price_minor`** = payable unit (`promo` when present, else catalog baseline). **`offer_discount_minor`** = savings from list to baseline; **`promo_discount_minor`** = extra savings from baseline to final when a promo applies; **`total_discount_minor`** = `total_price_minor - final_price_minor` (non-negative). Each product includes **`bundle_rules`**. Empty **`products`**, **`categories`**, null **`nextCursor`**, and false **`promotions_paused`** are omitted from the JSON object. `min_price_minor` / `max_price_minor` and `sort_by=price` use catalog baseline. Catalog cache key v6.",
         parameters: [
           ...shopParams,
           { name: "category_id", in: "query", schema: { type: "string", format: "uuid" } },
@@ -604,9 +604,13 @@ export function buildPaths() {
               "application/json": {
                 schema: {
                   type: "object",
+                  description:
+                    "Omitted keys are absent (not null): empty product/category arrays, absent nextCursor, promotions_paused only when true.",
                   properties: {
+                    promotions_paused: { type: "boolean" },
                     products: { type: "array", items: { type: "object" } },
-                    nextCursor: { type: "string", nullable: true }
+                    categories: { type: "array", items: { type: "object" } },
+                    nextCursor: { type: "string" }
                   }
                 }
               }
@@ -620,7 +624,8 @@ export function buildPaths() {
       get: {
         tags: ["Storefront catalog"],
         summary: "Product by slug",
-        description: "Fetches one shop product by global product slug.",
+        description:
+          "Product by slug. Pricing: `actual_price_minor`, `offer_price_minor` (nullable), `promo_price_minor` (nullable), `total_price_minor`, `final_price_minor`, `offer_discount_minor`, `promo_discount_minor`, `total_discount_minor` (see list endpoint). **`bundle_rules`**: BXGY rules for this SKU or category. `promo_price_minor` is the campaign **unit** price (replacement), not a delta off list/offer.",
         parameters: [...shopParams, P.Slug],
         responses: {
           "200": {
@@ -636,13 +641,12 @@ export function buildPaths() {
       get: {
         tags: ["Storefront catalog"],
         summary: "Product by shop product ID",
-        description: "Fetches one shop product by `shop_products.id` (UUID).",
+        description: "Product by `shop_products.id`. Same pricing and `bundle_rules` fields as slug detail.",
         parameters: [...shopParams, P.ProductId],
         responses: {
           "200": {
             description: "OK",
-            content: { "application/json": { schema: { type: "object" } }
-            }
+            content: { "application/json": { schema: { type: "object" } } }
           },
           "400": jsonErr,
           "404": jsonErr

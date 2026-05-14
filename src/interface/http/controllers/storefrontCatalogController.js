@@ -26,7 +26,7 @@ function listCategoriesHandler(ctx) {
   return async (req, res, next) => {
     try {
       if (!req.shopId) {
-        res.json({ categories: [] });
+        res.json({});
         return;
       }
       const shopId = shopIdForStorefront(req);
@@ -36,6 +36,10 @@ function listCategoriesHandler(ctx) {
         all: req.query.all === true
       });
       setCatalogHttpCache(ctx, res);
+      if (!categories.length) {
+        res.json({});
+        return;
+      }
       res.json({ categories });
     } catch (err) {
       next(err);
@@ -47,7 +51,7 @@ function listProductsHandler(ctx) {
   return async (req, res, next) => {
     try {
       if (!req.shopId) {
-        res.json({ categories: [], nextCursor: null });
+        res.json({});
         return;
       }
       const shopId = shopIdForStorefront(req);

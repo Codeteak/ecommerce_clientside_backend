@@ -1,3 +1,5 @@
+import { SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL } from "./catalogBaselineUnitSql.js";
+
 export function productsOrderByClause(sort, order) {
   const dir = order === "desc" ? "DESC" : "ASC";
   switch (sort) {
@@ -30,11 +32,11 @@ export function storefrontProductsOrderByClause(sortBy, sortOrder) {
   const dir = sortOrder === "asc" ? "ASC" : "DESC";
   switch (sortBy) {
     case "price":
-      return `COALESCE(NULLIF(offer_price_minor_per_unit, '')::bigint, 0) ${dir}, name ASC, id ASC`;
+      return `${SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL} ${dir}, gp.name ASC, sp.id ASC`;
     case "name":
-      return `name ${dir}, id ASC`;
+      return `gp.name ${dir}, sp.id ASC`;
     case "created_at":
     default:
-      return `created_at ${dir}, id ${dir}`;
+      return `sp.created_at ${dir}, sp.id ${dir}`;
   }
 }

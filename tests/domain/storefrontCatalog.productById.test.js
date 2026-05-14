@@ -44,7 +44,16 @@ describe("storefrontCatalog getProductById", () => {
     expect(out).toMatchObject({
       id: "11111111-1111-4111-8111-111111111111",
       slug: "apple",
-      category_id: "22222222-2222-4222-8222-222222222222"
+      category_id: "22222222-2222-4222-8222-222222222222",
+      actual_price_minor: "100",
+      offer_price_minor: "90",
+      promo_price_minor: null,
+      total_price_minor: "100",
+      final_price_minor: "90",
+      offer_discount_minor: "10",
+      promo_discount_minor: "0",
+      total_discount_minor: "10",
+      bundle_rules: []
     });
     expect(out.images).toHaveLength(1);
   });
