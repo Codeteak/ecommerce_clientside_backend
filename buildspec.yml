@@ -1,15 +1,18 @@
 version: 0.2
 
-# All command output below is streamed to CodeBuild → CloudWatch Logs when the project
-# has cloudWatchLogs enabled (see scripts/cicd/setup_aws_cicd.sh).
+# Logs: enable CloudWatch on the CodeBuild project (see scripts/cicd/setup_aws_cicd.sh).
+# ECR_URI / IMAGE_TAG are set in pre_build and exported to later phases via exported-variables.
 
 env:
   variables:
     AWS_REGION: ap-south-1
     ECR_REPOSITORY_NAME: clientside-ecommerce-api
-    # Plain Docker BuildKit output (no progress UI that hides lines in CloudWatch).
     DOCKER_BUILDKIT: "1"
     BUILDKIT_PROGRESS: plain
+  exported-variables:
+    - ACCOUNT_ID
+    - ECR_URI
+    - IMAGE_TAG
 
 phases:
   install:
@@ -22,52 +25,26 @@ phases:
   pre_build:
     commands:
       - echo "=== PRE_BUILD $(date -u +%FT%TZ) ==="
+      - . scripts/cicd/codebuild-env.sh
       - echo "Installing dependencies..."
       - npm ci --include=dev --loglevel=info
-      - echo "Resolving AWS account and ECR repository..."
-      - ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-      - ECR_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}"
-      - IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:-manual}-${CODEBUILD_BUILD_NUMBER}"
-      - IMAGE_TAG="$(echo "${IMAGE_TAG}" | tr '/' '-' | cut -c1-120)"
-      - echo "ECR_URI=${ECR_URI}"
-      - echo "IMAGE_TAG=${IMAGE_TAG}"
       - echo "Logging in to Amazon ECR..."
       - aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-      - echo "Preparing Docker Buildx for ARM64 build..."
-      - docker buildx create --name clientside-builder --use || docker buildx use clientside-builder
+      - echo "Preparing Docker Buildx..."
+      - docker buildx create --name clientside-builder --use 2>/dev/null || docker buildx use clientside-builder
       - docker buildx inspect --bootstrap
   build:
     commands:
       - echo "=== BUILD $(date -u +%FT%TZ) ==="
+      - echo "ECR_URI=${ECR_URI} IMAGE_TAG=${IMAGE_TAG}"
       - echo "Running tests..."
       - RUN_INTEGRATION_TESTS=0 NODE_ENV=test npm test -- --reporter=verbose
-      - echo "Build environment diagnostics..."
-      - echo "PWD=$(pwd)"
-      - echo "CODEBUILD_SRC_DIR=${CODEBUILD_SRC_DIR}"
-      - ls -la
+      - echo "PWD=$(pwd) CODEBUILD_SRC_DIR=${CODEBUILD_SRC_DIR}"
+      - ls -la "${CODEBUILD_SRC_DIR}"
       - docker version
       - docker buildx ls
-      - echo "Building and pushing ARM64 image ${ECR_URI}:${IMAGE_TAG}..."
-      - |
-        set -o pipefail
-        docker buildx build \
-          --progress=plain \
-          --platform linux/arm64 \
-          --provenance=false \
-          --sbom=false \
-          --file "${CODEBUILD_SRC_DIR}/Dockerfile" \
-          -t "${ECR_URI}:${IMAGE_TAG}" \
-          --push "${CODEBUILD_SRC_DIR}" 2>&1 | tee /tmp/docker-build.log || \
-        docker buildx build \
-          --progress=plain \
-          --platform linux/arm64 \
-          --provenance=false \
-          --sbom=false \
-          --file "${CODEBUILD_SRC_DIR}/Dockerfile" \
-          -t "${ECR_URI}:${IMAGE_TAG}" \
-          --push "${CODEBUILD_SRC_DIR}" 2>&1 | tee -a /tmp/docker-build.log
-      - echo "--- Docker build log tail ---"
-      - tail -n 200 /tmp/docker-build.log || true
+      - echo "Building and pushing ARM64 image..."
+      - bash scripts/cicd/docker-build-push.sh
       - |
         echo "Updating latest tag (best effort)..."
         docker buildx imagetools create -t "${ECR_URI}:latest" "${ECR_URI}:${IMAGE_TAG}" || \
@@ -75,6 +52,7 @@ phases:
   post_build:
     commands:
       - echo "=== POST_BUILD $(date -u +%FT%TZ) ==="
+      - echo "ECR_URI=${ECR_URI} IMAGE_TAG=${IMAGE_TAG}"
       - printf '{"imageUri":"%s","imageTag":"%s","repository":"%s","builtAt":"%s"}\n' "${ECR_URI}:${IMAGE_TAG}" "${IMAGE_TAG}" "${ECR_URI}" "$(date -u +%FT%TZ)" > image-detail.json
       - cat image-detail.json
       - echo "Build completed at $(date)"
