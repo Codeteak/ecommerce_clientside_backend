@@ -83,14 +83,26 @@ Next actions (run manually once values are verified):
      --deployment-config-name CodeDeployDefault.AllAtOnce \\
      --region "${AWS_REGION}"
 
-3) Create/verify CodeBuild project:
+3) Create/verify CodeBuild project (CloudWatch Logs = live build log in AWS console):
+   LOG_GROUP="/aws/codebuild/${PROJECT_NAME}-build"
+
    aws codebuild create-project \\
      --name "${PROJECT_NAME}-build" \\
      --service-role "${CODEBUILD_SERVICE_ROLE_ARN}" \\
      --artifacts type=CODEPIPELINE \\
      --environment type=LINUX_CONTAINER,image=aws/codebuild/standard:7.0,computeType=BUILD_GENERAL1_MEDIUM,privilegedMode=true \\
      --source type=CODEPIPELINE \\
+     --logs-config "cloudWatchLogs={status=ENABLED,groupName=${LOG_GROUP}},s3Logs={status=DISABLED}" \\
      --region "${AWS_REGION}"
+
+   If the project already exists, enable logging:
+   aws codebuild update-project \\
+     --name "${PROJECT_NAME}-build" \\
+     --logs-config "cloudWatchLogs={status=ENABLED,groupName=${LOG_GROUP}},s3Logs={status=DISABLED}" \\
+     --region "${AWS_REGION}"
+
+   View logs: CodeBuild → Build projects → ${PROJECT_NAME}-build → Build history →
+   open a build → "Phase details" or "View entire log" (CloudWatch log stream).
 
 4) Create CodePipeline stages:
    - Source: GitHub/CodeStar connection
