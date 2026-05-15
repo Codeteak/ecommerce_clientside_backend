@@ -1,4 +1,5 @@
 import { requireShopId } from "../catalog/catalogShopId.js";
+import { resolveStorefrontListAvailability } from "../catalog/resolveStorefrontListAvailability.js";
 import { toIlikePattern } from "../catalog/catalogSearchPattern.js";
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
@@ -251,10 +252,24 @@ export function createStorefrontCatalog({
 
     async listProducts(
       shopIdRaw,
-      { categoryId, brandId, search, limit, cursor, offset, availability, minPriceMinor, maxPriceMinor, sortBy, sortOrder }
+      {
+        categoryId,
+        brandId,
+        search,
+        limit,
+        cursor,
+        offset,
+        availability,
+        includeAllAvailability,
+        minPriceMinor,
+        maxPriceMinor,
+        sortBy,
+        sortOrder
+      }
     ) {
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
+      const listAvailability = resolveStorefrontListAvailability(availability, includeAllAvailability);
       const lim = Math.min(Math.max(Number(limit) || 24, 1), 100);
       const resolvedSortBy = sortBy || "created_at";
       const resolvedSortOrder = sortOrder || "desc";
@@ -273,7 +288,7 @@ export function createStorefrontCatalog({
         cursorId = parsed.id;
       }
       const qPattern = toIlikePattern(search ?? null);
-      const key = `shop:${shopId}:products:v6:${categoryId ?? "all"}:${brandId ?? "all"}:${qPattern ?? "q"}:${availability ?? "any"}:${minPriceMinor ?? "min"}:${maxPriceMinor ?? "max"}:${resolvedSortBy}:${resolvedSortOrder}:${lim}:cur:${cursor ?? "none"}:off:${offsetValue ?? "none"}`;
+      const key = `shop:${shopId}:products:v7:${categoryId ?? "all"}:${brandId ?? "all"}:${qPattern ?? "q"}:${listAvailability ?? "any"}:${minPriceMinor ?? "min"}:${maxPriceMinor ?? "max"}:${resolvedSortBy}:${resolvedSortOrder}:${lim}:cur:${cursor ?? "none"}:off:${offsetValue ?? "none"}`;
       const items = await cachedSWR(shopId, key, "products:list", async () => {
         const rows = await catalogRepo.listProductsStorefront(shopId, {
           categoryId: categoryId ?? null,
@@ -283,7 +298,7 @@ export function createStorefrontCatalog({
           offset: offsetValue,
           cursorCreatedAt,
           cursorId,
-          availability: availability ?? null,
+          availability: listAvailability,
           minPriceMinor: Number.isInteger(minPriceMinor) ? minPriceMinor : null,
           maxPriceMinor: Number.isInteger(maxPriceMinor) ? maxPriceMinor : null,
           sortBy: resolvedSortBy,

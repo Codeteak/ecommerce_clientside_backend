@@ -63,6 +63,7 @@ function listProductsHandler(ctx) {
         cursor: req.query.cursor,
         offset: req.query.offset,
         availability: req.query.availability,
+        includeAllAvailability: req.query.include_all_availability === true,
         minPriceMinor: req.query.min_price_minor,
         maxPriceMinor: req.query.max_price_minor,
         sortBy: req.query.sort_by,

@@ -39,7 +39,15 @@ export const storefrontAddressPostSchema = z.object(addressFields);
 export const storefrontAddressPatchSchema = z.object(addressFields).partial();
 
 export const storefrontCheckoutBodySchema = z.object({
-  notes: z.string().max(2000).optional().nullable()
+  notes: z.string().max(2000).optional().nullable(),
+  couponCode: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .optional()
+    .nullable()
+    .transform((v) => (v == null || v === "" ? undefined : v.toUpperCase()))
 });
 
 export const storefrontOrderIdParamSchema = z.object({

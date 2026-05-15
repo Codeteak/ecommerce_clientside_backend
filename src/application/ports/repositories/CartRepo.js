@@ -114,4 +114,11 @@ export class CartRepo {
     void _cartId;
     throw new Error("Not implemented");
   }
+
+  async listLiveProductPricingByIds(_client, _shopId, _productIds) {
+    void _client;
+    void _shopId;
+    void _productIds;
+    throw new Error("Not implemented");
+  }
 }

@@ -44,6 +44,32 @@ describe("createListApplicableCoupons", () => {
     expect(out.coupons).toEqual([]);
   });
 
+  it("omits first-order-only coupons when customer is not eligible", async () => {
+    const list = createListApplicableCoupons({
+      promotionRepo: {
+        getShopPromotionSettings: vi.fn().mockResolvedValue({ promotions_paused: false }),
+        listEligibleCouponsWithUsage: vi.fn().mockResolvedValue([
+          baseRow({ id: "a", code_normalized: "OK" }),
+          baseRow({ id: "b", code_normalized: "FIRST", first_order_only: true })
+        ])
+      },
+      authRepo: {
+        getCustomerCreatedAtById: vi.fn().mockResolvedValue({
+          created_at: new Date("2025-06-01T00:00:00.000Z")
+        })
+      },
+      orderRepo: { countDeliveredOrdersForCustomer: vi.fn().mockResolvedValue(1) }
+    });
+
+    const out = await list(fakeClient, {
+      shopId: "00000000-0000-4000-8000-000000000001",
+      customerId: "00000000-0000-4000-8000-000000000002",
+      cartSubtotalMinor: 1000
+    });
+    expect(out.coupons).toHaveLength(1);
+    expect(out.coupons[0].code).toBe("OK");
+  });
+
   it("maps benefits and eligibility; onlyApplicable filters to applicable rows", async () => {
     const list = createListApplicableCoupons({
       promotionRepo: {
@@ -74,12 +100,9 @@ describe("createListApplicableCoupons", () => {
       cartSubtotalMinor: 1000,
       onlyApplicable: false
     });
-    expect(all.coupons).toHaveLength(2);
+    expect(all.coupons).toHaveLength(1);
     expect(all.coupons[0].benefits).toEqual([{ kind: "cart_percent_off", percentBps: 1000 }]);
     expect(all.coupons[0].eligibility.applicable).toBe(true);
-    expect(all.coupons[1].eligibility.applicable).toBe(false);
-    expect(all.coupons[1].eligibility.ineligibilityCodes).toContain("FIRST_ORDER_ONLY_NOT_MET");
-    expect(all.coupons[1].benefits).toEqual([]);
 
     const filtered = await list(fakeClient, {
       shopId: "00000000-0000-4000-8000-000000000001",

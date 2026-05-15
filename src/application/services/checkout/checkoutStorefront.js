@@ -30,16 +30,26 @@ function customerAddressSnapshot(addr) {
   return parts.length ? parts.join(", ") : null;
 }
 
+function normalizeCouponCode(code) {
+  if (typeof code !== "string") return null;
+  const trimmed = code.trim();
+  return trimmed ? trimmed.toUpperCase() : null;
+}
+
 export function createCheckoutStorefront({
   cartRepo,
   orderRepo,
   authRepo,
   checkShopServiceArea,
   deliveryFeeMinor,
+  priceStorefrontLines,
+  promotionRepo,
   emitOrderPlaced = null
 }) {
   return async function checkoutStorefront(client, input) {
-    const { shopId: shopRaw, customerId, userId, notes, requestMeta, idempotencyKey } = input;
+    const { shopId: shopRaw, customerId, userId, notes, requestMeta, idempotencyKey, couponCode: rawCoupon } =
+      input;
+    const couponCode = normalizeCouponCode(rawCoupon ?? null);
     const shopId = requireShopId(shopRaw);
     const rawIdem = typeof idempotencyKey === "string" ? idempotencyKey.trim() : "";
     if (rawIdem && (rawIdem.length < 8 || rawIdem.length > 128)) {
@@ -154,7 +164,16 @@ export function createCheckoutStorefront({
             return {
               orderId: summary.id,
               orderNumber: summary.order_number,
-              total_minor: Number(summary.total_minor)
+              subtotal_minor: summary.subtotal_minor != null ? Number(summary.subtotal_minor) : undefined,
+              promotion_discount_minor:
+                summary.promotion_discount_total_minor != null
+                  ? Number(summary.promotion_discount_total_minor)
+                  : undefined,
+              coupon_discount_minor: summary.coupon_discount_minor != null ? Number(summary.coupon_discount_minor) : undefined,
+              delivery_fee_minor:
+                summary.delivery_fee_minor != null ? Number(summary.delivery_fee_minor) : undefined,
+              total_minor: Number(summary.total_minor),
+              coupon_code: summary.coupon_code_normalized ?? null
             };
           }
         }
@@ -167,21 +186,120 @@ export function createCheckoutStorefront({
 
       const items = await cartRepo.validateCartForCheckoutCommit(client, shopId, cart.id);
 
+      if (couponCode && !items.length) {
+        throw checkoutError("EMPTY_CART_WITH_COUPON", "Cannot apply a coupon to an empty cart.");
+      }
+
+      const productIds = [
+        ...new Set(items.filter((it) => !it.is_custom && it.product_id).map((it) => String(it.product_id)))
+      ];
+      const liveByProduct = new Map();
+      if (priceStorefrontLines && productIds.length) {
+        const liveRows = await cartRepo.listLiveProductPricingByIds(client, shopId, productIds);
+        for (const row of liveRows) {
+          liveByProduct.set(String(row.id), row);
+        }
+      }
+
       let subtotal = 0;
-      const orderItems = items.map((it) => {
-        const lineTotal = minorFromLine(it.quantity, it.unit_price_minor);
-        subtotal += lineTotal;
-        return {
-          productId: it.product_id,
-          name: it.title_snapshot,
-          unitLabel: it.unit_label,
-          quantity: Number(it.quantity),
-          unitPriceMinor: Number(it.unit_price_minor),
-          lineTotalMinor: lineTotal,
-          isCustom: it.is_custom,
-          customNote: it.custom_note
-        };
-      });
+      let promotionDiscountTotalMinor = 0;
+      let couponDiscountMinor = 0;
+      let couponCodeNormalized = null;
+      /** @type {string[]} */
+      let appliedPromotionIds = [];
+      /** @type {Array<Record<string, unknown>>} */
+      let orderItems = [];
+      /** @type {Awaited<ReturnType<NonNullable<typeof priceStorefrontLines>>> | null} */
+      let pricedResult = null;
+
+      if (priceStorefrontLines) {
+        const priced = await priceStorefrontLines(client, {
+          shopId,
+          customerId: custKey,
+          couponCode,
+          lines: items
+            .filter((it) => !it.is_custom && it.product_id)
+            .map((it) => {
+              const live = liveByProduct.get(String(it.product_id));
+              return {
+                cartItemId: it.id,
+                productId: String(it.product_id),
+                quantity: Number(it.quantity),
+                listMinor: live?.price_minor_per_unit ?? it.unit_price_minor,
+                offerMinor: live?.offer_price_minor_per_unit ?? null,
+                categoryId: live?.global_category_id ?? null
+              };
+            })
+        });
+        pricedResult = priced;
+        subtotal = priced.subtotalMinor;
+        promotionDiscountTotalMinor = priced.promotionDiscountTotalMinor;
+        couponDiscountMinor = priced.couponDiscountMinor;
+        couponCodeNormalized = priced.coupon?.code ?? null;
+        appliedPromotionIds = priced.appliedPromotionIds;
+
+        const pricedByCartItem = new Map(
+          priced.lines.filter((l) => l.cartItemId).map((l) => [String(l.cartItemId), l])
+        );
+        orderItems = items.map((it) => {
+          if (it.is_custom || !it.product_id) {
+            const lineTotal = minorFromLine(it.quantity, it.unit_price_minor);
+            subtotal += lineTotal;
+            return {
+              productId: it.product_id,
+              name: it.title_snapshot,
+              unitLabel: it.unit_label,
+              quantity: Number(it.quantity),
+              unitPriceMinor: Number(it.unit_price_minor),
+              lineTotalMinor: lineTotal,
+              listPriceMinor: Number(it.unit_price_minor),
+              lineDiscountMinor: 0,
+              appliedPromotionIds: [],
+              isCustom: it.is_custom,
+              customNote: it.custom_note
+            };
+          }
+          const p = pricedByCartItem.get(String(it.id));
+          const unitPriceMinor = p ? Number(p.final_price_minor) : Number(it.unit_price_minor);
+          const lineTotalMinor = p ? Number(p.line_total_minor) : minorFromLine(it.quantity, it.unit_price_minor);
+          const listPriceMinor = p ? Number(p.list_price_minor) : Number(it.unit_price_minor);
+          const compareTotal = p
+            ? Math.round(Number(p.total_price_minor) * Number(it.quantity))
+            : lineTotalMinor;
+          const lineDiscountMinor = Math.max(0, compareTotal - lineTotalMinor);
+          return {
+            productId: it.product_id,
+            name: it.title_snapshot,
+            unitLabel: it.unit_label,
+            quantity: Number(it.quantity),
+            unitPriceMinor,
+            lineTotalMinor,
+            listPriceMinor,
+            lineDiscountMinor,
+            appliedPromotionIds: p?.applied_promotion_ids ?? [],
+            isCustom: it.is_custom,
+            customNote: it.custom_note
+          };
+        });
+      } else {
+        orderItems = items.map((it) => {
+          const lineTotal = minorFromLine(it.quantity, it.unit_price_minor);
+          subtotal += lineTotal;
+          return {
+            productId: it.product_id,
+            name: it.title_snapshot,
+            unitLabel: it.unit_label,
+            quantity: Number(it.quantity),
+            unitPriceMinor: Number(it.unit_price_minor),
+            lineTotalMinor: lineTotal,
+            listPriceMinor: Number(it.unit_price_minor),
+            lineDiscountMinor: 0,
+            appliedPromotionIds: [],
+            isCustom: it.is_custom,
+            customNote: it.custom_note
+          };
+        });
+      }
 
       const delivery = Number(deliveryFeeMinor) || 0;
       const total = subtotal + delivery;
@@ -211,11 +329,25 @@ export function createCheckoutStorefront({
         subtotalMinor: subtotal,
         deliveryFeeMinor: delivery,
         totalMinor: total,
+        promotionDiscountTotalMinor,
+        couponCodeNormalized,
+        appliedPromotionIds,
         currency: "INR",
         notes: notes ?? null,
         items: orderItems,
         outboxPayload
       });
+
+      if (promotionRepo && pricedResult?.coupon && couponDiscountMinor > 0) {
+        await promotionRepo.insertPromotionRedemption(client, {
+          shopId,
+          orderId: order.id,
+          customerId: custKey,
+          promotionId: pricedResult.coupon.promotionId,
+          couponId: pricedResult.coupon.id,
+          discountMinor: couponDiscountMinor
+        });
+      }
 
       if (rawIdem) {
         await orderRepo.insertCheckoutIdempotency(client, {
@@ -277,7 +409,16 @@ export function createCheckoutStorefront({
         "Checkout succeeded"
       );
 
-      return { orderId: order.id, orderNumber, total_minor: total };
+      return {
+        orderId: order.id,
+        orderNumber,
+        subtotal_minor: subtotal,
+        promotion_discount_minor: promotionDiscountTotalMinor,
+        coupon_discount_minor: couponDiscountMinor,
+        delivery_fee_minor: delivery,
+        total_minor: total,
+        coupon_code: couponCodeNormalized
+      };
     } catch (err) {
       logger.warn(
         {

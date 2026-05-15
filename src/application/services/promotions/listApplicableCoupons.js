@@ -87,6 +87,17 @@ export function createListApplicableCoupons({ promotionRepo, authRepo, orderRepo
         const perCustomerLimit = row.max_redemptions_per_customer;
         if (typeof totalLimit === "number" && row.total_redemptions >= totalLimit) return false;
         if (typeof perCustomerLimit === "number" && row.customer_redemptions >= perCustomerLimit) return false;
+
+        const minSub = row.min_subtotal_minor != null ? Number(row.min_subtotal_minor) : null;
+        const firstOrderOnly = row.first_order_only === true;
+        const newCustomerOnly = row.new_customer_only === true;
+        const eligibility = buildCouponEligibility(
+          { minSubtotalMinor: minSub, firstOrderOnly, newCustomerOnly },
+          eligibilityCtx
+        );
+        if (firstOrderOnly || newCustomerOnly) {
+          if (!eligibility.applicable) return false;
+        }
         return true;
       })
       .map((row) => {

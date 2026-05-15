@@ -563,7 +563,7 @@ export function buildPaths() {
         tags: ["Storefront catalog"],
         summary: "Search and list products",
         description:
-          "Returns shop products with thumbnails, category metadata, and unit pricing (minor currency, string integers). **`actual_price_minor`** = list/MRP; **`offer_price_minor`** = catalog offer when set; **`promo_price_minor`** = campaign SKU replacement unit from `promotion_products` or null. **`total_price_minor`** = compare-at anchor (max of list and catalog baseline) for strikethrough UIs; **`final_price_minor`** = payable unit (`promo` when present, else catalog baseline). **`offer_discount_minor`** = savings from list to baseline; **`promo_discount_minor`** = extra savings from baseline to final when a promo applies; **`total_discount_minor`** = `total_price_minor - final_price_minor` (non-negative). Each product includes **`bundle_rules`**. Empty **`products`**, **`categories`**, null **`nextCursor`**, and false **`promotions_paused`** are omitted from the JSON object. `min_price_minor` / `max_price_minor` and `sort_by=price` use catalog baseline. Catalog cache key v6.",
+          "Returns shop products with thumbnails, category metadata, and unit pricing (minor currency, string integers). **Default filter:** `status=active` and **`availability=in_stock`** (sellable rows only, aligned with cart/checkout). Pass **`include_all_availability=true`** to list all active rows regardless of stock, or set **`availability`** explicitly (`out_of_stock`, `unknown`). **`actual_price_minor`** = list/MRP; **`offer_price_minor`** = catalog offer when set; **`promo_price_minor`** = campaign SKU replacement unit from `promotion_products` or null. **`total_price_minor`** = compare-at anchor (max of list and catalog baseline) for strikethrough UIs; **`final_price_minor`** = payable unit (`promo` when present, else catalog baseline). **`offer_discount_minor`** = savings from list to baseline; **`promo_discount_minor`** = extra savings from baseline to final when a promo applies; **`total_discount_minor`** = `total_price_minor - final_price_minor` (non-negative). Each product includes **`bundle_rules`**. Empty **`products`**, **`categories`**, null **`nextCursor`**, and false **`promotions_paused`** are omitted from the JSON object. `min_price_minor` / `max_price_minor` and `sort_by=price` use catalog baseline. Catalog cache key v7.",
         parameters: [
           ...shopParams,
           { name: "category_id", in: "query", schema: { type: "string", format: "uuid" } },
@@ -625,7 +625,7 @@ export function buildPaths() {
         tags: ["Storefront catalog"],
         summary: "Product by slug",
         description:
-          "Product by slug. Pricing: `actual_price_minor`, `offer_price_minor` (nullable), `promo_price_minor` (nullable), `total_price_minor`, `final_price_minor`, `offer_discount_minor`, `promo_discount_minor`, `total_discount_minor` (see list endpoint). **`bundle_rules`**: BXGY rules for this SKU or category. `promo_price_minor` is the campaign **unit** price (replacement), not a delta off list/offer.",
+          "Product by slug. Only **active** + **in_stock** shop offers are returned (404 otherwise). Pricing: `actual_price_minor`, `offer_price_minor` (nullable), `promo_price_minor` (nullable), `total_price_minor`, `final_price_minor`, `offer_discount_minor`, `promo_discount_minor`, `total_discount_minor` (see list endpoint). **`bundle_rules`**: BXGY rules for this SKU or category. `promo_price_minor` is the campaign **unit** price (replacement), not a delta off list/offer.",
         parameters: [...shopParams, P.Slug],
         responses: {
           "200": {
@@ -641,7 +641,7 @@ export function buildPaths() {
       get: {
         tags: ["Storefront catalog"],
         summary: "Product by shop product ID",
-        description: "Product by `shop_products.id`. Same pricing and `bundle_rules` fields as slug detail.",
+        description: "Product by `shop_products.id`. Same sellability rules, pricing, and `bundle_rules` fields as slug detail.",
         parameters: [...shopParams, P.ProductId],
         responses: {
           "200": {

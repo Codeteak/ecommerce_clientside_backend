@@ -8,6 +8,7 @@ function deps() {
       findCartByShopAndCustomerId: vi.fn().mockResolvedValue({ id: "cart-1" }),
       validateCartForCheckoutCommit: vi.fn().mockResolvedValue([
         {
+          id: "cart-item-1",
           product_id: "11111111-1111-4111-8111-111111111111",
           title_snapshot: "A",
           unit_label: "kg",
@@ -26,7 +27,15 @@ function deps() {
         availability: "in_stock"
       }),
       deleteCartItemsForCart: vi.fn().mockResolvedValue(undefined),
-      deleteCart: vi.fn().mockResolvedValue(undefined)
+      deleteCart: vi.fn().mockResolvedValue(undefined),
+      listLiveProductPricingByIds: vi.fn().mockResolvedValue([
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          price_minor_per_unit: "100",
+          offer_price_minor_per_unit: null,
+          global_category_id: null
+        }
+      ])
     },
     orderRepo: {
       insertOrderWithItemsAndOutbox: vi.fn().mockResolvedValue({ id: "order-1" }),
@@ -59,6 +68,37 @@ function deps() {
     },
     checkShopServiceArea: vi.fn().mockResolvedValue({ inServiceArea: true }),
     deliveryFeeMinor: 20
+  };
+}
+
+function pricedDeps(overrides = {}) {
+  const priceStorefrontLines = vi.fn().mockResolvedValue({
+    subtotalMinor: 90,
+    promotionDiscountTotalMinor: 10,
+    couponDiscountMinor: 10,
+    appliedPromotionIds: ["promo-1"],
+    coupon: { id: "coupon-1", code: "SAVE10", promotionId: "promo-1", discountMinor: 10 },
+    lines: [
+      {
+        cartItemId: "cart-item-1",
+        productId: "11111111-1111-4111-8111-111111111111",
+        quantity: 1,
+        list_price_minor: "100",
+        total_price_minor: "100",
+        final_price_minor: "90",
+        line_total_minor: "90",
+        offer_discount_minor: "0",
+        promo_discount_minor: "0",
+        total_discount_minor: "10",
+        applied_promotion_ids: []
+      }
+    ]
+  });
+  return {
+    ...deps(),
+    priceStorefrontLines,
+    promotionRepo: { insertPromotionRedemption: vi.fn().mockResolvedValue(undefined) },
+    ...overrides
   };
 }
 
@@ -167,7 +207,7 @@ describe("checkoutStorefront validations", () => {
         idempotencyKey: "idem-key-12345678"
       }
     );
-    expect(out).toEqual({ orderId: "order-existing", orderNumber: "ORD-1", total_minor: 99 });
+    expect(out).toMatchObject({ orderId: "order-existing", orderNumber: "ORD-1", total_minor: 99 });
     expect(d.cartRepo.validateCartForCheckoutCommit).not.toHaveBeenCalled();
     expect(d.orderRepo.insertOrderWithItemsAndOutbox).not.toHaveBeenCalled();
   });
@@ -267,6 +307,47 @@ describe("checkoutStorefront validations", () => {
         totalMinor: 120
       })
     );
+  });
+
+  it("applies coupon via pricing engine and records redemption", async () => {
+    const d = pricedDeps();
+    const run = createCheckoutStorefront(d);
+    const out = await run(
+      {},
+      {
+        shopId: "00000000-0000-4000-8000-000000000001",
+        customerId: "cust-1",
+        userId: "user-1",
+        couponCode: "SAVE10"
+      }
+    );
+    expect(d.priceStorefrontLines).toHaveBeenCalled();
+    expect(d.promotionRepo.insertPromotionRedemption).toHaveBeenCalled();
+    expect(out).toMatchObject({
+      subtotal_minor: 90,
+      coupon_discount_minor: 10,
+      total_minor: 110,
+      coupon_code: "SAVE10"
+    });
+  });
+
+  it("rejects coupon on empty cart before pricing", async () => {
+    const d = deps();
+    d.cartRepo.validateCartForCheckoutCommit = vi.fn().mockRejectedValue(
+      new AppError("Cart is empty", { statusCode: 400, code: "CART_EMPTY" })
+    );
+    const run = createCheckoutStorefront({ ...d, priceStorefrontLines: vi.fn() });
+    await expect(
+      run(
+        {},
+        {
+          shopId: "00000000-0000-4000-8000-000000000001",
+          customerId: "cust-1",
+          userId: "user-1",
+          couponCode: "SAVE10"
+        }
+      )
+    ).rejects.toMatchObject({ code: "CART_EMPTY" });
   });
 
   it("does not fail checkout when realtime emit fails and writes retry outbox event", async () => {

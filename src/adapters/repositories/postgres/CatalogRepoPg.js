@@ -360,6 +360,7 @@ export class CatalogRepoPg extends CatalogRepo {
                 JOIN global_products gp ON gp.id = sp.global_product_id
                WHERE sp.shop_id = $1::uuid
                  AND sp.status = 'active'
+                 AND sp.availability = 'in_stock'
                  AND gp.global_category_id IN (SELECT id FROM category_tree)
             )
             AND (
@@ -412,6 +413,7 @@ export class CatalogRepoPg extends CatalogRepo {
                 JOIN global_products gp ON gp.id = sp.global_product_id
                WHERE sp.shop_id = $1::uuid
                  AND sp.status = 'active'
+                 AND sp.availability = 'in_stock'
                  AND gp.global_category_id IN (SELECT id FROM category_tree)
             )
           ORDER BY c.sort_order ASC, c.name ASC
@@ -481,6 +483,7 @@ export class CatalogRepoPg extends CatalogRepo {
           WHERE sp.shop_id = $1::uuid
             AND lower(gp.slug) = $2
             AND sp.status = 'active'
+            AND sp.availability = 'in_stock'
           LIMIT 1`,
         [shopId, norm]
       );
@@ -543,6 +546,7 @@ export class CatalogRepoPg extends CatalogRepo {
           WHERE sp.shop_id = $1::uuid
             AND sp.id = $2::uuid
             AND sp.status = 'active'
+            AND sp.availability = 'in_stock'
           LIMIT 1`,
         [shopId, id]
       );
@@ -618,6 +622,7 @@ export class CatalogRepoPg extends CatalogRepo {
                 JOIN global_products gp ON gp.id = sp.global_product_id
                WHERE sp.shop_id = $1::uuid
                  AND sp.status = 'active'
+                 AND sp.availability = 'in_stock'
                  AND gp.global_category_id IN (SELECT id FROM category_tree)
             )
             AND lower(c.slug) = $2

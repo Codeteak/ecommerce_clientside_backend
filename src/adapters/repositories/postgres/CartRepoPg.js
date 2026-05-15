@@ -69,7 +69,9 @@ export class CartRepoPg extends CartRepo {
     const { rows } = await client.query(
       `SELECT ci.id, ci.cart_id, ci.product_id, ci.title_snapshot, ci.quantity::text AS quantity,
               ci.unit_label, ci.unit_price_minor, ci.is_custom, ci.custom_note,
+              sp.price_minor_per_unit::text AS list_price_minor_per_unit,
               sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
+              gp.global_category_id,
               gp.slug AS product_slug,
               gp.image_url AS global_image_url,
               m.id AS image_media_id,
@@ -362,5 +364,22 @@ export class CartRepoPg extends CartRepo {
     }
 
     return lines;
+  }
+
+  async listLiveProductPricingByIds(client, shopId, productIds) {
+    const ids = Array.isArray(productIds) ? productIds.map((x) => String(x)).filter(Boolean) : [];
+    if (!ids.length) return [];
+    await setTenantContext(client, shopId);
+    const { rows } = await client.query(
+      `SELECT sp.id,
+              sp.price_minor_per_unit::text AS price_minor_per_unit,
+              sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
+              gp.global_category_id
+         ${sellableShopProductJoin}
+        WHERE sp.shop_id = $1::uuid
+          AND sp.id = ANY($2::uuid[])`,
+      [shopId, ids]
+    );
+    return rows;
   }
 }

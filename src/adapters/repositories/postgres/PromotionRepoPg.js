@@ -77,10 +77,106 @@ export class PromotionRepoPg extends PromotionRepo {
          AND p.starts_at <= now()
          AND p.ends_at >= now()
          AND ($3::text IS NULL OR c.code_normalized = $3)
-       ORDER BY c.code_normalized ASC`,
+       ORDER BY p.priority ASC, p.created_at DESC, c.code_normalized ASC`,
       [shopId, String(customerId), codeNormalized]
     );
     return rows;
+  }
+
+  async findCouponByCodeForShop(client, shopId, codeNormalized, customerId = null) {
+    await setTenantContext(client, shopId);
+    const { rows } = await client.query(
+      `SELECT
+         c.id,
+         c.promotion_id,
+         c.code_normalized,
+         c.min_subtotal_minor,
+         c.first_order_only,
+         c.new_customer_only,
+         c.max_redemptions_total,
+         c.max_redemptions_per_customer,
+         COALESCE(ru.total_redemptions, 0) AS total_redemptions,
+         COALESCE(ru.customer_redemptions, 0) AS customer_redemptions,
+         EXISTS (
+           SELECT 1 FROM promotion_products pp
+            WHERE pp.shop_id = c.shop_id
+              AND pp.promotion_id = c.promotion_id
+              AND pp.is_deleted = false
+         ) AS has_sku_products,
+         EXISTS (
+           SELECT 1 FROM promotion_bundle_rules br
+            WHERE br.shop_id = c.shop_id
+              AND br.promotion_id = c.promotion_id
+              AND br.is_deleted = false
+         ) AS has_bundle_rules,
+         EXISTS (
+           SELECT 1 FROM promotion_rules pr
+            WHERE pr.shop_id = c.shop_id
+              AND pr.promotion_id = c.promotion_id
+              AND pr.is_deleted = false
+              AND pr.rule_kind IN (
+                'cart_percent_off',
+                'cart_fixed_off',
+                'cart_fixed_off_if_subtotal_above',
+                'cart_percent_off_if_subtotal_above',
+                'category_percent_off'
+              )
+         ) AS has_coupon_rules,
+         COALESCE(rules.promotion_rules, '[]'::json) AS promotion_rules
+       FROM promotion_coupons c
+       JOIN promotions p
+         ON p.id = c.promotion_id
+        AND p.shop_id = c.shop_id
+       LEFT JOIN LATERAL (
+         SELECT json_agg(
+                  json_build_object(
+                    'rule_kind', pr.rule_kind,
+                    'percent_bps', pr.percent_bps,
+                    'amount_minor', pr.amount_minor,
+                    'min_subtotal_minor', pr.min_subtotal_minor,
+                    'max_discount_minor', pr.max_discount_minor,
+                    'global_category_id', pr.global_category_id,
+                    'is_deleted', pr.is_deleted
+                  )
+                  ORDER BY pr.created_at ASC
+                ) AS promotion_rules
+           FROM promotion_rules pr
+          WHERE pr.shop_id = c.shop_id
+            AND pr.promotion_id = c.promotion_id
+            AND pr.is_deleted = false
+       ) rules ON true
+       LEFT JOIN (
+         SELECT pr.coupon_id,
+                count(*)::int AS total_redemptions,
+                count(*) FILTER (WHERE pr.customer_id = $3)::int AS customer_redemptions
+           FROM promotion_redemptions pr
+          WHERE pr.shop_id = $1::uuid
+          GROUP BY pr.coupon_id
+       ) ru ON ru.coupon_id = c.id
+       WHERE c.shop_id = $1::uuid
+         AND c.code_normalized = $2::text
+         AND c.is_deleted = false
+         AND p.status = 'active'
+         AND p.is_deleted = false
+         AND c.starts_at <= now()
+         AND c.ends_at >= now()
+         AND p.starts_at <= now()
+         AND p.ends_at >= now()
+       LIMIT 1`,
+      [shopId, codeNormalized, customerId != null ? String(customerId) : null]
+    );
+    return rows[0] ?? null;
+  }
+
+  async insertPromotionRedemption(client, payload) {
+    const { shopId, orderId, customerId, promotionId, couponId, discountMinor } = payload;
+    await setTenantContext(client, shopId);
+    await client.query(
+      `INSERT INTO promotion_redemptions (
+         shop_id, order_id, customer_id, promotion_id, coupon_id, discount_minor
+       ) VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5::uuid, $6)`,
+      [shopId, orderId, String(customerId), promotionId ?? null, couponId ?? null, discountMinor]
+    );
   }
 
   async listActivePromotionProductOverlaysForShopProducts(client, shopId, shopProductIds) {
@@ -95,7 +191,8 @@ export class PromotionRepoPg extends PromotionRepo {
               pp.promo_price_minor_per_unit::text AS promo_price_minor_per_unit,
               p.priority,
               p.overlap_mode,
-              p.ends_at
+              p.ends_at,
+              p.created_at
          FROM promotion_products pp
          JOIN promotions p
            ON p.id = pp.promotion_id
@@ -123,6 +220,8 @@ export class PromotionRepoPg extends PromotionRepo {
               br.get_qty,
               br.reward_type,
               br.reward_percent_bps,
+              p.priority,
+              p.created_at,
               p.ends_at
          FROM promotion_bundle_rules br
          JOIN promotions p
@@ -134,7 +233,7 @@ export class PromotionRepoPg extends PromotionRepo {
           AND p.status = 'active'
           AND p.starts_at <= now()
           AND p.ends_at >= now()
-        ORDER BY br.updated_at DESC
+        ORDER BY p.priority ASC, p.created_at DESC, br.updated_at DESC
         LIMIT 200`,
       [shopId]
     );

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { ValidationError } from "../../src/domain/errors/ValidationError.js";
 import { createStorefrontCart } from "../../src/application/services/storefront/storefrontCart.js";
 
 describe("storefront cart addItem merge behavior", () => {
@@ -114,5 +115,99 @@ describe("storefront cart addItem merge behavior", () => {
       customerId: "cust-1"
     });
     expect(out.items[0].image).toEqual({ url: "  https://cdn.example.com/global/apple.jpg  " });
+  });
+
+  it("adds separate bundle-reward line instead of discounting paid quantity", async () => {
+    const cartItemId = "33333333-3333-4333-8333-333333333333";
+    const productId = "22222222-2222-4222-8222-222222222222";
+    const cartRepo = {
+      findCartByShopAndCustomerId: vi.fn().mockResolvedValue({
+        id: "11111111-1111-4111-8111-111111111111"
+      }),
+      insertCart: vi.fn(),
+      listCartItems: vi.fn().mockResolvedValue([
+        {
+          id: cartItemId,
+          product_id: productId,
+          title_snapshot: "Banana",
+          quantity: "2",
+          unit_price_minor: 5000,
+          offer_price_minor_per_unit: "4500",
+          is_custom: false
+        }
+      ])
+    };
+    const priceStorefrontLines = vi.fn().mockResolvedValue({
+      subtotalMinor: 9000,
+      promotionDiscountTotalMinor: 4500,
+      linePromoDiscountMinor: 0,
+      lines: [
+        {
+          cartItemId,
+          paid_quantity: 2,
+          free_quantity: 1,
+          display_quantity: 3,
+          list_price_minor: "5000",
+          final_price_minor: "4500",
+          line_total_minor: "9000",
+          offer_discount_minor: "0",
+          promo_discount_minor: "0",
+          total_discount_minor: "0",
+          applied_promotion_ids: ["promo-bogo"]
+        }
+      ]
+    });
+
+    const service = createStorefrontCart({
+      cartRepo,
+      ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
+      priceStorefrontLines
+    });
+
+    const out = await service.getCartContents({}, "00000000-0000-4000-8000-000000000001", {
+      customerId: "cust-1"
+    });
+
+    expect(out.items).toHaveLength(2);
+    expect(out.items[0]).toMatchObject({
+      id: cartItemId,
+      quantity: "2",
+      is_bundle_reward: false,
+      line_total_minor: "9000",
+      final_price_minor: "4500"
+    });
+    expect(out.items[1]).toMatchObject({
+      id: `${cartItemId}:bundle-reward`,
+      quantity: "1",
+      is_bundle_reward: true,
+      bundle_source_cart_item_id: cartItemId,
+      line_total_minor: "0",
+      final_price_minor: "0"
+    });
+    expect(out.summary.display_units_total).toBe(3);
+    expect(out.summary.subtotal_minor).toBe(9000);
+  });
+
+  it("rejects PATCH on synthetic bundle-reward cart item ids", async () => {
+    const cartRepo = {
+      findCartByShopAndCustomerId: vi.fn().mockResolvedValue({
+        id: "11111111-1111-4111-8111-111111111111"
+      }),
+      findCartItemWithCart: vi.fn()
+    };
+    const service = createStorefrontCart({
+      cartRepo,
+      ensureShopForCatalog: vi.fn().mockResolvedValue(undefined)
+    });
+    await expect(
+      service.updateItemQuantity(
+        {},
+        "00000000-0000-4000-8000-000000000001",
+        { customerId: "cust-1" },
+        "33333333-3333-4333-8333-333333333333:bundle-reward",
+        1
+      )
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(cartRepo.findCartItemWithCart).not.toHaveBeenCalled();
   });
 });

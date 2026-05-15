@@ -60,4 +60,18 @@ export class PromotionRepo {
     void _globalCategoryId;
     throw new Error("Not implemented");
   }
+
+  async findCouponByCodeForShop(_client, _shopId, _codeNormalized, _customerId) {
+    void _client;
+    void _shopId;
+    void _codeNormalized;
+    void _customerId;
+    throw new Error("Not implemented");
+  }
+
+  async insertPromotionRedemption(_client, _payload) {
+    void _client;
+    void _payload;
+    throw new Error("Not implemented");
+  }
 }

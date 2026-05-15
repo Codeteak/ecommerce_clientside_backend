@@ -31,6 +31,26 @@ describe("buildListProductsStorefrontQuery", () => {
     expect(out.values).toHaveLength(10);
   });
 
+  it("filters category tree existence by availability when set", () => {
+    const out = buildListProductsStorefrontQuery({
+      shopId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      categoryId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      brandId: null,
+      qPattern: null,
+      availability: "in_stock",
+      minPriceMinor: null,
+      maxPriceMinor: null,
+      limit: 20,
+      offset: null,
+      cursorCreatedAt: null,
+      cursorId: null,
+      sortOrder: "desc",
+      orderBySql: "sp.created_at DESC, sp.id DESC"
+    });
+    expect(out.text).toContain("sp2.availability = 'in_stock'");
+    expect(out.text).toContain("AND ($5::text IS NULL OR sp.availability = $5)");
+  });
+
   it("builds offset query when offset is provided", () => {
     const out = buildListProductsStorefrontQuery({
       shopId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",

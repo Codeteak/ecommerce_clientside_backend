@@ -28,6 +28,13 @@ describe("Storefront products query validation", () => {
     expect(res.body.error?.code).toBe("VALIDATION_ERROR");
   });
 
+  it("accepts include_all_availability query flag", async () => {
+    const res = await request(app)
+      .get("/storefront/products?include_all_availability=true&limit=5")
+      .expect(200);
+    expect(res.status).toBe(200);
+  });
+
   it("accepts full filter/sort query shape", async () => {
     const res = await request(app)
       .get(

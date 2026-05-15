@@ -33,6 +33,7 @@ import { createRequestPhoneChangeOtp } from "../application/services/profile/req
 import { createVerifyPhoneChangeOtp } from "../application/services/profile/verifyPhoneChangeOtp.js";
 import { createCheckShopServiceArea } from "../application/services/shops/checkShopServiceArea.js";
 import { createListApplicableCoupons } from "../application/services/promotions/listApplicableCoupons.js";
+import { createPriceStorefrontLines } from "../application/services/promotions/priceStorefrontLines.js";
 import { createEnsureShopForCatalog } from "../application/services/catalog/ensureShopForCatalog.js";
 import { createCatalogCache } from "../infra/cache/catalogCache.js";
 import { getSharedRedisClient } from "../infra/redis/sharedRedis.js";
@@ -106,7 +107,8 @@ export function createAppContext() {
     promotionRepo
   });
 
-  const storefrontCart = createStorefrontCart({ cartRepo, ensureShopForCatalog });
+  const priceStorefrontLines = createPriceStorefrontLines({ promotionRepo, authRepo, orderRepo });
+  const storefrontCart = createStorefrontCart({ cartRepo, ensureShopForCatalog, priceStorefrontLines });
   const assertCustomerShopAccess = createAssertCustomerShopAccess({ authRepo });
   const requireCustomerShopAccess = createRequireCustomerShopAccess({ authRepo });
   const updateStorefrontProfile = createUpdateStorefrontProfile({ authRepo });
@@ -187,6 +189,8 @@ export function createAppContext() {
     cartRepo,
     orderRepo,
     authRepo,
+    promotionRepo,
+    priceStorefrontLines,
     checkShopServiceArea,
     deliveryFeeMinor: env.STOREFRONT_DELIVERY_FEE_MINOR,
     emitOrderPlaced: (payload) => realtime.emitOrderPlaced(payload)

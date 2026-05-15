@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "name": "ClientSide Ecommerce API",
-    "description": "Storefront API (2026-04): health, OTP auth, Google OAuth2 + JWT exchange, profile, service area, catalog, storefront cart/checkout/account/orders.\n\n**Tenant / shop**\n- Send **`x-shop-id: {{shopId}}`** on tenant-scoped routes (catalog, storefront, checkout, …). Query parameters **`shopId`** / **`shop_id`** are not read for resolution.\n\n**Setup**\n- `npm run dev` — default **4100**. `npm run db:migrate`. A **shop** row must exist; set **`shopId`** (collection or environment variable).\n- **`.env`:** `DATABASE_URL`, `JWT_SECRET`, `API_PUBLIC_URL`, Google OAuth vars. Redirect URI in Google Console: `{API_PUBLIC_URL}/api/oauth/callback/google`.\n\n**JWT**\n- **`POST /api/auth/otp/verify`** and **`POST /api/auth/oauth/jwt`** return **`accessToken`**.\n- Protected routes: `Authorization: Bearer {{accessToken}}`.\n\n**Postman + OAuth JWT exchange**\n- Cookie flow: after browser Google callback to `/api/oauth/callback/google`, cookie **`storefront_oauth_exchange`** is set on API host.\n- `POST /api/auth/oauth/jwt` with body `{}` succeeds only when valid cookie is sent.\n\n**Architecture note**\n- Picker/staff APIs are not served by this app anymore; picker notifications are handled by a separate server/process.\n\n**CORS**\n- API allows credentials for **`CORS_ORIGIN`** (e.g. `http://localhost:5173`). OAuth `POST /api/oauth/sign-in/social` may need **`Origin`** matching that value when testing from CLI.",
+    "description": "Storefront API (2026-05): health, OTP auth, Google OAuth2 + JWT exchange, profile, service area, catalog, storefront cart/checkout/account/orders, **promotions (coupons + live cart pricing)**.\n\n**Promotions**\n- No separate apply-coupon API. List: `GET /storefront/coupons`. Apply at checkout: `POST /storefront/checkout` with `couponCode`.\n- Use folder **Promotions — local test flow** (run in order after auth + address + cart item).\n- `GET /storefront/cart` sets `{{cartSubtotalMinor}}` from `summary.subtotal_minor` (post SKU/bundle, pre-coupon).\n\n**Tenant / shop**\n- Send **`x-shop-id: {{shopId}}`** on tenant-scoped routes (catalog, storefront, checkout, …). Query parameters **`shopId`** / **`shop_id`** are not read for resolution.\n\n**Setup**\n- `npm run dev` — default **4100**. `npm run db:migrate`. A **shop** row must exist; set **`shopId`** (collection or environment variable).\n- **`.env`:** `DATABASE_URL`, `JWT_SECRET`, `API_PUBLIC_URL`, Google OAuth vars. Redirect URI in Google Console: `{API_PUBLIC_URL}/api/oauth/callback/google`.\n\n**JWT**\n- **`POST /api/auth/otp/verify`** and **`POST /api/auth/oauth/jwt`** return **`accessToken`**.\n- Protected routes: `Authorization: Bearer {{accessToken}}`.\n\n**Postman + OAuth JWT exchange**\n- Cookie flow: after browser Google callback to `/api/oauth/callback/google`, cookie **`storefront_oauth_exchange`** is set on API host.\n- `POST /api/auth/oauth/jwt` with body `{}` succeeds only when valid cookie is sent.\n\n**Architecture note**\n- Picker/staff APIs are not served by this app anymore; picker notifications are handled by a separate server/process.\n\n**CORS**\n- API allows credentials for **`CORS_ORIGIN`** (e.g. `http://localhost:5173`). OAuth `POST /api/oauth/sign-in/social` may need **`Origin`** matching that value when testing from CLI.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -15,7 +15,12 @@
     { "key": "phone", "value": "+919999999999" },
     { "key": "email", "value": "user@example.com" },
     { "key": "accessToken", "value": "" },
-    { "key": "corsOrigin", "value": "http://localhost:5173" }
+    { "key": "corsOrigin", "value": "http://localhost:5173" },
+    { "key": "productId", "value": "00000000-0000-0000-0000-000000000000" },
+    { "key": "cartItemId", "value": "00000000-0000-0000-0000-000000000000" },
+    { "key": "cartSubtotalMinor", "value": "" },
+    { "key": "couponCode", "value": "SAVE10" },
+    { "key": "idempotencyKey", "value": "checkout-demo-key-00000001" }
   ],
   "item": [
     {
@@ -393,7 +398,7 @@
             "method": "GET",
             "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
             "url": "{{baseUrl}}/storefront/products?limit=24",
-            "description": "Public storefront products with optional `category_id`, `search`, `cursor`, `availability`."
+            "description": "Lists sellable products: `shop_id` scoped, `status=active`, default `availability=in_stock`. Optional: `category_id`, `search`, `cursor`, `availability=out_of_stock|unknown`, `include_all_availability=true` (all active rows)."
           },
           "response": []
         },
@@ -403,7 +408,7 @@
             "method": "GET",
             "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
             "url": "{{baseUrl}}/storefront/products/sample-slug",
-            "description": "Fetch one storefront product by slug."
+            "description": "Product by slug. Active + in_stock only (404 if draft/archived/out_of_stock)."
           },
           "response": []
         },
@@ -413,7 +418,7 @@
             "method": "GET",
             "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
             "url": "{{baseUrl}}/storefront/products/id/00000000-0000-0000-0000-000000000000",
-            "description": "Fetch one storefront product by shop product id."
+            "description": "Product by shop_products.id. Active + in_stock only."
           },
           "response": []
         },
@@ -429,11 +434,32 @@
         },
         {
           "name": "GET /storefront/cart",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.summary && j.summary.subtotal_minor != null) {",
+                  "    pm.collectionVariables.set('cartSubtotalMinor', String(j.summary.subtotal_minor));",
+                  "  }",
+                  "  if (j.items && j.items.length) {",
+                  "    const first = j.items.find((it) => it.product_id) || j.items[0];",
+                  "    if (first.id) pm.collectionVariables.set('cartItemId', first.id);",
+                  "    if (first.product_id) pm.collectionVariables.set('productId', first.product_id);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
             "url": "{{baseUrl}}/storefront/cart",
-            "description": "Get cart contents for guest/customer scope."
+            "description": "Get cart with **live promotion pricing** (response only; DB snapshots unchanged).\n\n**Item fields (when promos apply):** `list_price_minor`, `final_price_minor`, `line_total_minor`, `promo_discount_minor`, `applied_promotion_ids`.\n\n**Summary:** `subtotal_minor` (payable after SKU/bundle, before coupon), `promotion_discount_minor`, `bundle_discount_minor`, `currency`.\n\nTest script sets `{{cartSubtotalMinor}}`, `{{cartItemId}}`, `{{productId}}` for coupon list + checkout."
           },
           "response": []
         },
@@ -447,7 +473,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"productId\": \"00000000-0000-0000-0000-000000000000\",\n  \"quantity\": 1\n}"
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1\n}"
             },
             "url": "{{baseUrl}}/storefront/cart/items",
             "description": "Add one item to cart."
@@ -466,8 +492,8 @@
               "mode": "raw",
               "raw": "{\n  \"quantity\": 2\n}"
             },
-            "url": "{{baseUrl}}/storefront/cart/items/00000000-0000-0000-0000-000000000000",
-            "description": "Update cart item quantity."
+            "url": "{{baseUrl}}/storefront/cart/items/{{cartItemId}}",
+            "description": "Update cart item quantity. Set `cartItemId` from GET cart response."
           },
           "response": []
         },
@@ -476,18 +502,197 @@
           "request": {
             "method": "DELETE",
             "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
-            "url": "{{baseUrl}}/storefront/cart/items/00000000-0000-0000-0000-000000000000",
+            "url": "{{baseUrl}}/storefront/cart/items/{{cartItemId}}",
             "description": "Remove one cart item."
           },
           "response": []
+        },
+        {
+          "name": "Promotions — local test flow",
+          "description": "Run top-to-bottom after OTP verify, `POST /storefront/address`, and `POST /storefront/cart/items`.\n\n1. GET cart → saves `cartSubtotalMinor`\n2. List coupons (use subtotal from step 1)\n3. Checkout with optional `couponCode`\n\nAmounts are **minor units** (INR paise). `percentBps` 1000 = 10% off.",
+          "item": [
+            {
+              "name": "1. GET cart (save subtotal)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  const j = pm.response.json();",
+                      "  if (j.summary && j.summary.subtotal_minor != null) {",
+                      "    pm.collectionVariables.set('cartSubtotalMinor', String(j.summary.subtotal_minor));",
+                      "    console.log('cartSubtotalMinor', j.summary.subtotal_minor);",
+                      "  }",
+                      "  if (j.items && j.items.length) {",
+                      "    const first = j.items.find((it) => it.product_id) || j.items[0];",
+                      "    if (first.id) pm.collectionVariables.set('cartItemId', first.id);",
+                      "    if (first.product_id) pm.collectionVariables.set('productId', first.product_id);",
+                      "  }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
+                "url": "{{baseUrl}}/storefront/cart",
+                "description": "Loads cart with live SKU/bundle pricing. Saves `{{cartSubtotalMinor}}` for coupon eligibility."
+              },
+              "response": []
+            },
+            {
+              "name": "2. GET coupons (all visible)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
+                "url": {
+                  "raw": "{{baseUrl}}/storefront/coupons?cartSubtotalMinor={{cartSubtotalMinor}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["storefront", "coupons"],
+                  "query": [
+                    {
+                      "key": "cartSubtotalMinor",
+                      "value": "{{cartSubtotalMinor}}",
+                      "description": "From GET cart summary.subtotal_minor (optional but recommended)"
+                    }
+                  ]
+                },
+                "description": "Lists coupon codes for the shop. First-order / new-customer ineligible codes are **omitted**. Below-min-cart codes stay visible with `eligibility.applicable: false` unless `onlyApplicable=true`."
+              },
+              "response": []
+            },
+            {
+              "name": "2b. GET coupons (onlyApplicable)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
+                "url": {
+                  "raw": "{{baseUrl}}/storefront/coupons?onlyApplicable=true&cartSubtotalMinor={{cartSubtotalMinor}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["storefront", "coupons"],
+                  "query": [
+                    { "key": "onlyApplicable", "value": "true" },
+                    { "key": "cartSubtotalMinor", "value": "{{cartSubtotalMinor}}" }
+                  ]
+                },
+                "description": "Same as list but drops coupons where `eligibility.applicable` is false (e.g. min subtotal not met)."
+              },
+              "response": []
+            },
+            {
+              "name": "2c. GET coupons (filter by code)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
+                "url": {
+                  "raw": "{{baseUrl}}/storefront/coupons?code={{couponCode}}&cartSubtotalMinor={{cartSubtotalMinor}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["storefront", "coupons"],
+                  "query": [
+                    { "key": "code", "value": "{{couponCode}}" },
+                    { "key": "cartSubtotalMinor", "value": "{{cartSubtotalMinor}}" }
+                  ]
+                },
+                "description": "Lookup one code (case-insensitive; stored uppercase)."
+              },
+              "response": []
+            },
+            {
+              "name": "3. POST checkout (no coupon)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const j = pm.response.json();",
+                      "  if (j.orderId) pm.collectionVariables.set('lastOrderId', j.orderId);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-shop-id", "value": "{{shopId}}" },
+                  { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Postman test — no coupon\"\n}"
+                },
+                "url": "{{baseUrl}}/storefront/checkout",
+                "description": "Checkout with automatic SKU/bundle promos only. Requires address + serviceable location + non-empty cart.\n\n**201:** `orderId`, `orderNumber`, `subtotal_minor`, `promotion_discount_minor`, `coupon_discount_minor` (0), `delivery_fee_minor`, `total_minor`, `coupon_code` (null)."
+              },
+              "response": []
+            },
+            {
+              "name": "3b. POST checkout (with couponCode)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "exec": [
+                      "pm.collectionVariables.set('idempotencyKey', 'checkout-coupon-' + Date.now());"
+                    ],
+                    "type": "text/javascript"
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const j = pm.response.json();",
+                      "  pm.test('coupon applied', function () {",
+                      "    pm.expect(j.coupon_code).to.eql(pm.collectionVariables.get('couponCode'));",
+                      "  });",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-shop-id", "value": "{{shopId}}" },
+                  { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Postman test — with coupon\",\n  \"couponCode\": \"{{couponCode}}\"\n}"
+                },
+                "url": "{{baseUrl}}/storefront/checkout",
+                "description": "**Apply coupon** (only endpoint). `couponCode` is uppercased server-side. One code per order.\n\n**Errors (400):** `EMPTY_CART_WITH_COUPON`, `COUPON_NOT_FOUND`, `COUPON_EXHAUSTED`, `MIN_SUBTOTAL_NOT_MET`, `FIRST_ORDER_ONLY_NOT_MET`, `NEW_CUSTOMER_ONLY_NOT_MET`, `COUPON_NO_CART_BENEFIT`, `PRODUCT_UNAVAILABLE`, `PRICE_CHANGED`, `ADDRESS_NOT_SERVICEABLE`.\n\nPrerequest generates a fresh `Idempotency-Key` per run."
+              },
+              "response": []
+            }
+          ]
         },
         {
           "name": "GET /storefront/coupons",
           "request": {
             "method": "GET",
             "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
-            "url": "{{baseUrl}}/storefront/coupons?onlyApplicable=true&cartSubtotalMinor=5000",
-            "description": "List coupons for the shop (Bearer `{{accessToken}}`). Query: optional `code`, `cartSubtotalMinor` (minor units, int), `onlyApplicable` (`true`/`1` = only rows with `eligibility.applicable`). Response includes `benefits` per coupon and `settings`."
+            "url": {
+              "raw": "{{baseUrl}}/storefront/coupons?cartSubtotalMinor={{cartSubtotalMinor}}&onlyApplicable=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["storefront", "coupons"],
+              "query": [
+                { "key": "cartSubtotalMinor", "value": "{{cartSubtotalMinor}}" },
+                { "key": "onlyApplicable", "value": "false" },
+                { "key": "code", "value": "{{couponCode}}", "disabled": true }
+              ]
+            },
+            "description": "List coupons (Bearer + shop membership). Query: `code`, `cartSubtotalMinor`, `onlyApplicable`. Response: `promotionsPaused`, `settings`, `coupons[]` with `benefits` and `eligibility`."
           },
           "response": []
         },
@@ -497,14 +702,33 @@
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-shop-id", "value": "{{shopId}}" }
+              { "key": "x-shop-id", "value": "{{shopId}}" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Leave at the door\",\n  \"couponCode\": \"{{couponCode}}\"\n}"
+            },
+            "url": "{{baseUrl}}/storefront/checkout",
+            "description": "Place order. Optional `couponCode`. Reprices from live DB; writes `promotion_redemptions` when coupon used. Clears cart on success.\n\nSet `couponCode` collection var empty string to omit coupon, or remove field from body."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /storefront/checkout (no coupon)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-shop-id", "value": "{{shopId}}" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}-no-coupon" }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"notes\": \"Leave at the door\"\n}"
             },
             "url": "{{baseUrl}}/storefront/checkout",
-            "description": "Customer checkout. Creates order, outbox `order.created`, clears cart."
+            "description": "Checkout without `couponCode` (auto promos only)."
           },
           "response": []
         },

@@ -73,7 +73,9 @@ export const storefrontProductsQuerySchema = z.object({
     z.enum(["shared", "private"]).optional()
   ),
   include_global_only: booleanOpt,
-  include_all_statuses: booleanOpt
+  include_all_statuses: booleanOpt,
+  /** When true, do not default availability to in_stock (list all active rows). */
+  include_all_availability: booleanOpt
 }).superRefine((data, ctx) => {
   if (
     Number.isInteger(data.min_price_minor) &&

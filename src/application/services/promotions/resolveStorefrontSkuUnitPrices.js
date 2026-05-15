@@ -64,13 +64,13 @@ export function computeStorefrontUnitPricing(listMinorStr, offerMinorStr, promoP
 }
 
 /**
- * @typedef {{ shop_product_id: string, promotion_id: string, promo_price_minor_per_unit: string | number, priority: number, overlap_mode: string | null, ends_at?: Date | string | null }} PromoOverlayRow
+ * @typedef {{ shop_product_id: string, promotion_id: string, promo_price_minor_per_unit: string | number, priority: number, overlap_mode: string | null, ends_at?: Date | string | null, created_at?: Date | string | null }} PromoOverlayRow
  */
 
 /**
  * When multiple campaigns price the same SKU, pick one overlay row.
  * Convention: priority ASC = higher campaign priority (lower SMALLINT wins).
- * Tie-break: lower promo price, then promotion_id lexical.
+ * Tie-break: newest campaign (created_at DESC), then promotion_id lexical.
  *
  * @param {PromoOverlayRow[]} candidates
  * @param {'priority' | 'best_for_customer'} mode
@@ -99,9 +99,9 @@ export function pickWinningPromoOverlay(candidates, mode) {
     const na = Number.isFinite(pa) ? pa : 0;
     const nb = Number.isFinite(pb) ? pb : 0;
     if (na !== nb) return na - nb;
-    const aPrice = parseMinor(a.promo_price_minor_per_unit) ?? 0;
-    const bPrice = parseMinor(b.promo_price_minor_per_unit) ?? 0;
-    if (aPrice !== bPrice) return aPrice - bPrice;
+    const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+    if (ta !== tb) return tb - ta;
     return String(a.promotion_id).localeCompare(String(b.promotion_id));
   })[0];
 }

@@ -87,6 +87,9 @@ export class OrderRepoPg extends OrderRepo {
       subtotalMinor,
       deliveryFeeMinor,
       totalMinor,
+      promotionDiscountTotalMinor,
+      couponCodeNormalized,
+      appliedPromotionIds,
       currency,
       notes,
       items,
@@ -94,12 +97,19 @@ export class OrderRepoPg extends OrderRepo {
     } = payload;
     await setTenantContext(client, shopId);
 
+    const appliedIdsJson =
+      Array.isArray(appliedPromotionIds) && appliedPromotionIds.length
+        ? JSON.stringify(appliedPromotionIds)
+        : null;
+
     const { rows: oRows } = await client.query(
       `INSERT INTO orders (
          shop_id, customer_id, customer_name, customer_phone, customer_address,
          order_number, status, payment_method,
-         subtotal_minor, delivery_fee_minor, total_minor, currency, notes
-       ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         subtotal_minor, delivery_fee_minor, total_minor,
+         promotion_discount_total_minor, coupon_code_normalized, applied_promotion_ids,
+         currency, notes
+       ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16)
        RETURNING id, placed_at`,
       [
         shopId,
@@ -113,6 +123,9 @@ export class OrderRepoPg extends OrderRepo {
         subtotalMinor,
         deliveryFeeMinor,
         totalMinor,
+        promotionDiscountTotalMinor ?? null,
+        couponCodeNormalized ?? null,
+        appliedIdsJson,
         currency,
         notes
       ]
@@ -120,11 +133,17 @@ export class OrderRepoPg extends OrderRepo {
     const order = oRows[0];
 
     for (const it of items) {
+      const linePromoIds =
+        Array.isArray(it.appliedPromotionIds) && it.appliedPromotionIds.length
+          ? JSON.stringify(it.appliedPromotionIds)
+          : null;
       await client.query(
         `INSERT INTO order_items (
            order_id, product_id, product_name_snapshot, unit_label_snapshot,
-           quantity, unit_price_minor_snapshot, line_total_minor, is_custom, custom_note
-         ) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9)`,
+           quantity, unit_price_minor_snapshot, line_total_minor,
+           list_price_minor, line_discount_minor, applied_promotion_ids,
+           is_custom, custom_note
+         ) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12)`,
         [
           order.id,
           it.productId,
@@ -133,6 +152,9 @@ export class OrderRepoPg extends OrderRepo {
           it.quantity,
           it.unitPriceMinor,
           it.lineTotalMinor,
+          it.listPriceMinor ?? it.unitPriceMinor,
+          it.lineDiscountMinor ?? 0,
+          linePromoIds,
           it.isCustom,
           it.customNote
         ]
@@ -396,7 +418,18 @@ export class OrderRepoPg extends OrderRepo {
   async getOrderSummaryForCheckoutReplay(client, shopId, orderId, customerIdText) {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
-      `SELECT id::text AS id, order_number, total_minor::text AS total_minor
+      `SELECT id::text AS id,
+              order_number,
+              subtotal_minor::text AS subtotal_minor,
+              delivery_fee_minor::text AS delivery_fee_minor,
+              total_minor::text AS total_minor,
+              promotion_discount_total_minor::text AS promotion_discount_total_minor,
+              coupon_code_normalized,
+              CASE
+                WHEN promotion_discount_total_minor IS NOT NULL AND coupon_code_normalized IS NOT NULL
+                THEN promotion_discount_total_minor::text
+                ELSE NULL
+              END AS coupon_discount_minor
          FROM orders
         WHERE id = $1::uuid AND shop_id = $2::uuid AND customer_id = $3
         LIMIT 1`,

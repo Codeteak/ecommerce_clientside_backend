@@ -4,6 +4,12 @@ This file builds SQL for storefront product listing with cursor and offset pagin
 
 import { SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL } from "../../../../application/services/catalog/catalogBaselineUnitSql.js";
 
+/** @param {'in_stock' | 'out_of_stock' | 'unknown' | null} availability */
+function availabilityPredicate(alias, availability) {
+  if (!availability) return "";
+  return `AND ${alias}.availability = '${availability}'`;
+}
+
 export function buildListProductsStorefrontQuery({
   shopId,
   categoryId,
@@ -19,6 +25,7 @@ export function buildListProductsStorefrontQuery({
   sortOrder,
   orderBySql
 }) {
+  const categoryAvailabilitySql = availabilityPredicate("sp2", availability);
   const values = [shopId, categoryId, brandId, qPattern, availability, minPriceMinor, maxPriceMinor, limit];
   let cursorClause = "";
   let offsetClause = "";
@@ -52,6 +59,7 @@ export function buildListProductsStorefrontQuery({
           JOIN global_products gp2 ON gp2.id = sp2.global_product_id
          WHERE sp2.shop_id = $1::uuid
            AND sp2.status = 'active'
+           ${categoryAvailabilitySql}
            AND gp2.global_category_id = $2::uuid
       ) AS has_direct
     ),
