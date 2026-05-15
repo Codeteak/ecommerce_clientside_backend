@@ -6,6 +6,11 @@ import {
 } from "../../../infra/auth/jwt.js";
 import { hashToken } from "../../../infra/security/tokenHash.js";
 
+/**
+ * Rotate refresh token: verify JWT, consume DB row, issue new access + refresh pair.
+ *
+ * @param {{ authRepo: import("../../ports/repositories/CustomerAuthRepo.js").CustomerAuthRepo }} deps
+ */
 export function createRotateCustomerRefreshToken({ authRepo }) {
   return async function rotateCustomerRefreshToken(client, { refreshToken, ip, userAgent }) {
     let payload;

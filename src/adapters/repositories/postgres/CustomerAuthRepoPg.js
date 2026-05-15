@@ -618,6 +618,37 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     client,
     { userId, customerId = null, shopId = null, subjectType = "customer", tokenHash, jti, expiresAtIso, issuedIp, userAgent }
   ) {
+    const { rows: colRows } = await client.query(
+      `SELECT column_name
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'auth_refresh_tokens'
+          AND column_name IN ('jti', 'jwt_id')`
+    );
+    const cols = new Set(colRows.map((r) => r.column_name));
+    const hasJwtId = cols.has("jwt_id");
+    const hasJti = cols.has("jti");
+
+    if (hasJwtId && !hasJti) {
+      await client.query(
+        `INSERT INTO auth_refresh_tokens (
+           user_id, customer_id, shop_id, subject_type, token_hash, jwt_id, expires_at, issued_ip, user_agent
+         ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::text, $7::timestamptz, $8, $9)`,
+        [userId, customerId, shopId, subjectType, tokenHash, String(jti), expiresAtIso, issuedIp, userAgent]
+      );
+      return;
+    }
+
+    if (hasJwtId && hasJti) {
+      await client.query(
+        `INSERT INTO auth_refresh_tokens (
+           user_id, customer_id, shop_id, subject_type, token_hash, jti, jwt_id, expires_at, issued_ip, user_agent
+         ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::uuid, $6::text, $7::timestamptz, $8, $9)`,
+        [userId, customerId, shopId, subjectType, tokenHash, jti, expiresAtIso, issuedIp, userAgent]
+      );
+      return;
+    }
+
     await client.query(
       `INSERT INTO auth_refresh_tokens (
          user_id, customer_id, shop_id, subject_type, token_hash, jti, expires_at, issued_ip, user_agent
