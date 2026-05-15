@@ -58,7 +58,12 @@ export const storefrontCouponsListQuerySchema = z.object({
   cartSubtotalMinor: z.preprocess(
     (v) => (v === undefined || v === "" ? undefined : Number(v)),
     z.number().finite().int().min(0).optional()
-  )
+  ),
+  onlyApplicable: z.preprocess((v) => {
+    if (v === undefined || v === "" || v === null) return false;
+    const s = String(Array.isArray(v) ? v[0] : v).toLowerCase();
+    return s === "true" || s === "1";
+  }, z.boolean())
 });
 
 export const storefrontCatalogCacheInvalidateBodySchema = z.object({

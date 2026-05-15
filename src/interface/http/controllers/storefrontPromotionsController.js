@@ -9,14 +9,15 @@ function listCouponsHandler(ctx) {
     try {
       const shopId = requireShopId(req.shopId);
       const { customerId } = req.customerAuth;
-      const { code, cartSubtotalMinor } = req.query;
+      const { code, cartSubtotalMinor, onlyApplicable } = req.query;
 
       const out = await withClient((client) =>
         ctx.listApplicableCoupons(client, {
           shopId,
           customerId,
           code: typeof code === "string" ? code : null,
-          cartSubtotalMinor: typeof cartSubtotalMinor === "number" ? cartSubtotalMinor : null
+          cartSubtotalMinor: typeof cartSubtotalMinor === "number" ? cartSubtotalMinor : null,
+          onlyApplicable: onlyApplicable === true
         })
       );
 

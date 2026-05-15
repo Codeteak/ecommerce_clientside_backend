@@ -49,6 +49,18 @@ export function mountStorefrontRoutes(r, deps) {
     invalidateShopCatalogCache
   } = deps;
 
+  /** Versioned coupon list (v1): benefits, eligibility, optional onlyApplicable filter. */
+  function mountCouponsListV1(prefix) {
+    r.get(
+      `${prefix}/coupons`,
+      requireCustomerJwt,
+      couponsListLimiter,
+      requireCustomerShopAccess,
+      validate({ query: storefrontCouponsListQuerySchema }),
+      storefrontPromotions.listCoupons
+    );
+  }
+
   function mountForPrefix(prefix) {
     r.post(
       `${prefix}/location/check`,
@@ -160,15 +172,6 @@ export function mountStorefrontRoutes(r, deps) {
       validate({ query: storefrontOrdersListQuerySchema }),
       storefrontOrders.list
     );
-    r.get(
-      `${prefix}/coupons`,
-      requireCustomerJwt,
-      couponsListLimiter,
-      requireCustomerShopAccess,
-      validate({ query: storefrontCouponsListQuerySchema }),
-      storefrontPromotions.listCoupons
-    );
-
     if (env.CATALOG_CACHE_INVALIDATE_TOKEN && typeof invalidateShopCatalogCache === "function") {
       r.post(
         `${prefix}/catalog/cache/invalidate`,
@@ -200,4 +203,6 @@ export function mountStorefrontRoutes(r, deps) {
 
   mountForPrefix("/storefront");
   mountForPrefix("/api/storefront");
+  mountCouponsListV1("/storefront/v1");
+  mountCouponsListV1("/api/storefront/v1");
 }

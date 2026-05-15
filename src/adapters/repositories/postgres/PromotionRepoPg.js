@@ -39,11 +39,27 @@ export class PromotionRepoPg extends PromotionRepo {
          c.max_redemptions_per_customer,
          p.name AS promotion_name,
          COALESCE(ru.total_redemptions, 0) AS total_redemptions,
-         COALESCE(ru.customer_redemptions, 0) AS customer_redemptions
+         COALESCE(ru.customer_redemptions, 0) AS customer_redemptions,
+         pub_rules.promotion_rules_public
        FROM promotion_coupons c
        JOIN promotions p
          ON p.id = c.promotion_id
         AND p.shop_id = c.shop_id
+       LEFT JOIN LATERAL (
+         SELECT json_agg(
+                  json_build_object(
+                    'kind', pr.rule_kind,
+                    'percentBps', pr.percent_bps,
+                    'amountMinor', pr.amount_minor,
+                    'minSubtotalMinor', pr.min_subtotal_minor
+                  )
+                  ORDER BY pr.created_at ASC
+                ) AS promotion_rules_public
+           FROM promotion_rules pr
+          WHERE pr.shop_id = c.shop_id
+            AND pr.promotion_id = c.promotion_id
+            AND pr.is_deleted = false
+       ) pub_rules ON true
        LEFT JOIN (
          SELECT pr.coupon_id,
                 count(*)::int AS total_redemptions,

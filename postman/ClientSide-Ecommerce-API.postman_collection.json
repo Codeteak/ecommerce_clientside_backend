@@ -482,6 +482,16 @@
           "response": []
         },
         {
+          "name": "GET /storefront/v1/coupons",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
+            "url": "{{baseUrl}}/storefront/v1/coupons?onlyApplicable=true&cartSubtotalMinor=5000",
+            "description": "Storefront coupons API v1 (Bearer `{{accessToken}}`). Query: optional `code`, `cartSubtotalMinor` (minor units, int), `onlyApplicable` (`true`/`1` = only applicable coupons). Response includes `benefits`, `eligibility`, and shop `settings`."
+          },
+          "response": []
+        },
+        {
           "name": "POST /storefront/checkout",
           "request": {
             "method": "POST",

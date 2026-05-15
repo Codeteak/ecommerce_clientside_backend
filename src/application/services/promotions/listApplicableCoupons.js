@@ -1,3 +1,6 @@
+import { buildCouponEligibility } from "./couponEligibility.js";
+import { mapPublicPromotionBenefits } from "./publicPromotionBenefits.js";
+
 /**
  * Purpose: List customer-visible coupons for the current shop context with
  * eligibility hints aligned to shop_promotion_settings and promotion_coupons.
@@ -18,9 +21,15 @@ export function createListApplicableCoupons({ promotionRepo, authRepo, orderRepo
 
   /**
    * @param {import("pg").PoolClient} client
-   * @param {{ shopId: string, customerId: string, code?: string | null, cartSubtotalMinor?: number | null }} input
+   * @param {{ shopId: string, customerId: string, code?: string | null, cartSubtotalMinor?: number | null, onlyApplicable?: boolean }} input
    */
-  return async function listApplicableCoupons(client, { shopId, customerId, code = null, cartSubtotalMinor = null }) {
+  return async function listApplicableCoupons(client, {
+    shopId,
+    customerId,
+    code = null,
+    cartSubtotalMinor = null,
+    onlyApplicable = false
+  }) {
     const normalizedCode = normalizeCouponCode(code);
     const rawSettings = await promotionRepo.getShopPromotionSettings(client, shopId);
     const settings = { ...defaultSettings, ...(rawSettings || {}) };
@@ -65,7 +74,14 @@ export function createListApplicableCoupons({ promotionRepo, authRepo, orderRepo
       normalizedCode
     );
 
-    const coupons = rows
+    const eligibilityCtx = {
+      deliveredCount,
+      customerCreatedAt,
+      newCustomerCutoff,
+      cartSubtotalMinor
+    };
+
+    let coupons = rows
       .filter((row) => {
         const totalLimit = row.max_redemptions_total;
         const perCustomerLimit = row.max_redemptions_per_customer;
@@ -78,24 +94,10 @@ export function createListApplicableCoupons({ promotionRepo, authRepo, orderRepo
         const firstOrderOnly = row.first_order_only === true;
         const newCustomerOnly = row.new_customer_only === true;
 
-        /** @type {string[]} */
-        const ineligibilityCodes = [];
-
-        if (firstOrderOnly && Number(deliveredCount) > 0) {
-          ineligibilityCodes.push("FIRST_ORDER_ONLY_NOT_MET");
-        }
-        if (newCustomerOnly && customerCreatedAt < newCustomerCutoff) {
-          ineligibilityCodes.push("NEW_CUSTOMER_ONLY_NOT_MET");
-        }
-        if (minSub != null && minSub >= 0) {
-          if (cartSubtotalMinor == null || Number.isNaN(Number(cartSubtotalMinor))) {
-            ineligibilityCodes.push("MIN_SUBTOTAL_NOT_MET");
-          } else if (Number(cartSubtotalMinor) < minSub) {
-            ineligibilityCodes.push("MIN_SUBTOTAL_NOT_MET");
-          }
-        }
-
-        const applicable = ineligibilityCodes.length === 0;
+        const eligibility = buildCouponEligibility(
+          { minSubtotalMinor: minSub, firstOrderOnly, newCustomerOnly },
+          eligibilityCtx
+        );
 
         return {
           id: row.id,
@@ -109,12 +111,14 @@ export function createListApplicableCoupons({ promotionRepo, authRepo, orderRepo
           newCustomerOnly,
           maxRedemptionsTotal: row.max_redemptions_total,
           maxRedemptionsPerCustomer: row.max_redemptions_per_customer,
-          eligibility: {
-            applicable,
-            ineligibilityCodes: applicable ? [] : ineligibilityCodes
-          }
+          benefits: mapPublicPromotionBenefits(row.promotion_rules_public),
+          eligibility
         };
       });
+
+    if (onlyApplicable) {
+      coupons = coupons.filter((c) => c.eligibility.applicable);
+    }
 
     return {
       promotionsPaused: false,
