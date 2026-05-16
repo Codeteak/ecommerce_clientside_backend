@@ -9,5 +9,8 @@ CREATE TABLE IF NOT EXISTS order_items (
   line_total_minor BIGINT NOT NULL,
   is_custom BOOLEAN NOT NULL DEFAULT false,
   custom_note TEXT,
-  is_deleted BOOLEAN NOT NULL DEFAULT false
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  list_price_minor BIGINT,
+  line_discount_minor BIGINT,
+  applied_promotion_ids JSONB
 );

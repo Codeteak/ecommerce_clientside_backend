@@ -29,8 +29,10 @@ export function mountStorefrontRoutes(r, deps) {
     storefrontProductSlugParamSchema,
     storefrontProductIdParamSchema,
     storefrontCategorySlugParamSchema,
+    storefrontCartGetQuerySchema,
     storefrontCartItemBodySchema,
     storefrontCartItemPatchSchema,
+    storefrontCartItemDeleteBodySchema,
     storefrontCheckoutBodySchema,
     storefrontProfilePostSchema,
     storefrontAddressPostSchema,
@@ -84,7 +86,12 @@ export function mountStorefrontRoutes(r, deps) {
     );
 
     r.post(`${prefix}/cart`, requireCustomerJwt, storefrontCart.getOrCreate);
-    r.get(`${prefix}/cart`, requireCustomerJwt, storefrontCart.get);
+    r.get(
+      `${prefix}/cart`,
+      requireCustomerJwt,
+      validate({ query: storefrontCartGetQuerySchema }),
+      storefrontCart.get
+    );
     r.post(
       `${prefix}/cart/items`,
       requireCustomerJwt,
@@ -103,7 +110,7 @@ export function mountStorefrontRoutes(r, deps) {
       `${prefix}/cart/items/:itemId`,
       requireCustomerJwt,
       cartMutateLimiter,
-      validate({ params: cartItemIdParamSchema }),
+      validate({ params: cartItemIdParamSchema, body: storefrontCartItemDeleteBodySchema }),
       storefrontCart.deleteItem
     );
 

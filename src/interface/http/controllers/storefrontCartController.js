@@ -24,7 +24,10 @@ function getHandler(ctx) {
     try {
       const shopId = requireShopId(req.shopId);
       const scope = { customerId: req.customerAuth.customerId };
-      const out = await withClient((c) => ctx.storefrontCart.getCartContents(c, shopId, scope));
+      const couponCode = req.query?.couponCode;
+      const out = await withClient((c) =>
+        ctx.storefrontCart.getCartContents(c, shopId, scope, { couponCode })
+      );
       res.json(out);
     } catch (err) {
       next(err);
@@ -37,8 +40,8 @@ function addItemHandler(ctx) {
     try {
       const shopId = requireShopId(req.shopId);
       const scope = { customerId: req.customerAuth.customerId };
-      const row = await withClient((c) => ctx.storefrontCart.addItem(c, shopId, scope, req.body));
-      res.status(201).json(row);
+      const out = await withClient((c) => ctx.storefrontCart.addItem(c, shopId, scope, req.body));
+      res.status(201).json(out);
     } catch (err) {
       next(err);
     }
@@ -50,10 +53,10 @@ function patchItemHandler(ctx) {
     try {
       const shopId = requireShopId(req.shopId);
       const scope = { customerId: req.customerAuth.customerId };
-      const row = await withClient((c) =>
-        ctx.storefrontCart.updateItemQuantity(c, shopId, scope, req.params.itemId, req.body.quantity)
+      const out = await withClient((c) =>
+        ctx.storefrontCart.updateItemQuantity(c, shopId, scope, req.params.itemId, req.body)
       );
-      res.json(row);
+      res.json(out);
     } catch (err) {
       next(err);
     }
@@ -65,8 +68,10 @@ function deleteItemHandler(ctx) {
     try {
       const shopId = requireShopId(req.shopId);
       const scope = { customerId: req.customerAuth.customerId };
-      await withClient((c) => ctx.storefrontCart.removeItem(c, shopId, scope, req.params.itemId));
-      res.status(204).send();
+      const out = await withClient((c) =>
+        ctx.storefrontCart.removeItem(c, shopId, scope, req.params.itemId, req.body ?? {})
+      );
+      res.json(out);
     } catch (err) {
       next(err);
     }

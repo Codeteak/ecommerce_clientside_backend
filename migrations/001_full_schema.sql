@@ -371,6 +371,9 @@ CREATE TABLE IF NOT EXISTS orders (
   out_for_delivery_at TIMESTAMPTZ,
   delivered_at TIMESTAMPTZ,
   rejected_at TIMESTAMPTZ,
+  promotion_discount_total_minor BIGINT,
+  applied_promotion_ids JSONB,
+  coupon_code_normalized TEXT,
   UNIQUE (shop_id, order_number)
 );
 
@@ -385,8 +388,25 @@ CREATE TABLE IF NOT EXISTS order_items (
   line_total_minor BIGINT NOT NULL,
   is_custom BOOLEAN NOT NULL DEFAULT false,
   custom_note TEXT,
-  is_deleted BOOLEAN NOT NULL DEFAULT false
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  list_price_minor BIGINT,
+  line_discount_minor BIGINT,
+  applied_promotion_ids JSONB
 );
+
+CREATE TABLE IF NOT EXISTS checkout_idempotency (
+  shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  customer_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (shop_id, customer_id, idempotency_key),
+  CONSTRAINT checkout_idempotency_key_len_chk
+    CHECK (char_length(idempotency_key) >= 8 AND char_length(idempotency_key) <= 128)
+);
+
+CREATE INDEX IF NOT EXISTS idx_checkout_idempotency_order_id
+  ON checkout_idempotency (order_id);
 
 CREATE TABLE IF NOT EXISTS outbox_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -395,8 +415,16 @@ CREATE TABLE IF NOT EXISTS outbox_messages (
   event_type TEXT NOT NULL,
   payload_json JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  published_at TIMESTAMPTZ
+  published_at TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'pending',
+  retry_count INT NOT NULL DEFAULT 0,
+  processed_at TIMESTAMPTZ,
+  CONSTRAINT outbox_messages_status_chk CHECK (status IN ('pending', 'processing', 'done', 'failed'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_outbox_messages_status_created
+  ON outbox_messages (status, created_at)
+  WHERE status IN ('pending', 'processing');
 
 CREATE TABLE IF NOT EXISTS media_assets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -845,6 +873,7 @@ ALTER TABLE carts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cart_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE checkout_idempotency ENABLE ROW LEVEL SECURITY;
 ALTER TABLE entity_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE global_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE global_brands ENABLE ROW LEVEL SECURITY;
@@ -950,6 +979,11 @@ WITH CHECK (
   )
 );
 
+DROP POLICY IF EXISTS checkout_idempotency_tenant_isolation ON checkout_idempotency;
+CREATE POLICY checkout_idempotency_tenant_isolation ON checkout_idempotency
+USING (shop_id = app.current_shop_uuid())
+WITH CHECK (shop_id = app.current_shop_uuid());
+
 DROP POLICY IF EXISTS entity_images_tenant_isolation ON entity_images;
 CREATE POLICY entity_images_tenant_isolation ON entity_images
 USING (shop_id = app.current_shop_uuid())
@@ -960,6 +994,7 @@ ALTER TABLE carts FORCE ROW LEVEL SECURITY;
 ALTER TABLE cart_items FORCE ROW LEVEL SECURITY;
 ALTER TABLE orders FORCE ROW LEVEL SECURITY;
 ALTER TABLE order_items FORCE ROW LEVEL SECURITY;
+ALTER TABLE checkout_idempotency FORCE ROW LEVEL SECURITY;
 ALTER TABLE entity_images FORCE ROW LEVEL SECURITY;
 ALTER TABLE global_categories FORCE ROW LEVEL SECURITY;
 ALTER TABLE global_brands FORCE ROW LEVEL SECURITY;
@@ -993,7 +1028,15 @@ AS $$
   SELECT s.user_id, s.shop_id, s.role, u.email, u.phone, u.password_hash, u.staff_login_code
   FROM shop_staff s
   JOIN users u ON u.id = s.user_id
+  JOIN shops sh ON sh.id = s.shop_id
+    AND sh.is_active = true
+    AND sh.is_blocked = false
+    AND sh.is_deleted = false
+    AND sh.status = 'active'
   WHERE s.is_active = true
+    AND s.is_blocked = false
+    AND s.is_deleted = false
+    AND s.status = 'active'
     AND u.is_active = true
     AND u.staff_login_code = p_code
     AND s.role <> 'picker';
@@ -1773,6 +1816,20 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code_normalized TEXT;
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS list_price_minor BIGINT;
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS line_discount_minor BIGINT;
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS applied_promotion_ids JSONB;
+
+COMMENT ON COLUMN orders.promotion_discount_total_minor IS
+  'Sum of all promotion- and coupon-driven discounts for the order in minor units.';
+COMMENT ON COLUMN orders.applied_promotion_ids IS
+  'Promotion UUIDs that contributed to the order-level discount (checkout snapshot).';
+COMMENT ON COLUMN orders.coupon_code_normalized IS
+  'Primary coupon code applied on the order (matches promotion_coupons.code_normalized).';
+
+COMMENT ON COLUMN order_items.list_price_minor IS
+  'Unit or line list price before promotions in minor units.';
+COMMENT ON COLUMN order_items.line_discount_minor IS
+  'Total discount applied to this line in minor units.';
+COMMENT ON COLUMN order_items.applied_promotion_ids IS
+  'Promotion IDs that affected this line (checkout snapshot).';
 
 ALTER TABLE shop_promotion_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE promotions ENABLE ROW LEVEL SECURITY;

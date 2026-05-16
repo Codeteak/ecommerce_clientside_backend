@@ -39,6 +39,14 @@ export class CartRepo {
     throw new Error("Not implemented");
   }
 
+  async updateCartItemSnapshot(_client, _shopId, _cartItemId, _snapshot) {
+    void _client;
+    void _shopId;
+    void _cartItemId;
+    void _snapshot;
+    throw new Error("Not implemented");
+  }
+
   async deleteCartItem(_client, _shopId, _cartItemId) {
     void _client;
     void _shopId;

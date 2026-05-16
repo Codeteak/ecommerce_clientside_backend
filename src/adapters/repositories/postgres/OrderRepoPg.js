@@ -2,6 +2,9 @@ import { OrderRepo } from "../../../application/ports/repositories/OrderRepo.js"
 import { setTenantContext } from "../../../infra/db/tenantContext.js";
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
 
+/** Record separator for checkout idempotency advisory-lock keys (U+001E, not NUL). */
+const CHECKOUT_IDEM_LOCK_SEP = "\u001e";
+
 /**
  * Purpose: This file is the PostgreSQL implementation of order data access.
  * It stores new orders, inserts order items, reads order history and queue
@@ -64,6 +67,9 @@ export class OrderRepoPg extends OrderRepo {
       quantity: row.quantity,
       unit_price_minor_snapshot: row.unit_price_minor_snapshot,
       line_total_minor: row.line_total_minor,
+      list_price_minor: row.list_price_minor ?? null,
+      line_discount_minor: row.line_discount_minor ?? null,
+      applied_promotion_ids: row.applied_promotion_ids ?? null,
       is_custom: row.is_custom,
       custom_note: row.custom_note,
       image,
@@ -175,7 +181,9 @@ export class OrderRepoPg extends OrderRepo {
     const raw = opts?.limit ?? 50;
     const limit = Math.min(Math.max(Number(raw) || 50, 1), 100);
     const { rows } = await client.query(
-      `SELECT id, order_number, status, total_minor, currency, placed_at, picker_id, picker_name
+      `SELECT id, order_number, status, subtotal_minor, delivery_fee_minor, total_minor, currency,
+              promotion_discount_total_minor, coupon_code_normalized, applied_promotion_ids,
+              placed_at, picker_id, picker_name
          FROM orders
         WHERE shop_id = $1::uuid AND customer_id = $2
         ORDER BY placed_at DESC
@@ -188,6 +196,7 @@ export class OrderRepoPg extends OrderRepo {
     const { rows: itemRows } = await client.query(
       `SELECT oi.order_id, oi.id, oi.product_id, oi.product_name_snapshot, oi.unit_label_snapshot,
               oi.quantity::text AS quantity, oi.unit_price_minor_snapshot, oi.line_total_minor,
+              oi.list_price_minor, oi.line_discount_minor, oi.applied_promotion_ids,
               oi.is_custom, oi.custom_note,
               sp.id AS shop_product_id,
               gp.slug AS product_slug,
@@ -272,6 +281,7 @@ export class OrderRepoPg extends OrderRepo {
     const { rows: o } = await client.query(
       `SELECT id, shop_id, customer_id, order_number, status, payment_method,
               subtotal_minor, delivery_fee_minor, total_minor, currency, notes,
+              promotion_discount_total_minor, coupon_code_normalized, applied_promotion_ids,
               picker_id, picker_name,
               placed_at, accepted_at, out_for_delivery_at, delivered_at, rejected_at
          FROM orders
@@ -284,6 +294,7 @@ export class OrderRepoPg extends OrderRepo {
     const { rows: items } = await client.query(
       `SELECT oi.id, oi.product_id, oi.product_name_snapshot, oi.unit_label_snapshot,
               quantity::text AS quantity, unit_price_minor_snapshot, line_total_minor,
+              oi.list_price_minor, oi.line_discount_minor, oi.applied_promotion_ids,
               is_custom, custom_note,
               sp.id AS shop_product_id,
               gp.slug AS product_slug,
@@ -387,11 +398,11 @@ export class OrderRepoPg extends OrderRepo {
 
   async acquireCheckoutIdempotencyLock(client, shopId, customerIdText, idempotencyKey) {
     await setTenantContext(client, shopId);
-    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1::text), hashtext($2::text || chr(0) || $3::text))`, [
-      shopId,
-      customerIdText,
-      idempotencyKey
-    ]);
+    // Separator must be a bind param: Yugabyte rejects E'\\x1e' escape literals ("null character not permitted").
+    await client.query(
+      `SELECT pg_advisory_xact_lock(hashtext($1::text), hashtext($2::text || $4::text || $3::text))`,
+      [shopId, customerIdText, idempotencyKey, CHECKOUT_IDEM_LOCK_SEP]
+    );
   }
 
   async findCheckoutIdempotencyOrderId(client, shopId, customerIdText, idempotencyKey) {
@@ -418,20 +429,25 @@ export class OrderRepoPg extends OrderRepo {
   async getOrderSummaryForCheckoutReplay(client, shopId, orderId, customerIdText) {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
-      `SELECT id::text AS id,
-              order_number,
-              subtotal_minor::text AS subtotal_minor,
-              delivery_fee_minor::text AS delivery_fee_minor,
-              total_minor::text AS total_minor,
-              promotion_discount_total_minor::text AS promotion_discount_total_minor,
-              coupon_code_normalized,
-              CASE
-                WHEN promotion_discount_total_minor IS NOT NULL AND coupon_code_normalized IS NOT NULL
-                THEN promotion_discount_total_minor::text
-                ELSE NULL
-              END AS coupon_discount_minor
-         FROM orders
-        WHERE id = $1::uuid AND shop_id = $2::uuid AND customer_id = $3
+      `SELECT o.id::text AS id,
+              o.order_number,
+              o.subtotal_minor::text AS subtotal_minor,
+              o.delivery_fee_minor::text AS delivery_fee_minor,
+              o.total_minor::text AS total_minor,
+              o.promotion_discount_total_minor::text AS promotion_discount_total_minor,
+              o.coupon_code_normalized,
+              COALESCE(
+                (
+                  SELECT SUM(pr.discount_minor)::text
+                    FROM promotion_redemptions pr
+                   WHERE pr.order_id = o.id
+                     AND pr.shop_id = o.shop_id
+                     AND pr.coupon_id IS NOT NULL
+                ),
+                '0'
+              ) AS coupon_discount_minor
+         FROM orders o
+        WHERE o.id = $1::uuid AND o.shop_id = $2::uuid AND o.customer_id = $3
         LIMIT 1`,
       [orderId, shopId, customerIdText]
     );

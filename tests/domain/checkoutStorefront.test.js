@@ -35,7 +35,7 @@ function deps() {
           offer_price_minor_per_unit: null,
           global_category_id: null
         }
-      ])
+      ]),
     },
     orderRepo: {
       insertOrderWithItemsAndOutbox: vi.fn().mockResolvedValue({ id: "order-1" }),
@@ -286,6 +286,23 @@ describe("checkoutStorefront validations", () => {
     ).rejects.toMatchObject({ code: "INVALID_IDEMPOTENCY_KEY" });
   });
 
+  it("rejects idempotency keys with control characters", async () => {
+    const d = deps();
+    const run = createCheckoutStorefront(d);
+    await expect(
+      run(
+        {},
+        {
+          shopId: "00000000-0000-4000-8000-000000000001",
+          customerId: "cust-1",
+          userId: "user-1",
+          idempotencyKey: "checkout\u0000badkey"
+        }
+      )
+    ).rejects.toMatchObject({ code: "INVALID_IDEMPOTENCY_KEY" });
+    expect(d.orderRepo.acquireCheckoutIdempotencyLock).not.toHaveBeenCalled();
+  });
+
   it("emits standardized order.placed payload after successful checkout", async () => {
     const d = deps();
     const emitOrderPlaced = vi.fn();
@@ -305,6 +322,70 @@ describe("checkoutStorefront validations", () => {
         shopId: "00000000-0000-4000-8000-000000000001",
         customerId: "cust-1",
         totalMinor: 120
+      })
+    );
+  });
+
+  it("persists bundle display quantity and promotion ids on order lines", async () => {
+    const cartItemId = "cart-item-1";
+    const productId = "11111111-1111-4111-8111-111111111111";
+    const d = deps();
+    d.cartRepo.validateCartForCheckoutCommit = vi.fn().mockResolvedValue([
+      {
+        id: cartItemId,
+        product_id: productId,
+        title_snapshot: "Banana",
+        unit_label: "kg",
+        quantity: "2",
+        unit_price_minor: 5000,
+        is_custom: false,
+        custom_note: null
+      }
+    ]);
+    d.priceStorefrontLines = vi.fn().mockResolvedValue({
+      subtotalMinor: 9000,
+      promotionDiscountTotalMinor: 4500,
+      couponDiscountMinor: 0,
+      appliedPromotionIds: ["promo-bogo"],
+      lines: [
+        {
+          cartItemId,
+          productId,
+          quantity: 2,
+          paid_quantity: 2,
+          free_quantity: 1,
+          display_quantity: 3,
+          list_price_minor: "5000",
+          total_price_minor: "5000",
+          final_price_minor: "4500",
+          line_total_minor: "9000",
+          applied_promotion_ids: ["promo-bogo"]
+        }
+      ]
+    });
+    const run = createCheckoutStorefront(d);
+    await run(
+      {},
+      {
+        shopId: "00000000-0000-4000-8000-000000000001",
+        customerId: "cust-1",
+        userId: "user-1"
+      }
+    );
+    expect(d.orderRepo.insertOrderWithItemsAndOutbox).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({
+            quantity: 3,
+            paidQuantity: 2,
+            freeQuantity: 1,
+            appliedPromotionIds: ["promo-bogo"],
+            lineTotalMinor: 9000
+          })
+        ],
+        appliedPromotionIds: ["promo-bogo"],
+        promotionDiscountTotalMinor: 4500
       })
     );
   });

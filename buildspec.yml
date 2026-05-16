@@ -44,6 +44,9 @@ phases:
       - docker version
       - docker buildx ls
       - echo "Building and pushing ARM64 image..."
+      - . scripts/cicd/codebuild-env.sh
+      - test -n "${ECR_URI}" && test -n "${IMAGE_TAG}"
+      - test -f "${CODEBUILD_SRC_DIR}/Dockerfile"
       - bash scripts/cicd/docker-build-push.sh
       - |
         echo "Updating latest tag (best effort)..."

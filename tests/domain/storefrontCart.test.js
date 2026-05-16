@@ -1,213 +1,255 @@
 import { describe, it, expect, vi } from "vitest";
 import { ValidationError } from "../../src/domain/errors/ValidationError.js";
+import { AppError } from "../../src/domain/errors/AppError.js";
 import { createStorefrontCart } from "../../src/application/services/storefront/storefrontCart.js";
 
-describe("storefront cart addItem merge behavior", () => {
+const shopId = "00000000-0000-4000-8000-000000000001";
+const cartId = "11111111-1111-4111-8111-111111111111";
+const productId = "22222222-2222-4222-8222-222222222222";
+const cartItemId = "33333333-3333-4333-8333-333333333333";
+
+function productSnapshot(overrides = {}) {
+  return {
+    id: productId,
+    name: "Apple",
+    base_unit: "kg",
+    price_minor_per_unit: 100,
+    status: "active",
+    availability: "in_stock",
+    ...overrides
+  };
+}
+
+function cartLine(overrides = {}) {
+  return {
+    id: cartItemId,
+    product_id: productId,
+    title_snapshot: "Apple",
+    unit_label: "kg",
+    quantity: "2",
+    unit_price_minor: 100,
+    list_price_minor_per_unit: "100",
+    offer_price_minor_per_unit: "90",
+    is_custom: false,
+    ...overrides
+  };
+}
+
+function pricedResult(cartItemIdOverride = cartItemId) {
+  return {
+    subtotalMinor: 180,
+    subtotalBeforeCouponMinor: 200,
+    promotionDiscountTotalMinor: 20,
+    linePromoDiscountMinor: 10,
+    bundleDiscountMinor: 10,
+    couponDiscountMinor: 0,
+    appliedPromotionIds: ["promo-1"],
+    promotionsPaused: false,
+    lines: [
+      {
+        cartItemId: cartItemIdOverride,
+        paid_quantity: 2,
+        free_quantity: 0,
+        display_quantity: 2,
+        list_price_minor: "100",
+        final_price_minor: "90",
+        line_total_minor: "180",
+        offer_discount_minor: "0",
+        promo_discount_minor: "10",
+        total_discount_minor: "20",
+        applied_promotion_ids: ["promo-1"]
+      }
+    ],
+    coupon: null
+  };
+}
+
+function deps(overrides = {}) {
+  const baseCartRepo = {
+    findCartByShopAndCustomerId: vi.fn().mockResolvedValue({ id: cartId }),
+    insertCart: vi.fn(),
+    listCartItems: vi.fn().mockResolvedValue([cartLine()]),
+    getProductSnapshotForCart: vi.fn().mockResolvedValue(productSnapshot()),
+    findMatchingCartItem: vi.fn().mockResolvedValue(null),
+    findCartItemWithCart: vi.fn().mockResolvedValue({
+      id: cartItemId,
+      cart_id: cartId,
+      product_id: productId,
+      is_custom: false,
+      quantity: "2"
+    }),
+    updateCartItemSnapshot: vi.fn().mockResolvedValue(cartLine()),
+    updateCartItemQuantity: vi.fn().mockResolvedValue(cartLine()),
+    insertCartItem: vi.fn().mockResolvedValue(cartLine()),
+    deleteCartItem: vi.fn().mockResolvedValue(undefined)
+  };
+
+  return {
+    cartRepo: { ...baseCartRepo, ...(overrides.cartRepo ?? {}) },
+    ensureShopForCatalog: overrides.ensureShopForCatalog ?? vi.fn().mockResolvedValue(undefined),
+    priceStorefrontLines: overrides.priceStorefrontLines ?? vi.fn().mockResolvedValue(pricedResult()),
+    listApplicableCoupons:
+      overrides.listApplicableCoupons ??
+      vi.fn().mockResolvedValue({
+        promotionsPaused: false,
+        settings: {},
+        coupons: [
+          {
+            code: "SAVE10",
+            eligibility: { applicable: true, ineligibilityCodes: [] }
+          }
+        ]
+      })
+  };
+}
+
+describe("storefront cart", () => {
   it("increments quantity when same product is added again", async () => {
-    const cartRepo = {
-      findCartByShopAndCustomerId: vi.fn().mockResolvedValue({
-        id: "11111111-1111-4111-8111-111111111111"
-      }),
-      insertCart: vi.fn(),
-      listCartItems: vi.fn(),
-      getProductSnapshotForCart: vi.fn().mockResolvedValue({
-        id: "22222222-2222-4222-8222-222222222222",
-        name: "Apple",
-        base_unit: "kg",
-        price_minor_per_unit: 120
-      }),
-      findMatchingCartItem: vi.fn().mockResolvedValue({
-        id: "33333333-3333-4333-8333-333333333333",
-        quantity: "2"
-      }),
-      updateCartItemQuantity: vi.fn().mockResolvedValue({
-        id: "33333333-3333-4333-8333-333333333333",
-        quantity: "5"
-      }),
-      insertCartItem: vi.fn()
-    };
-
-    const service = createStorefrontCart({
-      cartRepo,
-      ensureShopForCatalog: vi.fn().mockResolvedValue(undefined)
-    });
-
-    const out = await service.addItem({}, "00000000-0000-4000-8000-000000000001", { customerId: "cust-1" }, {
-      productId: "22222222-2222-4222-8222-222222222222",
+    const d = deps();
+    d.cartRepo.findMatchingCartItem.mockResolvedValue({ id: cartItemId, quantity: "2" });
+    d.cartRepo.updateCartItemSnapshot.mockResolvedValue(cartLine({ quantity: "5" }));
+    const service = createStorefrontCart(d);
+    const out = await service.addItem({}, shopId, { customerId: "cust-1" }, {
+      productId,
       quantity: 3
     });
 
-    expect(cartRepo.findMatchingCartItem).toHaveBeenCalled();
-    expect(cartRepo.updateCartItemQuantity).toHaveBeenCalledWith(
-      {},
-      "00000000-0000-4000-8000-000000000001",
-      "33333333-3333-4333-8333-333333333333",
-      5
-    );
-    expect(cartRepo.insertCartItem).not.toHaveBeenCalled();
-    expect(out.quantity).toBe("5");
+    expect(d.cartRepo.updateCartItemSnapshot).toHaveBeenCalled();
+    expect(out.cart_id).toBe(cartId);
+    expect(out.promotions).toBeDefined();
+    expect(out.summary.subtotal_minor).toBe(180);
   });
 
-  it("returns total and offer totals in cart summary", async () => {
-    const cartRepo = {
-      findCartByShopAndCustomerId: vi.fn().mockResolvedValue({
-        id: "11111111-1111-4111-8111-111111111111"
-      }),
-      insertCart: vi.fn(),
-      listCartItems: vi.fn().mockResolvedValue([
-        {
-          id: "a",
-          product_slug: "apple",
-          quantity: "2",
-          unit_price_minor: 100,
-          offer_price_minor_per_unit: "80"
-        },
-        {
-          id: "b",
-          product_slug: "banana",
-          quantity: "1",
-          unit_price_minor: 50,
-          offer_price_minor_per_unit: null
-        }
-      ])
-    };
+  it("returns promotion and coupon blocks on GET cart", async () => {
+    const d = deps();
+    const service = createStorefrontCart(d);
+    const out = await service.getCartContents({}, shopId, { customerId: "cust-1" }, { couponCode: "SAVE10" });
 
-    const service = createStorefrontCart({
-      cartRepo,
-      ensureShopForCatalog: vi.fn().mockResolvedValue(undefined)
-    });
-
-    const out = await service.getCartContents({}, "00000000-0000-4000-8000-000000000001", {
-      customerId: "cust-1"
-    });
-
-    expect(out.summary).toEqual({
-      total_price_minor: 250,
-      total_offer_price_minor: 210,
-      total_discount_minor: 40,
-      currency: "INR"
-    });
-    expect(out.items.map((it) => it.product_slug)).toEqual(["apple", "banana"]);
+    expect(out.promotions.coupon.code).toBe("SAVE10");
+    expect(out.promotions.suggested_coupons).toHaveLength(1);
+    expect(out.summary.coupon_discount_minor).toBe(0);
   });
 
-  it("passes through item image payload from cart repository", async () => {
-    const cartRepo = {
-      findCartByShopAndCustomerId: vi.fn().mockResolvedValue({
-        id: "11111111-1111-4111-8111-111111111111"
-      }),
-      insertCart: vi.fn(),
-      listCartItems: vi.fn().mockResolvedValue([
-        {
-          id: "a",
-          product_slug: "apple",
-          quantity: "1",
-          unit_price_minor: 100,
-          offer_price_minor_per_unit: "90",
-          image: { url: "  https://cdn.example.com/global/apple.jpg  " }
-        }
-      ])
-    };
-    const service = createStorefrontCart({
-      cartRepo,
-      ensureShopForCatalog: vi.fn().mockResolvedValue(undefined)
+  it("PATCH with delta -1 at quantity 1 returns MINIMUM_QUANTITY", async () => {
+    const d = deps();
+    d.cartRepo.findCartItemWithCart.mockResolvedValue({
+      id: cartItemId,
+      cart_id: cartId,
+      product_id: productId,
+      is_custom: false,
+      quantity: "1"
     });
-    const out = await service.getCartContents({}, "00000000-0000-4000-8000-000000000001", {
-      customerId: "cust-1"
-    });
-    expect(out.items[0].image).toEqual({ url: "  https://cdn.example.com/global/apple.jpg  " });
+    const service = createStorefrontCart(d);
+    await expect(
+      service.updateItemQuantity({}, shopId, { customerId: "cust-1" }, cartItemId, { delta: -1 })
+    ).rejects.toMatchObject({ code: "MINIMUM_QUANTITY" });
   });
 
-  it("adds separate bundle-reward line instead of discounting paid quantity", async () => {
-    const cartItemId = "33333333-3333-4333-8333-333333333333";
-    const productId = "22222222-2222-4222-8222-222222222222";
-    const cartRepo = {
-      findCartByShopAndCustomerId: vi.fn().mockResolvedValue({
-        id: "11111111-1111-4111-8111-111111111111"
-      }),
-      insertCart: vi.fn(),
-      listCartItems: vi.fn().mockResolvedValue([
-        {
-          id: cartItemId,
-          product_id: productId,
-          title_snapshot: "Banana",
-          quantity: "2",
-          unit_price_minor: 5000,
-          offer_price_minor_per_unit: "4500",
-          is_custom: false
-        }
-      ])
-    };
-    const priceStorefrontLines = vi.fn().mockResolvedValue({
-      subtotalMinor: 9000,
-      promotionDiscountTotalMinor: 4500,
-      linePromoDiscountMinor: 0,
+  it("PATCH with delta returns full cart view", async () => {
+    const d = deps();
+    const service = createStorefrontCart(d);
+    const out = await service.updateItemQuantity({}, shopId, { customerId: "cust-1" }, cartItemId, {
+      delta: 1,
+      couponCode: "SAVE10"
+    });
+
+    expect(d.priceStorefrontLines).toHaveBeenCalled();
+    expect(out.items.length).toBeGreaterThan(0);
+    expect(out.promotions).toBeDefined();
+  });
+
+  it("GET cart removes unavailable product lines and returns empty cart", async () => {
+    const d = deps();
+    d.cartRepo.getProductSnapshotForCart.mockResolvedValue(null);
+    d.cartRepo.listCartItems
+      .mockResolvedValueOnce([cartLine()])
+      .mockResolvedValue([]);
+    d.priceStorefrontLines.mockResolvedValue(null);
+    const service = createStorefrontCart(d);
+    const out = await service.getCartContents({}, shopId, { customerId: "cust-1" });
+
+    expect(d.cartRepo.deleteCartItem).toHaveBeenCalledWith({}, shopId, cartItemId);
+    expect(out.items).toEqual([]);
+    expect(out.summary.subtotal_minor).toBe(0);
+    expect(out.promotions.coupon.status).toBe("none");
+  });
+
+  it("rejects when product is unavailable", async () => {
+    const d = deps();
+    d.cartRepo.getProductSnapshotForCart.mockResolvedValue(null);
+    const service = createStorefrontCart(d);
+    await expect(
+      service.updateItemQuantity({}, shopId, { customerId: "cust-1" }, cartItemId, { delta: 1 })
+    ).rejects.toMatchObject({ code: "PRODUCT_UNAVAILABLE" });
+  });
+
+  it("returns coupon not_applicable when pricing rejects coupon", async () => {
+    const d = deps();
+    d.priceStorefrontLines
+      .mockRejectedValueOnce(new AppError("Min subtotal", { statusCode: 400, code: "MIN_SUBTOTAL_NOT_MET" }))
+      .mockResolvedValueOnce(pricedResult());
+    const service = createStorefrontCart(d);
+    const out = await service.getCartContents({}, shopId, { customerId: "cust-1" }, {
+      couponCode: "SAVE10"
+    });
+
+    expect(out.promotions.coupon.status).toBe("not_applicable");
+    expect(out.promotions.coupon.reason_code).toBe("MIN_SUBTOTAL_NOT_MET");
+  });
+
+  it("DELETE returns empty cart with coupon none", async () => {
+    const d = deps();
+    d.cartRepo.listCartItems.mockResolvedValueOnce([cartLine()]).mockResolvedValue([]);
+    d.cartRepo.findCartItemWithCart.mockResolvedValue({
+      id: cartItemId,
+      cart_id: cartId,
+      product_id: productId,
+      is_custom: false,
+      quantity: "2"
+    });
+    d.priceStorefrontLines.mockResolvedValue(null);
+    const service = createStorefrontCart(d);
+    const out = await service.removeItem({}, shopId, { customerId: "cust-1" }, cartItemId, {});
+
+    expect(out.items).toEqual([]);
+    expect(out.promotions.coupon.status).toBe("none");
+  });
+
+  it("adds separate bundle-reward line in cart view", async () => {
+    const d = deps();
+    d.priceStorefrontLines.mockResolvedValue({
+      ...pricedResult(),
       lines: [
         {
-          cartItemId,
-          paid_quantity: 2,
+          ...pricedResult().lines[0],
           free_quantity: 1,
-          display_quantity: 3,
-          list_price_minor: "5000",
-          final_price_minor: "4500",
-          line_total_minor: "9000",
-          offer_discount_minor: "0",
-          promo_discount_minor: "0",
-          total_discount_minor: "0",
-          applied_promotion_ids: ["promo-bogo"]
+          display_quantity: 3
         }
       ]
     });
-
-    const service = createStorefrontCart({
-      cartRepo,
-      ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
-      priceStorefrontLines
-    });
-
-    const out = await service.getCartContents({}, "00000000-0000-4000-8000-000000000001", {
-      customerId: "cust-1"
-    });
+    const service = createStorefrontCart(d);
+    const out = await service.getCartContents({}, shopId, { customerId: "cust-1" });
 
     expect(out.items).toHaveLength(2);
-    expect(out.items[0]).toMatchObject({
-      id: cartItemId,
-      quantity: "2",
-      is_bundle_reward: false,
-      line_total_minor: "9000",
-      final_price_minor: "4500"
-    });
-    expect(out.items[1]).toMatchObject({
-      id: `${cartItemId}:bundle-reward`,
-      quantity: "1",
-      is_bundle_reward: true,
-      bundle_source_cart_item_id: cartItemId,
-      line_total_minor: "0",
-      final_price_minor: "0"
-    });
-    expect(out.summary.display_units_total).toBe(3);
-    expect(out.summary.subtotal_minor).toBe(9000);
+    expect(out.items[0].quantity).toMatchObject({ billable: 2, paid: 2, free: 1, display: 3 });
+    expect(out.items[1].is_bundle_reward).toBe(true);
+    expect(out.items[1].quantity).toMatchObject({ free: 1, display: 1 });
+    expect(out.items[1].bundle_source_item_id).toBe(cartItemId);
+    expect(out.items[0].pricing).toHaveProperty("list_minor");
+    expect(out.items[0].promo.types).toContain("bundle");
   });
 
   it("rejects PATCH on synthetic bundle-reward cart item ids", async () => {
-    const cartRepo = {
-      findCartByShopAndCustomerId: vi.fn().mockResolvedValue({
-        id: "11111111-1111-4111-8111-111111111111"
-      }),
-      findCartItemWithCart: vi.fn()
-    };
-    const service = createStorefrontCart({
-      cartRepo,
-      ensureShopForCatalog: vi.fn().mockResolvedValue(undefined)
-    });
+    const d = deps();
+    const service = createStorefrontCart(d);
     await expect(
       service.updateItemQuantity(
         {},
-        "00000000-0000-4000-8000-000000000001",
+        shopId,
         { customerId: "cust-1" },
-        "33333333-3333-4333-8333-333333333333:bundle-reward",
-        1
+        `${cartItemId}:bundle-reward`,
+        { delta: 1 }
       )
     ).rejects.toBeInstanceOf(ValidationError);
-    expect(cartRepo.findCartItemWithCart).not.toHaveBeenCalled();
   });
 });

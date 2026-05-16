@@ -11,9 +11,9 @@ export function getOpenApiDocument(envSlice) {
     openapi: "3.0.3",
     info: {
       title: "Client storefront API",
-      version: "0.1.0",
+      version: "0.2.0",
       description:
-        "Customer storefront, auth, catalog, cart, and checkout. See `docs/API_FRONTEND.md` for narrative specs. **Dashboard / superadmin APIs are not on this service.**"
+        "Customer storefront, auth, catalog, cart (live promos + coupon preview), coupons, and checkout. Narrative guide: [docs/API_FRONTEND.md](../docs/API_FRONTEND.md). **Dashboard / superadmin APIs are not on this service.**"
     },
     servers: [{ url: base, description: "Configured API host" }],
     tags: [
@@ -24,6 +24,7 @@ export function getOpenApiDocument(envSlice) {
       { name: "Storefront catalog", description: "Public shop catalog" },
       { name: "Storefront cart", description: "Bearer JWT cart" },
       { name: "Storefront checkout", description: "Place order" },
+      { name: "Storefront promotions", description: "Coupon listing (apply at checkout)" },
       { name: "Storefront account", description: "Profile + address under storefront" },
       { name: "Storefront orders", description: "Order history" },
       { name: "Catalog", description: "Tenant `/api/catalog/*`" }

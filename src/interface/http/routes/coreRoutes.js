@@ -7,15 +7,18 @@ export function mountCoreRoutes(r, deps) {
   const { healthGet, healthReadyGet } = deps;
 
   r.get("/", (_req, res) => {
-    res.json({
+    const body = {
       ok: true,
       service: "clientside-ecommerce-api",
       health: "/health",
       healthReady: "/health/ready",
-      metrics: "/metrics",
-      openapi: "/openapi.json",
-      swaggerUi: "/api-docs"
-    });
+      metrics: "/metrics"
+    };
+    if (env.ENABLE_API_DOCS) {
+      body.openapi = "/openapi.json";
+      body.swaggerUi = "/api-docs";
+    }
+    res.json(body);
   });
 
   r.get("/health", healthGet);

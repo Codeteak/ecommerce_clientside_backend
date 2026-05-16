@@ -4,13 +4,42 @@ import { z } from "zod";
  * Purpose: This file defines request validation schemas for
  * storefront cart, profile, address, checkout, and order endpoints.
  */
-export const storefrontCartItemBodySchema = z.object({
-  productId: z.string().uuid(),
-  quantity: z.coerce.number().positive()
+const optionalCouponCode = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .optional()
+  .nullable()
+  .transform((v) => (v == null || v === "" ? undefined : v.toUpperCase()));
+
+export const storefrontCartGetQuerySchema = z.object({
+  couponCode: optionalCouponCode
 });
 
-export const storefrontCartItemPatchSchema = z.object({
-  quantity: z.coerce.number().positive()
+export const storefrontCartItemBodySchema = z
+  .object({
+    productId: z.string().uuid(),
+    quantity: z.coerce.number().positive().optional(),
+    delta: z.coerce.number().int().optional(),
+    couponCode: optionalCouponCode
+  })
+  .refine((b) => b.quantity !== undefined || b.delta !== undefined, {
+    message: "quantity or delta is required"
+  });
+
+export const storefrontCartItemPatchSchema = z
+  .object({
+    quantity: z.coerce.number().positive().optional(),
+    delta: z.coerce.number().int().optional(),
+    couponCode: optionalCouponCode
+  })
+  .refine((b) => b.quantity !== undefined || b.delta !== undefined, {
+    message: "quantity or delta is required"
+  });
+
+export const storefrontCartItemDeleteBodySchema = z.object({
+  couponCode: optionalCouponCode
 });
 
 export const storefrontProfilePostSchema = z

@@ -2,7 +2,7 @@
 
 Express API with **domain → application → adapters → interface** layering. The composition root is `src/main/composition.js`.
 
-**API reference:** [docs/API.md](docs/API.md)
+**API reference:** [docs/API_FRONTEND.md](docs/API_FRONTEND.md) · Swagger UI: `/api-docs/` (when `ENABLE_API_DOCS=true`)
 
 The database schema is **`migrations/001_full_schema.sql`** only (`npm run db:migrate` applies that file explicitly). To drop legacy tables not in that schema (after a backup), extend **`scripts/prune-noncanonical-tables.sql`** and run **`npm run db:prune`**. Tenant-scoped reads use Postgres **RLS** via `set_config('app.current_shop_id', …)` before querying.
 
@@ -55,6 +55,15 @@ npm run dev
 ```
 
 Default port: **4100**. Ensure a **shop** row exists before customer registration with `shopId`.
+
+## API docs (Swagger UI)
+
+When `ENABLE_API_DOCS=true` (default in development):
+
+- **Swagger UI:** [http://localhost:4100/api-docs/](http://localhost:4100/api-docs/)
+- **OpenAPI JSON:** [http://localhost:4100/openapi.json](http://localhost:4100/openapi.json)
+
+In **production**, docs are off unless both `ENABLE_API_DOCS=true` and `ALLOW_API_DOCS_IN_PRODUCTION=true` are set (the CodeDeploy `application_start` script enables both on the shop API host).
 
 ## Postman
 

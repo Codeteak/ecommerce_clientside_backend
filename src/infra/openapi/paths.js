@@ -680,13 +680,19 @@ export function buildPaths() {
       },
       get: {
         tags: ["Storefront cart"],
-        summary: "Get cart with items",
+        summary: "Get cart with live pricing",
+        description:
+          "Returns cart lines with **SKU** and **bundle** promos applied. Optional `couponCode` query previews a coupon without persisting it (`promotions.coupon.status`: `applied` | `not_applicable`). Unsellable lines are pruned on read. Use `summary.subtotal_before_coupon_minor` for `GET /storefront/coupons`.",
         security: [{ bearerAuth: [] }],
-        parameters: [...shopParams],
+        parameters: [...shopParams, P.CouponCodeQuery],
         responses: {
           "200": {
             description: "OK",
-            content: { "application/json": { schema: { type: "object" } } }
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/StorefrontCartResponse" }
+              }
+            }
           },
           "400": jsonErr,
           "401": jsonErr
@@ -697,7 +703,8 @@ export function buildPaths() {
       post: {
         tags: ["Storefront cart"],
         summary: "Add cart line",
-        description: "Use `productId` as shop product UUID (`shop_products.id`).",
+        description:
+          "Use `productId` as shop product UUID (`shop_products.id`). Merges quantity when the same product is already in the cart. Returns the full repriced cart (`StorefrontCartResponse`).",
         security: [{ bearerAuth: [] }],
         parameters: [...shopParams],
         requestBody: {
@@ -705,7 +712,14 @@ export function buildPaths() {
           content: { "application/json": { schema: { $ref: "#/components/schemas/CartItemBody" } } }
         },
         responses: {
-          "201": { description: "Created", content: { "application/json": { schema: { type: "object" } } } },
+          "201": {
+            description: "Created — full cart view",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/StorefrontCartResponse" }
+              }
+            }
+          },
           "400": jsonErr,
           "401": jsonErr,
           "404": jsonErr,
@@ -717,7 +731,8 @@ export function buildPaths() {
       patch: {
         tags: ["Storefront cart"],
         summary: "Update line quantity",
-        description: "Updates quantity for one cart item by `itemId`.",
+        description:
+          "Set absolute `quantity` or relative `delta`. Cannot patch synthetic bundle reward ids (`:bundle-reward`). Returns full repriced cart.",
         security: [{ bearerAuth: [] }],
         parameters: [...shopParams, P.CartItemId],
         requestBody: {
@@ -725,7 +740,14 @@ export function buildPaths() {
           content: { "application/json": { schema: { $ref: "#/components/schemas/CartItemPatch" } } }
         },
         responses: {
-          "200": { description: "OK", content: { "application/json": { schema: { type: "object" } } } },
+          "200": {
+            description: "OK — full cart view",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/StorefrontCartResponse" }
+              }
+            }
+          },
           "400": jsonErr,
           "401": jsonErr,
           "404": jsonErr,
@@ -735,13 +757,72 @@ export function buildPaths() {
       delete: {
         tags: ["Storefront cart"],
         summary: "Remove line",
-        description: "Deletes one cart item by `itemId`.",
+        description:
+          "Deletes one cart item by `itemId` (not bundle reward ids). Optional body `couponCode` reprices the remaining cart. Returns full cart view.",
         security: [{ bearerAuth: [] }],
         parameters: [...shopParams, P.CartItemId],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/CartItemDeleteBody" } }
+          }
+        },
         responses: {
-          "204": { description: "No content" },
+          "200": {
+            description: "OK — full cart view",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/StorefrontCartResponse" }
+              }
+            }
+          },
+          "400": jsonErr,
           "401": jsonErr,
           "404": jsonErr,
+          "429": jsonErr
+        }
+      }
+    },
+    "/storefront/coupons": {
+      get: {
+        tags: ["Storefront promotions"],
+        summary: "List applicable coupons",
+        description:
+          "Read-only coupon list for the authenticated customer. Pass `cartSubtotalMinor` from `GET /storefront/cart` `summary.subtotal_minor` (after SKU/bundle, before coupon). There is no separate apply-coupon endpoint — send `couponCode` on `POST /storefront/checkout`.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          ...shopParams,
+          {
+            name: "code",
+            in: "query",
+            required: false,
+            schema: { type: "string", minLength: 1, maxLength: 64 }
+          },
+          {
+            name: "cartSubtotalMinor",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 0 }
+          },
+          {
+            name: "onlyApplicable",
+            in: "query",
+            required: false,
+            schema: { type: "boolean", default: false }
+          }
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/CouponsListResponse" }
+              }
+            }
+          },
+          "400": jsonErr,
+          "401": jsonErr,
+          "403": jsonErr,
           "429": jsonErr
         }
       }
@@ -751,7 +832,7 @@ export function buildPaths() {
         tags: ["Storefront checkout"],
         summary: "Place order",
         description:
-          "Send `Idempotency-Key` (optional) on the client to make retries safe (same key returns the same order).",
+          "Send `Idempotency-Key` (optional) on the client to make retries safe (same key returns the same order). Optional `couponCode` applies cart-level coupon discount; SKU and bundle promos are automatic.",
         security: [{ bearerAuth: [] }],
         parameters: [...shopParams, P.IdempotencyKey],
         requestBody: {
@@ -760,17 +841,10 @@ export function buildPaths() {
         },
         responses: {
           "201": {
-            description: "Created",
+            description: "Created — cart cleared on success",
             content: {
               "application/json": {
-                schema: {
-                  type: "object",
-                  properties: {
-                    orderId: { type: "string", format: "uuid" },
-                    orderNumber: { type: "string" },
-                    total_minor: { type: "number" }
-                  }
-                }
+                schema: { $ref: "#/components/schemas/CheckoutResponse" }
               }
             }
           },

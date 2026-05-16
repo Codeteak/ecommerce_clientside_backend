@@ -20,6 +20,12 @@ export class CartRepoPg extends CartRepo {
   resolveGlobalImageUrl(raw) {
     const value = typeof raw === "string" ? raw.trim() : "";
     if (!value) return null;
+    if (value.startsWith("data:")) return null;
+    if (value.includes(",")) {
+      const first = value.split(",")[0].trim();
+      if (/^https?:\/\//i.test(first)) return first;
+      return null;
+    }
     if (/^https?:\/\//i.test(value)) return value;
     return toPublicMediaUrl(value);
   }
@@ -172,6 +178,59 @@ export class CartRepoPg extends CartRepo {
     return rows[0] ? this.mapCartItemRow(rows[0]) : null;
   }
 
+  async updateCartItemSnapshot(client, shopId, cartItemId, snapshot) {
+    await setTenantContext(client, shopId);
+    const { rows } = await client.query(
+      `WITH upd AS (
+         UPDATE cart_items
+            SET quantity = $2,
+                unit_price_minor = $3,
+                title_snapshot = $4,
+                unit_label = $5
+          WHERE id = $1::uuid AND shop_id = $6::uuid
+          RETURNING id, quantity::text AS quantity, shop_id, product_id
+       )
+      SELECT upd.id, upd.quantity, gp.slug AS product_slug,
+             gp.image_url AS global_image_url,
+             m.id AS image_media_id,
+             m.storage_key AS image_storage_key,
+             m.content_type AS image_content_type
+         FROM upd
+         LEFT JOIN shop_products sp ON sp.id = upd.product_id AND sp.shop_id = upd.shop_id
+        LEFT JOIN global_products gp ON gp.id = sp.global_product_id
+        LEFT JOIN LATERAL (
+          WITH chosen_images AS (
+            SELECT spi.media_asset_id, spi.sort_order
+              FROM shop_product_images spi
+             WHERE spi.shop_product_id = sp.id
+            UNION ALL
+            SELECT gpi.media_asset_id, gpi.sort_order
+              FROM global_product_images gpi
+             WHERE gpi.global_product_id = sp.global_product_id
+               AND NOT EXISTS (
+                 SELECT 1
+                   FROM shop_product_images spi2
+                  WHERE spi2.shop_product_id = sp.id
+               )
+          )
+          SELECT ci.media_asset_id
+            FROM chosen_images ci
+           ORDER BY ci.sort_order ASC
+           LIMIT 1
+        ) pimg ON true
+        LEFT JOIN media_assets m ON m.id = pimg.media_asset_id`,
+      [
+        cartItemId,
+        snapshot.quantity,
+        snapshot.unitPriceMinor,
+        snapshot.titleSnapshot,
+        snapshot.unitLabel,
+        shopId
+      ]
+    );
+    return rows[0] ? this.mapCartItemRow(rows[0]) : null;
+  }
+
   async updateCartItemQuantity(client, shopId, cartItemId, quantity) {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
@@ -255,7 +314,7 @@ export class CartRepoPg extends CartRepo {
   async findCartItemWithCart(client, shopId, itemId) {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
-      `SELECT ci.id, ci.cart_id, ci.shop_id
+      `SELECT ci.id, ci.cart_id, ci.shop_id, ci.product_id, ci.is_custom, ci.quantity::text AS quantity
          FROM cart_items ci
         WHERE ci.id = $1::uuid AND ci.shop_id = $2::uuid
         LIMIT 1`,

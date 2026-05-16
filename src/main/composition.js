@@ -108,11 +108,16 @@ export function createAppContext() {
   });
 
   const priceStorefrontLines = createPriceStorefrontLines({ promotionRepo, authRepo, orderRepo });
-  const storefrontCart = createStorefrontCart({ cartRepo, ensureShopForCatalog, priceStorefrontLines });
+  const listApplicableCoupons = createListApplicableCoupons({ promotionRepo, authRepo, orderRepo });
+  const storefrontCart = createStorefrontCart({
+    cartRepo,
+    ensureShopForCatalog,
+    priceStorefrontLines,
+    listApplicableCoupons
+  });
   const assertCustomerShopAccess = createAssertCustomerShopAccess({ authRepo });
   const requireCustomerShopAccess = createRequireCustomerShopAccess({ authRepo });
   const updateStorefrontProfile = createUpdateStorefrontProfile({ authRepo });
-  const listApplicableCoupons = createListApplicableCoupons({ promotionRepo, authRepo, orderRepo });
   const msg91Key = env.MSG_AUTH_KEY?.trim() || "";
   const smsSender = msg91Key
     ? new Msg91SmsSender({

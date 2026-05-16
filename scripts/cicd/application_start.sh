@@ -14,7 +14,8 @@ aws secretsmanager get-secret-value \
   --secret-id "${SECRET_ID}" \
   --region "${AWS_REGION}" \
   --query SecretString \
-  --output text | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' | tr -d '\r' > .env
+  --output text | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' | tr -d '\r' \
+  | grep -vE '^(ENABLE_API_DOCS|ALLOW_API_DOCS_IN_PRODUCTION)=' > .env
 
 echo "[application_start] Appending runtime overrides..."
 {
@@ -24,6 +25,13 @@ echo "[application_start] Appending runtime overrides..."
   echo "TRUST_PROXY=true"
   echo "JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-$(openssl rand -base64 32)}"
 } >> .env
+
+# dotenv uses first-wins per key — prepend docs flags so they are not shadowed by secrets.
+{
+  echo "ENABLE_API_DOCS=true"
+  echo "ALLOW_API_DOCS_IN_PRODUCTION=true"
+  cat .env
+} > .env.tmp && mv .env.tmp .env
 
 if [[ ! -f "${IMAGE_DETAIL_FILE}" ]]; then
   echo "[application_start] Missing ${IMAGE_DETAIL_FILE}. Build artifact is incomplete."

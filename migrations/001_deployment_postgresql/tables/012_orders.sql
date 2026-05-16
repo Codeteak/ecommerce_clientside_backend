@@ -21,5 +21,8 @@ CREATE TABLE IF NOT EXISTS orders (
   out_for_delivery_at TIMESTAMPTZ,
   delivered_at TIMESTAMPTZ,
   rejected_at TIMESTAMPTZ,
+  promotion_discount_total_minor BIGINT,
+  applied_promotion_ids JSONB,
+  coupon_code_normalized TEXT,
   UNIQUE (shop_id, order_number)
 );

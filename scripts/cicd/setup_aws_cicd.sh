@@ -90,14 +90,15 @@ Next actions (run manually once values are verified):
      --name "${PROJECT_NAME}-build" \\
      --service-role "${CODEBUILD_SERVICE_ROLE_ARN}" \\
      --artifacts type=CODEPIPELINE \\
-     --environment type=LINUX_CONTAINER,image=aws/codebuild/standard:7.0,computeType=BUILD_GENERAL1_MEDIUM,privilegedMode=true \\
+     --environment type=ARM_CONTAINER,image=aws/codebuild/amazonlinux2-aarch64-standard:3.0,computeType=BUILD_GENERAL1_MEDIUM,privilegedMode=true \\
      --source type=CODEPIPELINE \\
      --logs-config "cloudWatchLogs={status=ENABLED,groupName=${LOG_GROUP}},s3Logs={status=DISABLED}" \\
      --region "${AWS_REGION}"
 
-   If the project already exists, enable logging:
+   If the project already exists, enable logging and use a native ARM builder (matches linux/arm64 deploy targets):
    aws codebuild update-project \\
      --name "${PROJECT_NAME}-build" \\
+     --environment type=ARM_CONTAINER,image=aws/codebuild/amazonlinux2-aarch64-standard:3.0,computeType=BUILD_GENERAL1_MEDIUM,privilegedMode=true \\
      --logs-config "cloudWatchLogs={status=ENABLED,groupName=${LOG_GROUP}},s3Logs={status=DISABLED}" \\
      --region "${AWS_REGION}"
 

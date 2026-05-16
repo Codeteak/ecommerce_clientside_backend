@@ -23,7 +23,13 @@ export function createExpressApp(ctx) {
   app.set("trust proxy", env.TRUST_PROXY ? env.TRUST_PROXY_HOPS : false);
 
   app.disable("x-powered-by");
-  app.use(helmet());
+  app.use(
+    helmet(
+      env.ENABLE_API_DOCS
+        ? { contentSecurityPolicy: false }
+        : undefined
+    )
+  );
   app.use(requestMetricsMiddleware);
   app.use(
     pinoHttp({

@@ -77,8 +77,11 @@ export const envSchema = z
           .filter(Boolean)
       )
       .pipe(z.array(z.string().min(1)).min(1)),
-    ENABLE_API_DOCS: z.preprocess(boolFromEnv, z.boolean()),
-    ALLOW_API_DOCS_IN_PRODUCTION: z.preprocess(boolFromEnv, z.boolean()),
+    ENABLE_API_DOCS: z.preprocess((val) => {
+      if (val === undefined || val === null || val === "") return true;
+      return boolFromEnv(val);
+    }, z.boolean()),
+    ALLOW_API_DOCS_IN_PRODUCTION: z.preprocess(boolFromEnv, z.boolean()).default(false),
     TRUST_PROXY: z.preprocess(boolFromEnv, z.boolean()),
     TRUST_PROXY_HOPS: z.coerce.number().int().positive().default(1),
     SERVICE_AREA_RADIUS_METERS: z.coerce.number().int().positive().default(5000),

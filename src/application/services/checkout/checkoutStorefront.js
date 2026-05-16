@@ -18,6 +18,25 @@ function minorFromLine(q, unitPrice) {
   return Math.round(line);
 }
 
+/** @param {Record<string, unknown> | undefined} pricedLine @param {unknown} cartQty */
+function orderLineQuantitiesFromPriced(pricedLine, cartQty) {
+  const cart = Number(cartQty);
+  if (!pricedLine) {
+    return { quantity: cart, paidQuantity: cart, freeQuantity: 0 };
+  }
+  const paid = Math.max(0, Number(pricedLine.paid_quantity ?? pricedLine.quantity ?? cart));
+  const free = Math.max(0, Number(pricedLine.free_quantity ?? 0));
+  const display = Math.max(
+    paid + free,
+    Number(pricedLine.display_quantity ?? 0) || paid + free
+  );
+  return {
+    quantity: display,
+    paidQuantity: paid,
+    freeQuantity: free
+  };
+}
+
 function checkoutError(code, message) {
   return new AppError(message, { statusCode: 400, code });
 }
@@ -56,6 +75,12 @@ export function createCheckoutStorefront({
       throw checkoutError(
         "INVALID_IDEMPOTENCY_KEY",
         "Idempotency-Key header must be between 8 and 128 characters when provided."
+      );
+    }
+    if (rawIdem && /[\x00-\x1f\x7f]/.test(rawIdem)) {
+      throw checkoutError(
+        "INVALID_IDEMPOTENCY_KEY",
+        "Idempotency-Key must not contain control characters."
       );
     }
     const logBase = {
@@ -245,11 +270,14 @@ export function createCheckoutStorefront({
           if (it.is_custom || !it.product_id) {
             const lineTotal = minorFromLine(it.quantity, it.unit_price_minor);
             subtotal += lineTotal;
+            const qty = Number(it.quantity);
             return {
               productId: it.product_id,
               name: it.title_snapshot,
               unitLabel: it.unit_label,
-              quantity: Number(it.quantity),
+              quantity: qty,
+              paidQuantity: qty,
+              freeQuantity: 0,
               unitPriceMinor: Number(it.unit_price_minor),
               lineTotalMinor: lineTotal,
               listPriceMinor: Number(it.unit_price_minor),
@@ -260,18 +288,24 @@ export function createCheckoutStorefront({
             };
           }
           const p = pricedByCartItem.get(String(it.id));
+          const { quantity, paidQuantity, freeQuantity } = orderLineQuantitiesFromPriced(
+            p,
+            it.quantity
+          );
           const unitPriceMinor = p ? Number(p.final_price_minor) : Number(it.unit_price_minor);
           const lineTotalMinor = p ? Number(p.line_total_minor) : minorFromLine(it.quantity, it.unit_price_minor);
           const listPriceMinor = p ? Number(p.list_price_minor) : Number(it.unit_price_minor);
           const compareTotal = p
-            ? Math.round(Number(p.total_price_minor) * Number(it.quantity))
+            ? Math.round(Number(p.total_price_minor) * quantity)
             : lineTotalMinor;
           const lineDiscountMinor = Math.max(0, compareTotal - lineTotalMinor);
           return {
             productId: it.product_id,
             name: it.title_snapshot,
             unitLabel: it.unit_label,
-            quantity: Number(it.quantity),
+            quantity,
+            paidQuantity,
+            freeQuantity,
             unitPriceMinor,
             lineTotalMinor,
             listPriceMinor,
@@ -285,11 +319,14 @@ export function createCheckoutStorefront({
         orderItems = items.map((it) => {
           const lineTotal = minorFromLine(it.quantity, it.unit_price_minor);
           subtotal += lineTotal;
+          const qty = Number(it.quantity);
           return {
             productId: it.product_id,
             name: it.title_snapshot,
             unitLabel: it.unit_label,
-            quantity: Number(it.quantity),
+            quantity: qty,
+            paidQuantity: qty,
+            freeQuantity: 0,
             unitPriceMinor: Number(it.unit_price_minor),
             lineTotalMinor: lineTotal,
             listPriceMinor: Number(it.unit_price_minor),

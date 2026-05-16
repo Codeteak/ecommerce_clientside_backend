@@ -54,6 +54,14 @@ export const parameters = {
     required: false,
     description: "Max orders to return (1–100, default 50).",
     schema: { type: "integer", minimum: 1, maximum: 100, default: 50 }
+  },
+  CouponCodeQuery: {
+    name: "couponCode",
+    in: "query",
+    required: false,
+    description:
+      "Optional coupon code to **preview** on the cart (uppercased server-side). Does not persist until checkout. When invalid, cart still returns 200 with `promotions.coupon.status: not_applicable`.",
+    schema: { type: "string", minLength: 1, maxLength: 64 }
   }
 };
 
@@ -249,27 +257,230 @@ export const schemas = {
   },
   CartItemBody: {
     type: "object",
-    required: ["productId", "quantity"],
+    required: ["productId"],
+    description: "Provide `quantity` (absolute) or `delta` (relative, integer). Optional `couponCode` reprices the returned cart.",
     properties: {
       productId: {
         type: "string",
         format: "uuid",
         description: "Shop product UUID (`shop_products.id`), not global product ID."
       },
-      quantity: { type: "number", exclusiveMinimum: 0 }
+      quantity: { type: "number", exclusiveMinimum: 0, description: "Absolute quantity after add/merge." },
+      delta: {
+        type: "integer",
+        description: "Relative change when adding (must be positive for new lines)."
+      },
+      couponCode: {
+        type: "string",
+        minLength: 1,
+        maxLength: 64,
+        description: "Preview coupon on the cart response."
+      }
     }
   },
   CartItemPatch: {
     type: "object",
-    required: ["quantity"],
+    description: "Provide `quantity` (absolute) or `delta` (relative, integer). Optional `couponCode` reprices the returned cart.",
     properties: {
-      quantity: { type: "number", exclusiveMinimum: 0 }
+      quantity: { type: "number", exclusiveMinimum: 0 },
+      delta: { type: "integer", description: "Relative change; use -1 to decrement. At qty 1, negative delta returns MINIMUM_QUANTITY." },
+      couponCode: { type: "string", minLength: 1, maxLength: 64 }
+    }
+  },
+  CartItemDeleteBody: {
+    type: "object",
+    properties: {
+      couponCode: { type: "string", minLength: 1, maxLength: 64, description: "Reprice remaining cart after delete." }
     }
   },
   CheckoutBody: {
     type: "object",
     properties: {
-      notes: { type: "string", maxLength: 2000, nullable: true }
+      notes: { type: "string", maxLength: 2000, nullable: true },
+      couponCode: {
+        type: "string",
+        minLength: 1,
+        maxLength: 64,
+        nullable: true,
+        description: "Optional coupon code (uppercased server-side). Apply happens at checkout only."
+      }
+    }
+  },
+  CouponsListResponse: {
+    type: "object",
+    required: ["promotionsPaused", "settings", "coupons"],
+    properties: {
+      promotionsPaused: { type: "boolean" },
+      settings: {
+        type: "object",
+        properties: {
+          maxCouponsPerOrder: { type: "integer" },
+          allowCombineAutoCampaigns: { type: "boolean" },
+          firstCouponEligibilityDays: { type: "integer" }
+        }
+      },
+      coupons: {
+        type: "array",
+        items: { $ref: "#/components/schemas/CouponListEntry" }
+      }
+    }
+  },
+  CouponListEntry: {
+    type: "object",
+    properties: {
+      id: { type: "string", format: "uuid" },
+      code: { type: "string" },
+      promotionId: { type: "string", format: "uuid" },
+      promotionName: { type: "string" },
+      startsAt: { type: "string", format: "date-time" },
+      endsAt: { type: "string", format: "date-time", nullable: true },
+      minSubtotalMinor: { type: "integer", nullable: true },
+      firstOrderOnly: { type: "boolean" },
+      newCustomerOnly: { type: "boolean" },
+      benefits: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            kind: { type: "string" },
+            percentBps: { type: "integer" },
+            amountMinor: { type: "integer" },
+            minSubtotalMinor: { type: "integer" }
+          }
+        }
+      },
+      eligibility: {
+        type: "object",
+        properties: {
+          applicable: { type: "boolean" },
+          ineligibilityCodes: { type: "array", items: { type: "string" } }
+        }
+      }
+    }
+  },
+  StorefrontCartSummary: {
+    type: "object",
+    description: "All amounts in minor units (INR paise).",
+    properties: {
+      subtotal_minor: { type: "integer", description: "Payable subtotal after SKU/bundle and coupon preview." },
+      subtotal_before_coupon_minor: {
+        type: "integer",
+        description: "Subtotal after auto promos, before coupon (use for GET /coupons eligibility)."
+      },
+      promotion_discount_minor: { type: "integer", description: "SKU + bundle + coupon discount combined." },
+      coupon_discount_minor: { type: "integer" },
+      units_display_total: {
+        type: "integer",
+        description: "Sum of display units on paid lines (includes bundle free qty on parent line)."
+      },
+      currency: { type: "string", example: "INR" }
+    }
+  },
+  StorefrontCartPromotions: {
+    type: "object",
+    properties: {
+      paused: { type: "boolean" },
+      types: {
+        type: "array",
+        items: { type: "string", enum: ["offer", "sku", "bundle", "coupon"] },
+        description: "Promotion kinds active on this cart."
+      },
+      promotion_ids: { type: "array", items: { type: "string", format: "uuid" } },
+      coupon: {
+        type: "object",
+        properties: {
+          code: { type: "string", nullable: true },
+          status: { type: "string", enum: ["none", "applied", "not_applicable"] },
+          discount_minor: { type: "integer" },
+          reason_code: { type: "string", nullable: true },
+          reason_message: { type: "string", nullable: true }
+        }
+      },
+      suggested_coupons: {
+        type: "array",
+        maxItems: 3,
+        items: {
+          type: "object",
+          properties: {
+            code: { type: "string" },
+            applicable: { type: "boolean" },
+            reason_codes: { type: "array", items: { type: "string" } }
+          }
+        }
+      }
+    }
+  },
+  StorefrontCartLineQuantity: {
+    type: "object",
+    properties: {
+      billable: { type: "number", description: "Qty stored on cart line (what customer added)." },
+      paid: { type: "number", description: "Units charged after promos." },
+      free: { type: "number", description: "Bundle free units (also on parent line when bundle applies)." },
+      display: { type: "number", description: "Units to show in UI (paid + free on parent line)." }
+    }
+  },
+  StorefrontCartLinePricing: {
+    type: "object",
+    description: "Per-unit amounts in minor units unless noted.",
+    properties: {
+      list_minor: { type: "string", nullable: true },
+      offer_minor: { type: "string", nullable: true },
+      final_minor: { type: "string", nullable: true },
+      line_total_minor: { type: "string", nullable: true }
+    }
+  },
+  StorefrontCartLinePromo: {
+    type: "object",
+    properties: {
+      types: {
+        type: "array",
+        items: { type: "string", enum: ["offer", "sku", "bundle"] }
+      },
+      promotion_ids: { type: "array", items: { type: "string" } }
+    }
+  },
+  StorefrontCartLineItem: {
+    type: "object",
+    description:
+      "Paid line or synthetic bundle reward (`id` suffix `:bundle-reward`). Reward lines are read-only.",
+    properties: {
+      id: { type: "string" },
+      product_id: { type: "string", format: "uuid", nullable: true },
+      slug: { type: "string", nullable: true },
+      title: { type: "string", nullable: true },
+      unit: { type: "string", nullable: true },
+      image_url: { type: "string", nullable: true, format: "uri" },
+      quantity: { $ref: "#/components/schemas/StorefrontCartLineQuantity" },
+      pricing: { $ref: "#/components/schemas/StorefrontCartLinePricing" },
+      promo: { $ref: "#/components/schemas/StorefrontCartLinePromo" },
+      is_bundle_reward: { type: "boolean" },
+      bundle_source_item_id: { type: "string", nullable: true },
+      price_updated: { type: "boolean" },
+      previous_list_minor: { type: "string", nullable: true }
+    }
+  },
+  StorefrontCartResponse: {
+    type: "object",
+    required: ["cart_id", "items", "summary", "promotions"],
+    properties: {
+      cart_id: { type: "string", format: "uuid" },
+      items: { type: "array", items: { $ref: "#/components/schemas/StorefrontCartLineItem" } },
+      summary: { $ref: "#/components/schemas/StorefrontCartSummary" },
+      promotions: { $ref: "#/components/schemas/StorefrontCartPromotions" }
+    }
+  },
+  CheckoutResponse: {
+    type: "object",
+    required: ["orderId", "orderNumber", "total_minor"],
+    properties: {
+      orderId: { type: "string", format: "uuid" },
+      orderNumber: { type: "string" },
+      subtotal_minor: { type: "integer", description: "Merchandise total after promos (excludes delivery)." },
+      promotion_discount_minor: { type: "integer" },
+      coupon_discount_minor: { type: "integer" },
+      delivery_fee_minor: { type: "integer" },
+      total_minor: { type: "integer", description: "subtotal_minor + delivery_fee_minor" },
+      coupon_code: { type: "string", nullable: true }
     }
   },
   /** Resolved from live shop/global product media when `product_id` matches a shop product. */
