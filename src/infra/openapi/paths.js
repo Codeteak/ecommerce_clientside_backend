@@ -732,7 +732,7 @@ export function buildPaths() {
         tags: ["Storefront cart"],
         summary: "Update line quantity",
         description:
-          "Set absolute `quantity` or relative `delta`. Cannot patch synthetic bundle reward ids (`:bundle-reward`). Returns full repriced cart.",
+          "Set absolute `quantity` or relative `delta`. Returns full repriced cart (bundle free units appear as `offer_quantity` on the line).",
         security: [{ bearerAuth: [] }],
         parameters: [...shopParams, P.CartItemId],
         requestBody: {

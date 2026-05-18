@@ -215,7 +215,7 @@ describe("storefront cart", () => {
     expect(out.promotions.coupon.status).toBe("none");
   });
 
-  it("adds separate bundle-reward line in cart view", async () => {
+  it("exposes in-cart quantity and offer_quantity on one line for bundle promos", async () => {
     const d = deps();
     d.priceStorefrontLines.mockResolvedValue({
       ...pricedResult(),
@@ -230,16 +230,15 @@ describe("storefront cart", () => {
     const service = createStorefrontCart(d);
     const out = await service.getCartContents({}, shopId, { customerId: "cust-1" });
 
-    expect(out.items).toHaveLength(2);
-    expect(out.items[0].quantity).toMatchObject({ billable: 2, paid: 2, free: 1, display: 3 });
-    expect(out.items[1].is_bundle_reward).toBe(true);
-    expect(out.items[1].quantity).toMatchObject({ free: 1, display: 1 });
-    expect(out.items[1].bundle_source_item_id).toBe(cartItemId);
+    expect(out.items).toHaveLength(1);
+    expect(out.items[0].quantity).toBe(2);
+    expect(out.items[0].offer_quantity).toBe(1);
+    expect(out.summary.units_display_total).toBe(3);
     expect(out.items[0].pricing).toHaveProperty("list_minor");
     expect(out.items[0].promo.types).toContain("bundle");
   });
 
-  it("rejects PATCH on synthetic bundle-reward cart item ids", async () => {
+  it("rejects PATCH on legacy synthetic bundle-reward cart item ids", async () => {
     const d = deps();
     const service = createStorefrontCart(d);
     await expect(

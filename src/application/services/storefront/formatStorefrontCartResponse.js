@@ -26,7 +26,7 @@ function pickImageUrl(row) {
 /**
  * @param {Record<string, unknown> | undefined} pricedLine
  * @param {Record<string, unknown>} rawRow
- * @param {{ isBundleReward?: boolean, freeQty?: number, paidQty?: number }} ctx
+ * @param {{ offerQty?: number }} ctx
  */
 function inferPromoTypes(pricedLine, rawRow, ctx = {}) {
   const types = [];
@@ -36,10 +36,11 @@ function inferPromoTypes(pricedLine, rawRow, ctx = {}) {
   const final = Number(pricedLine?.final_price_minor ?? list);
   const promoDisc = Number(pricedLine?.promo_discount_minor ?? 0);
   const offerDisc = Number(pricedLine?.offer_discount_minor ?? 0);
+  const offerQty = Number(ctx.offerQty ?? 0);
 
   if (offerDisc > 0 && offer < list) types.push("offer");
   if (promoDisc > 0 && final < Math.min(offer, list)) types.push("sku");
-  if (ctx.isBundleReward || (ctx.freeQty ?? 0) > 0) types.push("bundle");
+  if (offerQty > 0) types.push("bundle");
 
   return types;
 }
@@ -47,38 +48,18 @@ function inferPromoTypes(pricedLine, rawRow, ctx = {}) {
 /**
  * @param {Record<string, unknown>} row
  * @param {Record<string, unknown> | undefined} pricedLine
- * @param {{ isBundleReward?: boolean, bundleSourceItemId?: string | null }} meta
  */
-export function formatStorefrontCartItem(row, pricedLine, meta = {}) {
-  const isBundleReward = meta.isBundleReward === true;
-  const billableQty = Number(
-    row.billable_quantity ?? row.quantity ?? pricedLine?.quantity ?? 0
+export function formatStorefrontCartItem(row, pricedLine) {
+  const inCartQty = Number(
+    row.billable_quantity ?? row.quantity ?? pricedLine?.paid_quantity ?? pricedLine?.quantity ?? 0
   );
-  const paidQty = isBundleReward
-    ? 0
-    : pricedLine
-      ? Number(pricedLine.paid_quantity ?? billableQty)
-      : billableQty;
-  const freeQty = isBundleReward
-    ? Number(row.free_quantity ?? meta.freeQty ?? 0)
-    : Number(pricedLine?.free_quantity ?? row.free_quantity ?? 0);
-  const displayQty = isBundleReward
-    ? freeQty
-    : Number(
-        row.display_quantity ??
-          pricedLine?.display_quantity ??
-          paidQty + freeQty
-      );
+  const offerQty = Number(pricedLine?.free_quantity ?? row.free_quantity ?? 0);
 
-  const promotionIds = isBundleReward
-    ? Array.isArray(row.applied_promotion_ids)
+  const promotionIds = Array.isArray(pricedLine?.applied_promotion_ids)
+    ? pricedLine.applied_promotion_ids
+    : Array.isArray(row.applied_promotion_ids)
       ? row.applied_promotion_ids
-      : []
-    : Array.isArray(pricedLine?.applied_promotion_ids)
-      ? pricedLine.applied_promotion_ids
-      : Array.isArray(row.applied_promotion_ids)
-        ? row.applied_promotion_ids
-        : [];
+      : [];
 
   const listMinor = pricedLine?.list_price_minor ?? row.list_price_minor_per_unit ?? row.unit_price_minor;
   const offerMinor =
@@ -86,7 +67,7 @@ export function formatStorefrontCartItem(row, pricedLine, meta = {}) {
       ? row.offer_price_minor_per_unit
       : listMinor;
   const finalMinor = pricedLine?.final_price_minor ?? offerMinor ?? listMinor;
-  const lineTotalMinor = isBundleReward ? "0" : pricedLine?.line_total_minor ?? null;
+  const lineTotalMinor = pricedLine?.line_total_minor ?? null;
 
   const item = {
     id: String(row.id),
@@ -95,32 +76,20 @@ export function formatStorefrontCartItem(row, pricedLine, meta = {}) {
     title: row.title_snapshot ?? null,
     unit: row.unit_label ?? null,
     image_url: pickImageUrl(row),
-    quantity: {
-      billable: billableQty,
-      paid: paidQty,
-      free: freeQty,
-      display: displayQty
-    },
+    quantity: inCartQty,
+    offer_quantity: offerQty,
     pricing: {
       list_minor: listMinor != null ? String(listMinor) : null,
       offer_minor: offerMinor != null ? String(offerMinor) : null,
       final_minor: finalMinor != null ? String(finalMinor) : null,
-      line_total_minor: lineTotalMinor
+      line_total_minor: lineTotalMinor != null ? String(lineTotalMinor) : null
     },
     promo: {
-      types: inferPromoTypes(pricedLine, row, {
-        isBundleReward,
-        freeQty,
-        paidQty
-      }),
+      types: inferPromoTypes(pricedLine, row, { offerQty }),
       promotion_ids: promotionIds.map(String)
-    },
-    is_bundle_reward: isBundleReward
+    }
   };
 
-  if (isBundleReward && meta.bundleSourceItemId) {
-    item.bundle_source_item_id = String(meta.bundleSourceItemId);
-  }
   if (row.price_updated === true) {
     item.price_updated = true;
     item.previous_list_minor =
@@ -173,9 +142,9 @@ export function formatStorefrontPromotions(promotionsBase, suggestedCoupons, ite
 
 /**
  * @param {object} priced
- * @param {number} displayUnitsTotal
+ * @param {number} unitsTotal
  */
-export function formatStorefrontSummary(priced, displayUnitsTotal) {
+export function formatStorefrontSummary(priced, unitsTotal) {
   if (!priced) {
     return {
       subtotal_minor: 0,
@@ -192,6 +161,6 @@ export function formatStorefrontSummary(priced, displayUnitsTotal) {
     promotion_discount_minor: priced.promotionDiscountTotalMinor,
     coupon_discount_minor: priced.couponDiscountMinor ?? 0,
     currency: "INR",
-    units_display_total: displayUnitsTotal
+    units_display_total: unitsTotal
   };
 }

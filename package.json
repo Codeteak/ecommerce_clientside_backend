@@ -9,6 +9,7 @@
     "start": "node src/main/bootstrap.js",
     "db:migrate": "node scripts/migrate.js",
     "db:migrate:full": "DB_MIGRATE_FULL_SCHEMA=1 node scripts/migrate.js",
+    "db:build-full-schema": "node scripts/build-full-schema.js",
     "db:prune": "node scripts/prune-noncanonical-tables.js",
     "test": "NODE_ENV=test vitest run",
     "test:watch": "NODE_ENV=test vitest",

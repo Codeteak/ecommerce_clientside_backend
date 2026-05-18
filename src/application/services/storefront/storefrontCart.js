@@ -355,7 +355,7 @@ export function createStorefrontCart({
       const syncMeta = priceMetaByItemId.get(String(it.id));
 
       if (!p) {
-        const row = formatStorefrontCartItem(it, undefined, { isBundleReward: false });
+        const row = formatStorefrontCartItem(it, undefined);
         if (syncMeta?.priceUpdated) {
           row.price_updated = true;
           row.previous_list_minor =
@@ -368,17 +368,13 @@ export function createStorefrontCart({
       }
 
       const billableQty = parseBillableCartQuantity(it.quantity);
-      const paidQty = p.paid_quantity ?? billableQty;
-      const freeQty = p.free_quantity ?? 0;
-      const displayQty = p.display_quantity ?? paidQty + freeQty;
+      const offerQty = p.free_quantity ?? 0;
       const bundlePromotionIds = Array.isArray(p.applied_promotion_ids) ? p.applied_promotion_ids : [];
 
-      const paidSource = {
+      const lineSource = {
         ...it,
         billable_quantity: billableQty,
-        paid_quantity: paidQty,
-        free_quantity: freeQty,
-        display_quantity: displayQty,
+        free_quantity: offerQty,
         list_price_minor: p.list_price_minor,
         final_price_minor: p.final_price_minor,
         line_total_minor: p.line_total_minor,
@@ -387,45 +383,17 @@ export function createStorefrontCart({
         applied_promotion_ids: bundlePromotionIds
       };
       if (syncMeta?.priceUpdated) {
-        paidSource.price_updated = true;
-        paidSource.previous_unit_price_minor = syncMeta.previousUnitPriceMinor;
+        lineSource.price_updated = true;
+        lineSource.previous_unit_price_minor = syncMeta.previousUnitPriceMinor;
       }
 
-      cartItems.push(
-        formatStorefrontCartItem(paidSource, p, { isBundleReward: false })
-      );
-
-      if (freeQty > 0) {
-        cartItems.push(
-          formatStorefrontCartItem(
-            {
-              ...it,
-              id: `${String(it.id)}:bundle-reward`,
-              free_quantity: freeQty,
-              display_quantity: freeQty,
-              applied_promotion_ids: bundlePromotionIds
-            },
-            {
-              ...p,
-              list_price_minor: "0",
-              final_price_minor: "0",
-              line_total_minor: "0",
-              offer_discount_minor: "0",
-              promo_discount_minor: "0"
-            },
-            {
-              isBundleReward: true,
-              freeQty,
-              bundleSourceItemId: it.id
-            }
-          )
-        );
-      }
+      cartItems.push(formatStorefrontCartItem(lineSource, p));
     }
 
-    const displayUnitsTotal = cartItems
-      .filter((row) => row.is_bundle_reward !== true)
-      .reduce((sum, row) => sum + Number(row.quantity?.display ?? 0), 0);
+    const displayUnitsTotal = cartItems.reduce(
+      (sum, row) => sum + Number(row.quantity ?? 0) + Number(row.offer_quantity ?? 0),
+      0
+    );
 
     const promotions = formatStorefrontPromotions(
       promotionsBase,

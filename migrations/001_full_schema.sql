@@ -1,7 +1,9 @@
 -- Sole PostgreSQL migration for fresh deployment of the multi-tenant ecommerce schema.
--- Apply this entire file once per new database (e.g. psql -f 001_deployment_postgresql.sql).
+-- Apply this entire file once per new database (e.g. DB_MIGRATE_FULL_SCHEMA=1 npm run db:migrate).
+-- Canonical split migrations live under migrations/001_deployment_postgresql/tables/ (001–036).
 -- Layout targets fresh installs (inline FKs, CHECKs, timestamps on CREATE TABLE); idempotent
 -- ALTER … IF NOT EXISTS / DROP IF EXISTS blocks also help bring older databases closer to current shape.
+-- Trailing section "deployment sync" mirrors 023, 035, 036 for legacy DB upgrades.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -1881,3 +1883,121 @@ ALTER TABLE promotion_rules FORCE ROW LEVEL SECURITY;
 ALTER TABLE promotion_bundle_rules FORCE ROW LEVEL SECURITY;
 ALTER TABLE promotion_coupons FORCE ROW LEVEL SECURITY;
 ALTER TABLE promotion_redemptions FORCE ROW LEVEL SECURITY;
+
+-- =============================================================================
+-- deployment sync (migrations/001_deployment_postgresql/tables)
+-- Idempotent upgrades aligned with split migrations 023, 033, 035, 036.
+-- =============================================================================
+
+-- 023_auth_refresh_tokens.sql — upgrade partial / legacy refresh-token tables
+ALTER TABLE auth_refresh_tokens ADD COLUMN IF NOT EXISTS customer_id UUID;
+ALTER TABLE auth_refresh_tokens ADD COLUMN IF NOT EXISTS shop_id UUID;
+ALTER TABLE auth_refresh_tokens ADD COLUMN IF NOT EXISTS subject_type TEXT DEFAULT 'customer';
+UPDATE auth_refresh_tokens SET subject_type = 'customer' WHERE subject_type IS NULL;
+ALTER TABLE auth_refresh_tokens ALTER COLUMN subject_type SET NOT NULL;
+ALTER TABLE auth_refresh_tokens ALTER COLUMN subject_type SET DEFAULT 'customer';
+ALTER TABLE auth_refresh_tokens ADD COLUMN IF NOT EXISTS jti UUID;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+      FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'auth_refresh_tokens'
+       AND column_name = 'jwt_id'
+  ) THEN
+    UPDATE auth_refresh_tokens
+       SET jti = jwt_id::uuid
+     WHERE jti IS NULL
+       AND jwt_id IS NOT NULL
+       AND jwt_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+  END IF;
+END $$;
+ALTER TABLE auth_refresh_tokens ADD COLUMN IF NOT EXISTS consumed_at TIMESTAMPTZ;
+ALTER TABLE auth_refresh_tokens ADD COLUMN IF NOT EXISTS replaced_by_token_hash TEXT;
+ALTER TABLE auth_refresh_tokens ADD COLUMN IF NOT EXISTS issued_ip TEXT;
+ALTER TABLE auth_refresh_tokens ADD COLUMN IF NOT EXISTS user_agent TEXT;
+ALTER TABLE auth_refresh_tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'auth_refresh_tokens_subject_type_check'
+  ) THEN
+    ALTER TABLE auth_refresh_tokens
+      ADD CONSTRAINT auth_refresh_tokens_subject_type_check
+      CHECK (subject_type IN ('customer', 'shop_staff', 'super_admin'));
+  END IF;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS auth_refresh_tokens_token_hash_key
+  ON auth_refresh_tokens (token_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS auth_refresh_tokens_jti_key
+  ON auth_refresh_tokens (jti);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+      FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'auth_refresh_tokens'
+       AND column_name = 'jwt_id'
+  ) THEN
+    UPDATE auth_refresh_tokens
+       SET jti = jwt_id::uuid
+     WHERE jti IS NULL
+       AND jwt_id IS NOT NULL
+       AND jwt_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+    ALTER TABLE auth_refresh_tokens DROP COLUMN jwt_id;
+  END IF;
+END $$;
+
+-- 033_promotion_and_category_updates.sql — extended column documentation
+COMMENT ON COLUMN promotion_coupons.min_subtotal_minor IS
+  'Minimum cart subtotal in minor currency units (e.g. cents) before this coupon can apply. NULL means no floor. Needed so codes like "20 off when you spend 50" are enforceable in checkout.';
+COMMENT ON COLUMN promotion_coupons.first_order_only IS
+  'When true, only customers with no prior completed orders may use the code. Stored here for merchandising rules; the customer-facing service must enforce it using order history.';
+COMMENT ON COLUMN promotion_coupons.new_customer_only IS
+  'When true, only customers whose account is newer than shop_promotion_settings.first_coupon_eligibility_days may use the code. Pairs with shop-level window; application enforces.';
+COMMENT ON COLUMN shop_promotion_settings.max_coupons_per_order IS
+  'Hard cap on how many different coupon codes may stack on one order. Prevents abuse and keeps UX predictable; checkout reads this from the shop row.';
+COMMENT ON COLUMN shop_promotion_settings.allow_combine_auto_campaigns IS
+  'When false, automatic campaign discounts should not stack from multiple winning promotions—only one auto campaign applies. When true, engine may combine eligible automatic discounts per other stacking flags.';
+COMMENT ON COLUMN orders.promotion_discount_total_minor IS
+  'Sum of all promotion- and coupon-driven discounts for the order in minor units. Needed for accounting, refunds, and customer receipts without replaying pricing rules.';
+COMMENT ON COLUMN orders.applied_promotion_ids IS
+  'JSON array/object of promotion UUIDs that contributed to the order-level discount. Snapshot for analytics and dispute resolution; complements promotion_redemptions.';
+COMMENT ON COLUMN orders.coupon_code_normalized IS
+  'Primary coupon code applied on the order in normalized form (matches promotion_coupons.code_normalized). NULL if no code; helps support look up which campaign fired.';
+COMMENT ON COLUMN order_items.list_price_minor IS
+  'Unit or line list price before promotions in minor units. Lets you show "was / now" on invoices and recompute margin after discounts.';
+COMMENT ON COLUMN order_items.line_discount_minor IS
+  'Total discount applied to this line in minor units (promos, coupons, bundles). Separates promotional savings from tax/shipping logic.';
+COMMENT ON COLUMN order_items.applied_promotion_ids IS
+  'Which promotion IDs affected this line. Finer-grained than order-level totals; used when refunds must unwind specific campaign contributions.';
+
+-- 035_drop_shop_products_stock_quantity.sql
+ALTER TABLE shop_products DROP COLUMN IF EXISTS stock_quantity;
+
+-- 036_outbox_worker_columns.sql — optional worker columns for outboxProcessor
+ALTER TABLE outbox_messages ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending';
+ALTER TABLE outbox_messages ADD COLUMN IF NOT EXISTS retry_count INT NOT NULL DEFAULT 0;
+ALTER TABLE outbox_messages ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'outbox_messages_status_chk'
+  ) THEN
+    ALTER TABLE outbox_messages
+      ADD CONSTRAINT outbox_messages_status_chk
+      CHECK (status IN ('pending', 'processing', 'done', 'failed'));
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_outbox_messages_status_created
+  ON outbox_messages (status, created_at)
+  WHERE status IN ('pending', 'processing');

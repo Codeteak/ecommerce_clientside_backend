@@ -371,7 +371,7 @@ export const schemas = {
       coupon_discount_minor: { type: "integer" },
       units_display_total: {
         type: "integer",
-        description: "Sum of display units on paid lines (includes bundle free qty on parent line)."
+        description: "Sum of quantity + offer_quantity across all cart lines."
       },
       currency: { type: "string", example: "INR" }
     }
@@ -410,15 +410,6 @@ export const schemas = {
       }
     }
   },
-  StorefrontCartLineQuantity: {
-    type: "object",
-    properties: {
-      billable: { type: "number", description: "Qty stored on cart line (what customer added)." },
-      paid: { type: "number", description: "Units charged after promos." },
-      free: { type: "number", description: "Bundle free units (also on parent line when bundle applies)." },
-      display: { type: "number", description: "Units to show in UI (paid + free on parent line)." }
-    }
-  },
   StorefrontCartLinePricing: {
     type: "object",
     description: "Per-unit amounts in minor units unless noted.",
@@ -442,7 +433,7 @@ export const schemas = {
   StorefrontCartLineItem: {
     type: "object",
     description:
-      "Paid line or synthetic bundle reward (`id` suffix `:bundle-reward`). Reward lines are read-only.",
+      "One row per cart line. `quantity` is what the customer added; `offer_quantity` is bundle free units (e.g. buy 2 get 1 → quantity 2, offer_quantity 1).",
     properties: {
       id: { type: "string" },
       product_id: { type: "string", format: "uuid", nullable: true },
@@ -450,11 +441,16 @@ export const schemas = {
       title: { type: "string", nullable: true },
       unit: { type: "string", nullable: true },
       image_url: { type: "string", nullable: true, format: "uri" },
-      quantity: { $ref: "#/components/schemas/StorefrontCartLineQuantity" },
+      quantity: {
+        type: "number",
+        description: "Billable units in cart (matches PATCH/DELETE quantity)."
+      },
+      offer_quantity: {
+        type: "number",
+        description: "Free units from bundle promos (0 when no bundle applies)."
+      },
       pricing: { $ref: "#/components/schemas/StorefrontCartLinePricing" },
       promo: { $ref: "#/components/schemas/StorefrontCartLinePromo" },
-      is_bundle_reward: { type: "boolean" },
-      bundle_source_item_id: { type: "string", nullable: true },
       price_updated: { type: "boolean" },
       previous_list_minor: { type: "string", nullable: true }
     }
