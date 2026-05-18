@@ -79,6 +79,19 @@ export class CartRepo {
     throw new Error("Not implemented");
   }
 
+  /**
+   * Batch sellable product snapshots for cart prune/sync (same rules as getProductSnapshotForCart).
+   * @param {import("pg").PoolClient} _client
+   * @param {string} _shopId
+   * @param {string[]} _productIds
+   */
+  async listProductSnapshotsForCart(_client, _shopId, _productIds) {
+    void _client;
+    void _shopId;
+    void _productIds;
+    throw new Error("Not implemented");
+  }
+
   async updateCartCustomerId(_client, _shopId, _cartId, _newCustomerIdText) {
     void _client;
     void _shopId;

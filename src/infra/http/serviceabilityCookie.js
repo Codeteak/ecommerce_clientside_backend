@@ -14,7 +14,10 @@ export function getServiceabilityCookieName() {
 
 export function signServiceabilityPayload(obj) {
   const payload = Buffer.from(JSON.stringify(obj), "utf8").toString("base64url");
-  const sig = crypto.createHmac("sha256", env.JWT_SECRET).update(payload).digest("base64url");
+  const sig = crypto
+    .createHmac("sha256", env.SERVICEABILITY_COOKIE_SECRET)
+    .update(payload)
+    .digest("base64url");
   return `${payload}.${sig}`;
 }
 
@@ -24,7 +27,10 @@ export function verifyServiceabilityCookie(raw) {
   if (i <= 0) return null;
   const payload = raw.slice(0, i);
   const sig = raw.slice(i + 1);
-  const expected = crypto.createHmac("sha256", env.JWT_SECRET).update(payload).digest("base64url");
+  const expected = crypto
+    .createHmac("sha256", env.SERVICEABILITY_COOKIE_SECRET)
+    .update(payload)
+    .digest("base64url");
   const a = Buffer.from(sig, "utf8");
   const b = Buffer.from(expected, "utf8");
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {

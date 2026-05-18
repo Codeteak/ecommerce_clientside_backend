@@ -4,16 +4,11 @@ import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { buildStorefrontSessionResponse } from "./buildStorefrontSessionResponse.js";
 import { shopAllowsCustomers } from "./shopPolicy.js";
 import { verifyOtpCode } from "../../../infra/security/otpHasher.js";
-
-function normalizePhone(raw) {
-  return String(raw || "")
-    .trim()
-    .replace(/[\s\-()]/g, "");
-}
+import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normalizeCustomerPhone.js";
 
 export function createVerifyCustomerOtp({ authRepo, otpMaxAttempts = 5 }) {
   return async function verifyCustomerOtp(client, input) {
-    const phone = normalizePhone(input.phone);
+    const phone = normalizeCustomerPhoneForStorage(input.phone);
     const shopId = input.shopId;
     const code = String(input.code || "").trim();
     const ip = input.ip ?? null;
@@ -55,6 +50,9 @@ export function createVerifyCustomerOtp({ authRepo, otpMaxAttempts = 5 }) {
       user = await authRepo.insertUser(client, { email: null, phone, password_hash: null });
     } else if (!user.is_active) {
       throw new AuthError("Invalid credentials");
+    } else if (user.phone !== phone) {
+      await authRepo.updateUserPhone(client, user.id, phone);
+      user = { ...user, phone };
     }
     if (await authRepo.isUserActiveShopStaff(client, user.id)) {
       throw new AuthError("Invalid credentials");
@@ -67,6 +65,11 @@ export function createVerifyCustomerOtp({ authRepo, otpMaxAttempts = 5 }) {
         display_name: null
       });
     } else if (customer.is_blocked || customer.is_deleted) {
+      throw new AuthError("Invalid credentials");
+    }
+
+    const existingMembership = await authRepo.getCustomerShopMembership(client, customer.id, shopId);
+    if (existingMembership?.is_blocked) {
       throw new AuthError("Invalid credentials");
     }
 

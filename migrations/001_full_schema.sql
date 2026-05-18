@@ -2001,3 +2001,27 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_outbox_messages_status_created
   ON outbox_messages (status, created_at)
   WHERE status IN ('pending', 'processing');
+
+-- 037_carts_shop_customer_index.sql
+CREATE INDEX IF NOT EXISTS idx_carts_shop_customer
+  ON carts (shop_id, customer_id);
+
+-- 038_carts_shop_customer_unique.sql
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'carts_shop_customer_unique'
+  ) THEN
+    ALTER TABLE carts
+      ADD CONSTRAINT carts_shop_customer_unique UNIQUE (shop_id, customer_id);
+  END IF;
+END $$;
+
+-- 039_pg_trgm_product_search.sql (skip if extensions disallowed)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE INDEX IF NOT EXISTS idx_global_products_name_trgm
+  ON global_products USING gin (name gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_global_products_slug_trgm
+  ON global_products USING gin (slug gin_trgm_ops);

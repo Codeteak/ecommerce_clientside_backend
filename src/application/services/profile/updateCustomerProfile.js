@@ -2,6 +2,7 @@ import { AuthError } from "../../../domain/errors/AuthError.js";
 import { ConflictError } from "../../../domain/errors/ConflictError.js";
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { getCustomerProfile } from "./getCustomerProfile.js";
+import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normalizeCustomerPhone.js";
 
 /**
  * Purpose: Partially update display name and/or nested address fields; returns the same shape as GET.
@@ -38,8 +39,10 @@ export function updateCustomerProfile({ authRepo }) {
       });
     }
     if (hasPhone) {
+      const storedPhone =
+        patch.phone == null ? null : normalizeCustomerPhoneForStorage(patch.phone);
       try {
-        await authRepo.updateUserPhone(client, userId, patch.phone ?? null);
+        await authRepo.updateUserPhone(client, userId, storedPhone);
       } catch (err) {
         if (err?.code === "23505" && err?.constraint === "users_phone_key") {
           throw new ConflictError("Phone number is already in use");

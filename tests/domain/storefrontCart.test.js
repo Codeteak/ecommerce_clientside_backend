@@ -69,6 +69,7 @@ function deps(overrides = {}) {
     findCartByShopAndCustomerId: vi.fn().mockResolvedValue({ id: cartId }),
     insertCart: vi.fn(),
     listCartItems: vi.fn().mockResolvedValue([cartLine()]),
+    listProductSnapshotsForCart: vi.fn().mockResolvedValue([productSnapshot()]),
     getProductSnapshotForCart: vi.fn().mockResolvedValue(productSnapshot()),
     findMatchingCartItem: vi.fn().mockResolvedValue(null),
     findCartItemWithCart: vi.fn().mockResolvedValue({
@@ -160,7 +161,7 @@ describe("storefront cart", () => {
 
   it("GET cart removes unavailable product lines and returns empty cart", async () => {
     const d = deps();
-    d.cartRepo.getProductSnapshotForCart.mockResolvedValue(null);
+    d.cartRepo.listProductSnapshotsForCart.mockResolvedValue([]);
     d.cartRepo.listCartItems
       .mockResolvedValueOnce([cartLine()])
       .mockResolvedValue([]);
@@ -176,7 +177,7 @@ describe("storefront cart", () => {
 
   it("rejects when product is unavailable", async () => {
     const d = deps();
-    d.cartRepo.getProductSnapshotForCart.mockResolvedValue(null);
+    d.cartRepo.listProductSnapshotsForCart.mockResolvedValue([]);
     const service = createStorefrontCart(d);
     await expect(
       service.updateItemQuantity({}, shopId, { customerId: "cust-1" }, cartItemId, { delta: 1 })
@@ -236,6 +237,62 @@ describe("storefront cart", () => {
     expect(out.summary.units_display_total).toBe(3);
     expect(out.items[0].pricing).toHaveProperty("list_minor");
     expect(out.items[0].promo.types).toContain("bundle");
+  });
+
+  it("batches product snapshots on GET cart with multiple lines", async () => {
+    const line2 = cartLine({
+      id: "44444444-4444-4444-8444-444444444444",
+      product_id: "55555555-5555-4555-8555-555555555555"
+    });
+    const d = deps();
+    d.cartRepo.listCartItems.mockResolvedValue([cartLine(), line2]);
+    d.cartRepo.listProductSnapshotsForCart.mockResolvedValue([
+      productSnapshot(),
+      productSnapshot({
+        id: "55555555-5555-4555-8555-555555555555",
+        name: "Banana"
+      })
+    ]);
+    const service = createStorefrontCart(d);
+    await service.getCartContents({}, shopId, { customerId: "cust-1" });
+
+    expect(d.cartRepo.listProductSnapshotsForCart).toHaveBeenCalledTimes(1);
+    expect(d.cartRepo.getProductSnapshotForCart).not.toHaveBeenCalled();
+  });
+
+  it("does not load suggested coupons when cart is empty", async () => {
+    const d = deps();
+    d.cartRepo.listCartItems.mockResolvedValue([]);
+    d.priceStorefrontLines.mockResolvedValue(null);
+    const service = createStorefrontCart(d);
+    await service.getCartContents({}, shopId, { customerId: "cust-1" });
+
+    expect(d.listApplicableCoupons).not.toHaveBeenCalled();
+  });
+
+  it("skips suggested coupons when includeSuggestedCoupons is false", async () => {
+    const d = deps();
+    const service = createStorefrontCart(d);
+    await service.getCartContents({}, shopId, { customerId: "cust-1" }, {
+      includeSuggestedCoupons: false
+    });
+
+    expect(d.listApplicableCoupons).not.toHaveBeenCalled();
+  });
+
+  it("retries findCart when insertCart hits unique violation", async () => {
+    const d = deps();
+    const uniqueErr = Object.assign(new Error("duplicate key"), { code: "23505" });
+    d.cartRepo.findCartByShopAndCustomerId
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: cartId });
+    d.cartRepo.insertCart.mockRejectedValueOnce(uniqueErr);
+    const service = createStorefrontCart(d);
+    const out = await service.getCartContents({}, shopId, { customerId: "cust-1" });
+
+    expect(d.cartRepo.insertCart).toHaveBeenCalledTimes(1);
+    expect(d.cartRepo.findCartByShopAndCustomerId).toHaveBeenCalledTimes(2);
+    expect(out.cart_id).toBe(cartId);
   });
 
   it("rejects PATCH on legacy synthetic bundle-reward cart item ids", async () => {

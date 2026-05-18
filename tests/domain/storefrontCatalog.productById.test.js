@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createStorefrontCatalog } from "../../src/application/services/storefront/storefrontCatalog.js";
+import { storefrontCatalogTestDeps } from "../helpers/storefrontCatalogTestDeps.js";
 
 describe("storefrontCatalog getProductById", () => {
   it("maps product detail by shop product UUID", async () => {
@@ -29,7 +30,8 @@ describe("storefrontCatalog getProductById", () => {
       catalogRepo,
       ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
       catalogCache: { swr: vi.fn((_k, _t, fn) => fn()) },
-      catalogCacheTtlSec: 0
+      catalogCacheTtlSec: 0,
+      ...storefrontCatalogTestDeps()
     });
 
     const out = await storefrontCatalog.getProductById(
@@ -79,7 +81,8 @@ describe("storefrontCatalog getProductById", () => {
       catalogRepo,
       ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
       catalogCache: { swr: vi.fn((_k, _t, fn) => fn()) },
-      catalogCacheTtlSec: 0
+      catalogCacheTtlSec: 0,
+      ...storefrontCatalogTestDeps()
     });
 
     const out = await storefrontCatalog.getProductById(
@@ -121,7 +124,8 @@ describe("storefrontCatalog getProductById", () => {
       catalogRepo,
       ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
       catalogCache: { swr: vi.fn((_k, _t, fn) => fn()) },
-      catalogCacheTtlSec: 0
+      catalogCacheTtlSec: 0,
+      ...storefrontCatalogTestDeps()
     });
 
     const out = await storefrontCatalog.getProductById(
@@ -162,7 +166,8 @@ describe("storefrontCatalog getProductById", () => {
       catalogRepo,
       ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
       catalogCache: { swr },
-      catalogCacheTtlSec: 60
+      catalogCacheTtlSec: 60,
+      ...storefrontCatalogTestDeps()
     });
 
     await storefrontCatalog.getProductById(

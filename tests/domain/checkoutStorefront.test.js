@@ -452,7 +452,7 @@ describe("checkoutStorefront validations", () => {
         shopId: "00000000-0000-4000-8000-000000000001",
         aggregateType: "order",
         aggregateId: "order-1",
-        eventType: "order.placed.realtime.retry"
+        eventType: "ORDER_PLACED_REALTIME"
       })
     );
   });

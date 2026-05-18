@@ -2,7 +2,7 @@
 
 Express API with **domain → application → adapters → interface** layering. The composition root is `src/main/composition.js`.
 
-**API reference:** [docs/API_FRONTEND.md](docs/API_FRONTEND.md) · Swagger UI: `/api-docs/` (when `ENABLE_API_DOCS=true`)
+**API reference:** [docs/API_FRONTEND.md](docs/API_FRONTEND.md) · Swagger UI: `/api-docs/` (when `ENABLE_API_DOCS=true`) · **Production deploy:** [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md)
 
 The database schema is **`migrations/001_full_schema.sql`** only (`npm run db:migrate` applies that file explicitly). To drop legacy tables not in that schema (after a backup), extend **`scripts/prune-noncanonical-tables.sql`** and run **`npm run db:prune`**. Tenant-scoped reads use Postgres **RLS** via `set_config('app.current_shop_id', …)` before querying.
 

@@ -22,8 +22,10 @@ export class PromotionRepoPg extends PromotionRepo {
     return rows[0] ?? null;
   }
 
-  async listEligibleCouponsWithUsage(client, shopId, customerId, codeNormalized) {
+  async listEligibleCouponsWithUsage(client, shopId, customerId, codeNormalized, options = {}) {
     await setTenantContext(client, shopId);
+    const limit =
+      Number.isInteger(options?.limit) && options.limit > 0 ? Math.min(options.limit, 50) : null;
     const { rows } = await client.query(
       `SELECT
          c.id,
@@ -77,8 +79,9 @@ export class PromotionRepoPg extends PromotionRepo {
          AND p.starts_at <= now()
          AND p.ends_at >= now()
          AND ($3::text IS NULL OR c.code_normalized = $3)
-       ORDER BY p.priority ASC, p.created_at DESC, c.code_normalized ASC`,
-      [shopId, String(customerId), codeNormalized]
+       ORDER BY p.priority ASC, p.created_at DESC, c.code_normalized ASC
+       ${limit != null ? "LIMIT $4" : ""}`,
+      limit != null ? [shopId, String(customerId), codeNormalized, limit] : [shopId, String(customerId), codeNormalized]
     );
     return rows;
   }

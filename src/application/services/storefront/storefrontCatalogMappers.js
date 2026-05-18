@@ -31,7 +31,9 @@ export function mapStorefrontCategoryRow(r) {
   };
 }
 
-export function mapStorefrontProductRow(r) {
+/** @param {Record<string, unknown>} r @param {{ listView?: boolean }} [options] */
+export function mapStorefrontProductRow(r, options = {}) {
+  const listView = options.listView === true;
   const thumbUrl = toPublicMediaUrl(r.thumb_storage_key);
   const globalImageUrl = typeof r.global_image_url === "string" && r.global_image_url !== "" ? r.global_image_url : null;
   const categoryImageUrl = toPublicMediaUrl(r.category_image_storage_key);
@@ -86,20 +88,22 @@ export function mapStorefrontProductRow(r) {
             url: thumbnailUrl
           }
         : null,
-    images: productImages.map((img) => {
-      const out = {
-        sortOrder: img.sort_order,
-        contentType: img.content_type,
-        url: img.url ?? toPublicMediaUrl(img.storage_key)
-      };
-      if (img.media_asset_id != null) {
-        out.mediaAssetId = img.media_asset_id;
-      }
-      if (img.storage_key != null) {
-        out.storageKey = img.storage_key;
-      }
-      return out;
-    }),
+    images: listView
+      ? []
+      : productImages.map((img) => {
+          const out = {
+            sortOrder: img.sort_order,
+            contentType: img.content_type,
+            url: img.url ?? toPublicMediaUrl(img.storage_key)
+          };
+          if (img.media_asset_id != null) {
+            out.mediaAssetId = img.media_asset_id;
+          }
+          if (img.storage_key != null) {
+            out.storageKey = img.storage_key;
+          }
+          return out;
+        }),
     category:
       r.category_slug != null
         ? {

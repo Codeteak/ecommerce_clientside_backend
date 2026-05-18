@@ -5,6 +5,7 @@ import {
   verifyCustomerAccessToken,
   verifyCustomerRefreshToken
 } from "../../../infra/auth/jwt.js";
+import { accessTokenTtlSec } from "../../../infra/auth/accessTokenRegistry.js";
 import { buildProfileFromShops } from "./customerProfile.js";
 import { hashToken } from "../../../infra/security/tokenHash.js";
 
@@ -29,17 +30,23 @@ export async function buildStorefrontSessionResponse(authRepo, client, userId, s
   const shopIds = shops.map((s) => s.id);
   const profile = buildProfileFromShops(customer, shops);
 
-  const accessToken = signCustomerAccessToken({
+  const access = signCustomerAccessToken({
     userId: user.id,
     customerId: customer.id,
     shopId: shopIds.length === 1 ? shopIds[0] : undefined
   });
-  const payload = verifyCustomerAccessToken(accessToken);
+  const payload = verifyCustomerAccessToken(access.token);
   const ttlMs = Number(payload.exp) * 1000 - Date.now();
+  const ttlSec = accessTokenTtlSec();
+
+  if (sessionMeta?.accessTokenRegistry) {
+    await sessionMeta.accessTokenRegistry.registerAccessJti(user.id, access.jti, ttlSec);
+  }
+
   if (sessionMeta?.sessionCache && ttlMs > 0) {
     await sessionMeta.sessionCache.storeSession({
       userId: user.id,
-      sessionId: hashToken(accessToken),
+      sessionId: access.jti,
       ttlMs
     });
   }
@@ -60,7 +67,7 @@ export async function buildStorefrontSessionResponse(authRepo, client, userId, s
   });
 
   return {
-    accessToken,
+    accessToken: access.token,
     refreshToken: refresh.token,
     role: "customer",
     user: {

@@ -14,7 +14,13 @@ const options = {
       "req.headers.authorization",
       "req.headers.cookie",
       "req.body.refreshToken",
-      "req.body.code"
+      "req.body.code",
+      "req.body.phone",
+      "req.body.newPhone",
+      "req.body.email",
+      "phone",
+      "email",
+      "otp"
     ],
     remove: true
   }

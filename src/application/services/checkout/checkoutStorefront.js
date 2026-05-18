@@ -1,60 +1,23 @@
 import { requireShopId } from "../catalog/catalogShopId.js";
-import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import { AppError } from "../../../domain/errors/AppError.js";
-import crypto from "node:crypto";
-import { logger } from "../../../config/logger.js";
+import { getRequestLogger } from "../../../infra/logging/requestContext.js";
+import {
+  assertValidIdempotencyKey,
+  customerAddressSnapshot,
+  normalizeCouponCode,
+  randomOrderNumber
+} from "./checkoutInput.js";
+import { createCheckoutCartValidation } from "./checkoutCartValidation.js";
+import {
+  recordCheckoutIdempotency,
+  tryCheckoutIdempotentReplay
+} from "./checkoutIdempotency.js";
+import { buildCheckoutOrderLines } from "./checkoutOrderAssembly.js";
+import { OUTBOX_EVENT_TYPES } from "../../constants/outboxEventTypes.js";
 
 /**
- * Purpose: This file handles storefront checkout business logic.
- * It validates checkout input, creates the order, and then notifies
- * all picker clients for the same shop_id that a new order was placed.
+ * Purpose: Storefront checkout business logic — validates input, creates orders, notifies pickers.
  */
-function randomOrderNumber() {
-  return `ORD-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
-}
-
-function minorFromLine(q, unitPrice) {
-  const line = Number(q) * Number(unitPrice);
-  return Math.round(line);
-}
-
-/** @param {Record<string, unknown> | undefined} pricedLine @param {unknown} cartQty */
-function orderLineQuantitiesFromPriced(pricedLine, cartQty) {
-  const cart = Number(cartQty);
-  if (!pricedLine) {
-    return { quantity: cart, paidQuantity: cart, freeQuantity: 0 };
-  }
-  const paid = Math.max(0, Number(pricedLine.paid_quantity ?? pricedLine.quantity ?? cart));
-  const free = Math.max(0, Number(pricedLine.free_quantity ?? 0));
-  const display = Math.max(
-    paid + free,
-    Number(pricedLine.display_quantity ?? 0) || paid + free
-  );
-  return {
-    quantity: display,
-    paidQuantity: paid,
-    freeQuantity: free
-  };
-}
-
-function checkoutError(code, message) {
-  return new AppError(message, { statusCode: 400, code });
-}
-
-function customerAddressSnapshot(addr) {
-  if (!addr) return null;
-  const parts = [addr.line1, addr.line2, addr.landmark, addr.city, addr.state, addr.postalCode, addr.country]
-    .map((x) => (x != null && String(x).trim() !== "" ? String(x).trim() : null))
-    .filter(Boolean);
-  return parts.length ? parts.join(", ") : null;
-}
-
-function normalizeCouponCode(code) {
-  if (typeof code !== "string") return null;
-  const trimmed = code.trim();
-  return trimmed ? trimmed.toUpperCase() : null;
-}
-
 export function createCheckoutStorefront({
   cartRepo,
   orderRepo,
@@ -65,24 +28,17 @@ export function createCheckoutStorefront({
   promotionRepo,
   emitOrderPlaced = null
 }) {
+  const cartValidation = createCheckoutCartValidation({ authRepo, checkShopServiceArea });
+
   return async function checkoutStorefront(client, input) {
+    const log = getRequestLogger();
     const { shopId: shopRaw, customerId, userId, notes, requestMeta, idempotencyKey, couponCode: rawCoupon } =
       input;
     const couponCode = normalizeCouponCode(rawCoupon ?? null);
     const shopId = requireShopId(shopRaw);
     const rawIdem = typeof idempotencyKey === "string" ? idempotencyKey.trim() : "";
-    if (rawIdem && (rawIdem.length < 8 || rawIdem.length > 128)) {
-      throw checkoutError(
-        "INVALID_IDEMPOTENCY_KEY",
-        "Idempotency-Key header must be between 8 and 128 characters when provided."
-      );
-    }
-    if (rawIdem && /[\x00-\x1f\x7f]/.test(rawIdem)) {
-      throw checkoutError(
-        "INVALID_IDEMPOTENCY_KEY",
-        "Idempotency-Key must not contain control characters."
-      );
-    }
+    assertValidIdempotencyKey(rawIdem);
+
     const logBase = {
       event: "api.checkout.failed",
       requestId: requestMeta?.requestId,
@@ -94,114 +50,26 @@ export function createCheckoutStorefront({
     };
 
     try {
-      const assertAddressServiceable = async (profileAddress) => {
-        const service = await checkShopServiceArea({
-          shopId,
-          lat: Number(profileAddress.lat),
-          lng: Number(profileAddress.lng)
-        });
-        if (service.inServiceArea) return;
-
-        logger.warn(
-          {
-            event: "api.checkout.failed",
-            requestId: requestMeta?.requestId,
-            method: requestMeta?.method,
-            route: requestMeta?.route,
-            shopId,
-            userId,
-            customerId,
-            code: service.code || "ADDRESS_NOT_SERVICEABLE",
-            distanceM: service.distanceM ?? null,
-            maxRadiusM: service.maxRadiusM ?? null,
-            addressLat: Number(profileAddress.lat),
-            addressLng: Number(profileAddress.lng)
-          },
-          "Checkout serviceability rejected"
-        );
-        if (service.code === "SHOP_UNAVAILABLE") {
-          throw checkoutError("SHOP_UNAVAILABLE", service.message || "This shop is not available for orders.");
-        }
-        if (service.code === "SHOP_LOCATION_MISSING") {
-          throw checkoutError("SHOP_LOCATION_MISSING", service.message || "Shop delivery location is not configured.");
-        }
-        if (service.code === "ADDRESS_COORDINATES_INVALID") {
-          throw checkoutError(
-            "ADDRESS_COORDINATES_INVALID",
-            service.message || "Selected address coordinates are invalid."
-          );
-        }
-        const distanceInfo =
-          service.distanceM != null && service.maxRadiusM != null
-            ? ` (distance ${service.distanceM}m, max ${service.maxRadiusM}m)`
-            : "";
-        throw checkoutError(
-          "ADDRESS_NOT_SERVICEABLE",
-          `${service.message || "Selected address is not serviceable for delivery"}${distanceInfo}`
-        );
-      };
-
-      const membership = await authRepo.getMembershipByCustomerAndShop(client, customerId, shopId);
-      if (!membership?.is_active || membership.is_blocked || membership.is_deleted) {
-        throw new ValidationError("No access to this shop");
-      }
-
-      const profile = await authRepo.getCustomerProfileByCustomerId(client, customerId);
-      if (!profile || profile.is_blocked || profile.is_deleted) {
-        throw new ValidationError("Invalid customer");
-      }
-      if (profile.user_id !== userId) {
-        throw new ValidationError("Invalid customer");
-      }
-      // Temporary: allow checkout without a registered phone while OTP/mobile flow is not enabled in production.
-      // Re-enable PHONE_REQUIRED once real OTP verification is live.
-      if (!profile.address || !profile.address.id || !profile.address.line1) {
-        throw checkoutError("ADDRESS_REQUIRED", "Delivery address is required");
-      }
-      if (profile.address.lat == null || profile.address.lng == null) {
-        throw checkoutError("ADDRESS_COORDINATES_REQUIRED", "Selected address must include location coordinates");
-      }
-      await assertAddressServiceable(profile.address);
+      const profile = await cartValidation.validateCheckoutCustomer(
+        client,
+        shopId,
+        customerId,
+        userId,
+        requestMeta
+      );
 
       const custKey = String(customerId);
 
-      if (rawIdem) {
-        await orderRepo.acquireCheckoutIdempotencyLock(client, shopId, custKey, rawIdem);
-        const existingOrderId = await orderRepo.findCheckoutIdempotencyOrderId(client, shopId, custKey, rawIdem);
-        if (existingOrderId) {
-          const summary = await orderRepo.getOrderSummaryForCheckoutReplay(
-            client,
-            shopId,
-            existingOrderId,
-            custKey
-          );
-          if (summary) {
-            logger.info(
-              {
-                event: "api.checkout.idempotent_replay",
-                requestId: requestMeta?.requestId,
-                shopId,
-                customerId,
-                orderId: summary.id
-              },
-              "Checkout idempotent replay"
-            );
-            return {
-              orderId: summary.id,
-              orderNumber: summary.order_number,
-              subtotal_minor: summary.subtotal_minor != null ? Number(summary.subtotal_minor) : undefined,
-              promotion_discount_minor:
-                summary.promotion_discount_total_minor != null
-                  ? Number(summary.promotion_discount_total_minor)
-                  : undefined,
-              coupon_discount_minor: summary.coupon_discount_minor != null ? Number(summary.coupon_discount_minor) : undefined,
-              delivery_fee_minor:
-                summary.delivery_fee_minor != null ? Number(summary.delivery_fee_minor) : undefined,
-              total_minor: Number(summary.total_minor),
-              coupon_code: summary.coupon_code_normalized ?? null
-            };
-          }
-        }
+      const replay = await tryCheckoutIdempotentReplay({
+        orderRepo,
+        client,
+        shopId,
+        customerIdText: custKey,
+        rawIdem,
+        requestMeta
+      });
+      if (replay) {
+        return replay;
       }
 
       const cart = await cartRepo.findCartByShopAndCustomerId(client, shopId, custKey);
@@ -211,139 +79,35 @@ export function createCheckoutStorefront({
 
       const items = await cartRepo.validateCartForCheckoutCommit(client, shopId, cart.id);
 
-      if (couponCode && !items.length) {
-        throw checkoutError("EMPTY_CART_WITH_COUPON", "Cannot apply a coupon to an empty cart.");
-      }
-
-      const productIds = [
-        ...new Set(items.filter((it) => !it.is_custom && it.product_id).map((it) => String(it.product_id)))
-      ];
-      const liveByProduct = new Map();
-      if (priceStorefrontLines && productIds.length) {
-        const liveRows = await cartRepo.listLiveProductPricingByIds(client, shopId, productIds);
-        for (const row of liveRows) {
-          liveByProduct.set(String(row.id), row);
-        }
-      }
-
-      let subtotal = 0;
-      let promotionDiscountTotalMinor = 0;
-      let couponDiscountMinor = 0;
-      let couponCodeNormalized = null;
-      /** @type {string[]} */
-      let appliedPromotionIds = [];
-      /** @type {Array<Record<string, unknown>>} */
-      let orderItems = [];
-      /** @type {Awaited<ReturnType<NonNullable<typeof priceStorefrontLines>>> | null} */
-      let pricedResult = null;
-
-      if (priceStorefrontLines) {
-        const priced = await priceStorefrontLines(client, {
-          shopId,
-          customerId: custKey,
-          couponCode,
-          lines: items
-            .filter((it) => !it.is_custom && it.product_id)
-            .map((it) => {
-              const live = liveByProduct.get(String(it.product_id));
-              return {
-                cartItemId: it.id,
-                productId: String(it.product_id),
-                quantity: Number(it.quantity),
-                listMinor: live?.price_minor_per_unit ?? it.unit_price_minor,
-                offerMinor: live?.offer_price_minor_per_unit ?? null,
-                categoryId: live?.global_category_id ?? null
-              };
-            })
-        });
-        pricedResult = priced;
-        subtotal = priced.subtotalMinor;
-        promotionDiscountTotalMinor = priced.promotionDiscountTotalMinor;
-        couponDiscountMinor = priced.couponDiscountMinor;
-        couponCodeNormalized = priced.coupon?.code ?? null;
-        appliedPromotionIds = priced.appliedPromotionIds;
-
-        const pricedByCartItem = new Map(
-          priced.lines.filter((l) => l.cartItemId).map((l) => [String(l.cartItemId), l])
-        );
-        orderItems = items.map((it) => {
-          if (it.is_custom || !it.product_id) {
-            const lineTotal = minorFromLine(it.quantity, it.unit_price_minor);
-            subtotal += lineTotal;
-            const qty = Number(it.quantity);
-            return {
-              productId: it.product_id,
-              name: it.title_snapshot,
-              unitLabel: it.unit_label,
-              quantity: qty,
-              paidQuantity: qty,
-              freeQuantity: 0,
-              unitPriceMinor: Number(it.unit_price_minor),
-              lineTotalMinor: lineTotal,
-              listPriceMinor: Number(it.unit_price_minor),
-              lineDiscountMinor: 0,
-              appliedPromotionIds: [],
-              isCustom: it.is_custom,
-              customNote: it.custom_note
-            };
-          }
-          const p = pricedByCartItem.get(String(it.id));
-          const { quantity, paidQuantity, freeQuantity } = orderLineQuantitiesFromPriced(
-            p,
-            it.quantity
-          );
-          const unitPriceMinor = p ? Number(p.final_price_minor) : Number(it.unit_price_minor);
-          const lineTotalMinor = p ? Number(p.line_total_minor) : minorFromLine(it.quantity, it.unit_price_minor);
-          const listPriceMinor = p ? Number(p.list_price_minor) : Number(it.unit_price_minor);
-          const compareTotal = p
-            ? Math.round(Number(p.total_price_minor) * quantity)
-            : lineTotalMinor;
-          const lineDiscountMinor = Math.max(0, compareTotal - lineTotalMinor);
-          return {
-            productId: it.product_id,
-            name: it.title_snapshot,
-            unitLabel: it.unit_label,
-            quantity,
-            paidQuantity,
-            freeQuantity,
-            unitPriceMinor,
-            lineTotalMinor,
-            listPriceMinor,
-            lineDiscountMinor,
-            appliedPromotionIds: p?.applied_promotion_ids ?? [],
-            isCustom: it.is_custom,
-            customNote: it.custom_note
-          };
-        });
-      } else {
-        orderItems = items.map((it) => {
-          const lineTotal = minorFromLine(it.quantity, it.unit_price_minor);
-          subtotal += lineTotal;
-          const qty = Number(it.quantity);
-          return {
-            productId: it.product_id,
-            name: it.title_snapshot,
-            unitLabel: it.unit_label,
-            quantity: qty,
-            paidQuantity: qty,
-            freeQuantity: 0,
-            unitPriceMinor: Number(it.unit_price_minor),
-            lineTotalMinor: lineTotal,
-            listPriceMinor: Number(it.unit_price_minor),
-            lineDiscountMinor: 0,
-            appliedPromotionIds: [],
-            isCustom: it.is_custom,
-            customNote: it.custom_note
-          };
-        });
-      }
+      const {
+        subtotal,
+        promotionDiscountTotalMinor,
+        couponDiscountMinor,
+        couponCodeNormalized,
+        appliedPromotionIds,
+        orderItems,
+        pricedResult
+      } = await buildCheckoutOrderLines({
+        cartRepo,
+        client,
+        shopId,
+        custKey,
+        items,
+        couponCode,
+        priceStorefrontLines
+      });
 
       const delivery = Number(deliveryFeeMinor) || 0;
       const total = subtotal + delivery;
       const orderNumber = randomOrderNumber();
 
-      // Final gate right before order creation so checkout cannot bypass feasibility.
-      await assertAddressServiceable(profile.address);
+      await cartValidation.assertAddressServiceable(
+        shopId,
+        profile.address,
+        requestMeta,
+        userId,
+        customerId
+      );
 
       const customerName = profile.display_name || "";
 
@@ -386,14 +150,14 @@ export function createCheckoutStorefront({
         });
       }
 
-      if (rawIdem) {
-        await orderRepo.insertCheckoutIdempotency(client, {
-          shopId,
-          customerIdText: custKey,
-          idempotencyKey: rawIdem,
-          orderId: order.id
-        });
-      }
+      await recordCheckoutIdempotency({
+        orderRepo,
+        client,
+        shopId,
+        customerIdText: custKey,
+        rawIdem,
+        orderId: order.id
+      });
 
       await cartRepo.deleteCartItemsForCart(client, shopId, cart.id);
       await cartRepo.deleteCart(client, shopId, cart.id);
@@ -409,7 +173,7 @@ export function createCheckoutStorefront({
         try {
           emitOrderPlaced(emitPayload);
         } catch (emitErr) {
-          logger.warn(
+          log.warn(
             {
               event: "api.checkout.realtime_emit_failed",
               requestId: requestMeta?.requestId,
@@ -424,13 +188,13 @@ export function createCheckoutStorefront({
             shopId,
             aggregateType: "order",
             aggregateId: order.id,
-            eventType: "order.placed.realtime.retry",
+            eventType: OUTBOX_EVENT_TYPES.ORDER_PLACED_REALTIME,
             payload: emitPayload
           });
         }
       }
 
-      logger.info(
+      log.info(
         {
           event: "api.checkout.succeeded",
           requestId: requestMeta?.requestId,
@@ -457,7 +221,7 @@ export function createCheckoutStorefront({
         coupon_code: couponCodeNormalized
       };
     } catch (err) {
-      logger.warn(
+      log.warn(
         {
           ...logBase,
           code: err?.code || "CHECKOUT_FAILED",

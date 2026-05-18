@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import { envSchema } from "./schema.js";
 import { getDevLikeDefaults } from "./defaults.js";
+import { applyProductionEnvDefaults } from "./productionDefaults.js";
 
 dotenv.config();
 
@@ -35,9 +36,13 @@ function rawEnv() {
     src.JWT_REFRESH_SECRET ??= "dev_refresh_only_change_me";
   }
 
-  if (src.JWT_ACCESS_EXPIRES_IN === undefined || src.JWT_ACCESS_EXPIRES_IN === "") {
-    src.JWT_ACCESS_EXPIRES_IN = src.JWT_EXPIRES_IN || "7d";
+  if (nodeEnv !== "production") {
+    if (src.JWT_ACCESS_EXPIRES_IN === undefined || src.JWT_ACCESS_EXPIRES_IN === "") {
+      src.JWT_ACCESS_EXPIRES_IN = src.JWT_EXPIRES_IN || "15m";
+    }
   }
+
+  applyProductionEnvDefaults(src, nodeEnv);
 
   return src;
 }
@@ -79,6 +84,9 @@ export const env = {
   JWT_PREVIOUS_REFRESH_SECRET: parsed.data.JWT_PREVIOUS_REFRESH_SECRET?.trim() || "",
   STOREFRONT_DELIVERY_FEE_MINOR: parsed.data.STOREFRONT_DELIVERY_FEE_MINOR ?? 0,
   STOREFRONT_ENFORCE_SERVICEABILITY: parsed.data.STOREFRONT_ENFORCE_SERVICEABILITY ?? false,
+  SERVICEABILITY_COOKIE_SECRET:
+    parsed.data.SERVICEABILITY_COOKIE_SECRET?.trim() ||
+    (parsed.data.NODE_ENV === "production" ? "" : parsed.data.JWT_SECRET),
   STOREFRONT_CATALOG_CACHE_TTL_SEC: parsed.data.STOREFRONT_CATALOG_CACHE_TTL_SEC ?? 60,
   STOREFRONT_CATALOG_HTTP_CACHE_SEC: parsed.data.STOREFRONT_CATALOG_HTTP_CACHE_SEC ?? 0,
   CATALOG_CACHE_INVALIDATE_TOKEN: parsed.data.CATALOG_CACHE_INVALIDATE_TOKEN?.trim() || "",
@@ -97,6 +105,18 @@ export const env = {
   SERVER_DB_RETRY_MAX_DELAY_MS: parsed.data.SERVER_DB_RETRY_MAX_DELAY_MS ?? 5000,
   SERVER_START_RETRY_ATTEMPTS: parsed.data.SERVER_START_RETRY_ATTEMPTS ?? 5,
   SERVER_START_RETRY_BASE_DELAY_MS: parsed.data.SERVER_START_RETRY_BASE_DELAY_MS ?? 500,
-  SERVER_START_RETRY_MAX_DELAY_MS: parsed.data.SERVER_START_RETRY_MAX_DELAY_MS ?? 6000
+  SERVER_START_RETRY_MAX_DELAY_MS: parsed.data.SERVER_START_RETRY_MAX_DELAY_MS ?? 6000,
+  SHUTDOWN_TIMEOUT_MS: parsed.data.SHUTDOWN_TIMEOUT_MS ?? 30_000,
+  SENTRY_DSN: parsed.data.SENTRY_DSN?.trim() || "",
+  SENTRY_TRACES_SAMPLE_RATE: parsed.data.SENTRY_TRACES_SAMPLE_RATE ?? 0,
+  ACCESS_JTI_REDIS_REQUIRED:
+    parsed.data.NODE_ENV === "production"
+      ? process.env.ACCESS_JTI_REDIS_REQUIRED === "false"
+        ? false
+        : true
+      : parsed.data.ACCESS_JTI_REDIS_REQUIRED ?? false,
+  REALTIME_ENABLED: parsed.data.REALTIME_ENABLED ?? false,
+  REALTIME_CONNECT_TOKEN: parsed.data.REALTIME_CONNECT_TOKEN?.trim() || "",
+  SEARCH_USE_TRGM: parsed.data.SEARCH_USE_TRGM ?? false
 };
 

@@ -23,10 +23,22 @@ async function handleOrderCancelled(payload, { logger, eventId }) {
   await simulateAsyncWork();
 }
 
-export function createOutboxHandlers() {
+async function handleOrderPlacedRealtime(payload, { logger, eventId, emitOrderPlaced }) {
+  logger.info(
+    { event: "outbox.handler.order_placed_realtime", eventId, orderId: payload?.orderId },
+    "Handling ORDER_PLACED_REALTIME event"
+  );
+  if (typeof emitOrderPlaced === "function") {
+    emitOrderPlaced(payload);
+  }
+}
+
+export function createOutboxHandlers({ emitOrderPlaced = () => {} } = {}) {
   return Object.freeze({
     [OUTBOX_EVENT_TYPES.ORDER_CREATED]: handleOrderCreated,
     [OUTBOX_EVENT_TYPES.ORDER_COMPLETED]: handleOrderCompleted,
-    [OUTBOX_EVENT_TYPES.ORDER_CANCELLED]: handleOrderCancelled
+    [OUTBOX_EVENT_TYPES.ORDER_CANCELLED]: handleOrderCancelled,
+    [OUTBOX_EVENT_TYPES.ORDER_PLACED_REALTIME]: (payload, ctx) =>
+      handleOrderPlacedRealtime(payload, { ...ctx, emitOrderPlaced })
   });
 }

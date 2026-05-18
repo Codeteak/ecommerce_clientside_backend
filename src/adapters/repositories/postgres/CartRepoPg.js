@@ -289,16 +289,23 @@ export class CartRepoPg extends CartRepo {
     await client.query(`DELETE FROM carts WHERE id = $1::uuid`, [cartId]);
   }
 
-  async getProductSnapshotForCart(client, shopId, productId) {
+  async listProductSnapshotsForCart(client, shopId, productIds) {
+    const ids = Array.isArray(productIds) ? productIds.map((x) => String(x)).filter(Boolean) : [];
+    if (!ids.length) return [];
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
       `SELECT sp.id, gp.name, gp.base_unit, sp.price_minor_per_unit, sp.status, sp.availability
          ${sellableShopProductJoin}
-        WHERE sp.id = $1::uuid
-          AND sp.shop_id = $2::uuid
+        WHERE sp.shop_id = $1::uuid
+          AND sp.id = ANY($2::uuid[])
           AND ${sellableAtPurchasePredicates}`,
-      [productId, shopId]
+      [shopId, ids]
     );
+    return rows;
+  }
+
+  async getProductSnapshotForCart(client, shopId, productId) {
+    const rows = await this.listProductSnapshotsForCart(client, shopId, [productId]);
     return rows[0] ?? null;
   }
   

@@ -13,11 +13,12 @@ export class PromotionRepo {
    * Eligible coupon rows for the shop window, including redemption counts and
    * `promotion_rules_public` (JSON array of customer-safe rule fields for benefits).
    */
-  async listEligibleCouponsWithUsage(_client, _shopId, _customerId, _codeNormalized) {
+  async listEligibleCouponsWithUsage(_client, _shopId, _customerId, _codeNormalized, _options = {}) {
     void _client;
     void _shopId;
     void _customerId;
     void _codeNormalized;
+    void _options;
     throw new Error("Not implemented");
   }
 

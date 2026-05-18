@@ -28,14 +28,25 @@ export class CatalogRepo {
     throw new Error("Not implemented");
   }
 
+  /**
+   * Category IDs that have sellable products at the shop (includes ancestor categories).
+   * @param {string} _shopId
+   * @returns {Promise<string[]>}
+   */
+  async listCategoryIdsWithSellableProducts(_shopId) {
+    void _shopId;
+    throw new Error("Not implemented");
+  }
+
   async listCategoriesStorefront(_shopId, _filters) {
     void _shopId;
     void _filters;
     throw new Error("Not implemented");
   }
 
-  async listAllCategoriesStorefront(_shopId) {
+  async listAllCategoriesStorefront(_shopId, _filters = {}) {
     void _shopId;
+    void _filters;
     throw new Error("Not implemented");
   }
 

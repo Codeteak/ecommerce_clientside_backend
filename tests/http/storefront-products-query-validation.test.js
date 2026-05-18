@@ -67,6 +67,20 @@ describe("Storefront products query validation", () => {
     }
   });
 
+  it("accepts search_mode=prefix", async () => {
+    const res = await request(app)
+      .get("/storefront/products?search=mil&search_mode=prefix&limit=5")
+      .expect(200);
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects invalid search_mode", async () => {
+    const res = await request(app)
+      .get("/storefront/products?search_mode=regex")
+      .expect(400);
+    expect(res.body.error?.code).toBe("VALIDATION_ERROR");
+  });
+
   it("applies the same validation under /api/storefront alias", async () => {
     const res = await request(app).get("/api/storefront/products?sort_by=random").expect(400);
     expect(res.body.error?.code).toBe("VALIDATION_ERROR");

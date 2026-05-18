@@ -14,10 +14,15 @@ import { errorHandler } from "../interface/http/middleware/errorHandler.js";
 import { createAppContext } from "./composition.js";
 import { getOpenApiDocument } from "../infra/openapi/openapiDocument.js";
 import { requestMetricsMiddleware } from "../infra/metrics/requestMetrics.js";
+import { requestContextMiddleware } from "../infra/logging/requestContext.js";
 
 export function createExpressApp(ctx) {
   const isNoisePath = (url) =>
-    url === "/health" || url === "/health/ready" || url === "/metrics" || url === "/";
+    url === "/health" ||
+    url === "/health/ready" ||
+    url === "/metrics" ||
+    url === "/metrics/json" ||
+    url === "/";
 
   const app = express();
   app.set("trust proxy", env.TRUST_PROXY ? env.TRUST_PROXY_HOPS : false);
@@ -117,6 +122,7 @@ export function createExpressApp(ctx) {
       }
     })
   );
+  app.use(requestContextMiddleware);
 
   if (env.ENABLE_API_DOCS) {
     const openApiDocument = getOpenApiDocument(env);

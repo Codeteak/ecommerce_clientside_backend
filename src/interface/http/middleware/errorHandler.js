@@ -1,5 +1,6 @@
 import { AppError } from "../../../domain/errors/AppError.js";
 import { logApiError, logApiWarn } from "../../../infra/logging/apiLog.js";
+import { captureApiError } from "../../../infra/observability/sentry.js";
 
 /** express.json() / body-parser: invalid JSON body (e.g. trailing character in Postman raw body). */
 function isMalformedJsonBody(err) {
@@ -31,8 +32,10 @@ export function errorHandler(err, req, res, _next) {
 
   if (!isAppError) {
     logApiError("api.error.unhandled", req, { code: "INTERNAL_ERROR", statusCode, err });
+    captureApiError(req, err, statusCode);
   } else if (statusCode >= 500) {
     logApiError("api.error.app", req, { code: err.code, statusCode });
+    captureApiError(req, err, statusCode);
   }
 
   res.status(statusCode).json({

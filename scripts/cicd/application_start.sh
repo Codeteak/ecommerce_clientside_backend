@@ -26,13 +26,6 @@ echo "[application_start] Appending runtime overrides..."
   echo "JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-$(openssl rand -base64 32)}"
 } >> .env
 
-# dotenv uses first-wins per key — prepend docs flags so they are not shadowed by secrets.
-{
-  echo "ENABLE_API_DOCS=true"
-  echo "ALLOW_API_DOCS_IN_PRODUCTION=true"
-  cat .env
-} > .env.tmp && mv .env.tmp .env
-
 if [[ ! -f "${IMAGE_DETAIL_FILE}" ]]; then
   echo "[application_start] Missing ${IMAGE_DETAIL_FILE}. Build artifact is incomplete."
   exit 1

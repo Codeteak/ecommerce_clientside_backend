@@ -119,6 +119,13 @@ export const schemas = {
       code: { type: "string", pattern: "^\\d{6}$" }
     }
   },
+  LogoutBody: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      refreshToken: { type: "string", minLength: 20 }
+    }
+  },
   OtpRequestResponse: {
     type: "object",
     properties: {
@@ -528,10 +535,25 @@ export const schemas = {
       id: { type: "string", format: "uuid" },
       order_number: { type: "string" },
       status: { type: "string" },
-      total_minor: {
-        description: "Order total in minor units; may be string when serialized from Postgres bigint.",
-        oneOf: [{ type: "integer" }, { type: "string" }]
+      subtotal_minor: { type: "integer", description: "Merchandise payable after all promos (excludes delivery)." },
+      delivery_fee_minor: { type: "integer" },
+      total_minor: { type: "integer", description: "subtotal_minor + delivery_fee_minor" },
+      promotion_discount_minor: {
+        type: "integer",
+        description: "SKU + bundle + coupon discount combined (alias of promotion_discount_total_minor)."
       },
+      promotion_discount_total_minor: { type: "integer" },
+      coupon_discount_minor: { type: "integer", description: "Coupon-only discount from promotion_redemptions." },
+      auto_promotion_discount_minor: {
+        type: "integer",
+        description: "SKU + bundle + line promos (promotion_discount_minor minus coupon_discount_minor)."
+      },
+      subtotal_before_coupon_minor: {
+        type: "integer",
+        description: "Merchandise subtotal before coupon (subtotal_minor + coupon_discount_minor)."
+      },
+      coupon_code: { type: "string", nullable: true },
+      coupon_code_normalized: { type: "string", nullable: true },
       currency: { type: "string" },
       placed_at: { type: "string", format: "date-time" },
       picker_id: { type: "string", format: "uuid", nullable: true },
@@ -559,9 +581,25 @@ export const schemas = {
       order_number: { type: "string" },
       status: { type: "string" },
       payment_method: { type: "string" },
-      subtotal_minor: { oneOf: [{ type: "integer" }, { type: "string" }] },
-      delivery_fee_minor: { oneOf: [{ type: "integer" }, { type: "string" }] },
-      total_minor: { oneOf: [{ type: "integer" }, { type: "string" }] },
+      subtotal_minor: { type: "integer", description: "Merchandise payable after all promos (excludes delivery)." },
+      delivery_fee_minor: { type: "integer" },
+      total_minor: { type: "integer", description: "subtotal_minor + delivery_fee_minor" },
+      promotion_discount_minor: {
+        type: "integer",
+        description: "SKU + bundle + coupon discount combined (alias of promotion_discount_total_minor)."
+      },
+      promotion_discount_total_minor: { type: "integer" },
+      coupon_discount_minor: { type: "integer", description: "Coupon-only discount from promotion_redemptions." },
+      auto_promotion_discount_minor: {
+        type: "integer",
+        description: "SKU + bundle + line promos (promotion_discount_minor minus coupon_discount_minor)."
+      },
+      subtotal_before_coupon_minor: {
+        type: "integer",
+        description: "Merchandise subtotal before coupon (subtotal_minor + coupon_discount_minor)."
+      },
+      coupon_code: { type: "string", nullable: true },
+      coupon_code_normalized: { type: "string", nullable: true },
       currency: { type: "string" },
       notes: { type: "string", nullable: true },
       picker_id: { type: "string", format: "uuid", nullable: true },

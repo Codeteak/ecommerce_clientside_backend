@@ -4,26 +4,18 @@ import { AuthError } from "../../../domain/errors/AuthError.js";
 import { ConflictError } from "../../../domain/errors/ConflictError.js";
 import { verifyOtpCode } from "../../../infra/security/otpHasher.js";
 import { buildStorefrontSessionResponse } from "../auth/buildStorefrontSessionResponse.js";
-
-function normalizePhone(raw) {
-  return String(raw || "")
-    .trim()
-    .replace(/[\s\-()]/g, "");
-}
+import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normalizeCustomerPhone.js";
 
 export function createVerifyPhoneChangeOtp({ authRepo, otpMaxAttempts = 5 }) {
   return async function verifyPhoneChangeOtp(client, input) {
     const userId = input.userId;
     const customerId = input.customerId;
     const shopId = input.shopId;
-    const newPhone = normalizePhone(input.newPhone);
+    const newPhone = normalizeCustomerPhoneForStorage(input.newPhone);
     const code = String(input.code || "").trim();
     const ip = input.ip ?? null;
     const userAgent = input.userAgent ?? null;
 
-    if (!/^[0-9+][0-9]{7,31}$/.test(newPhone)) {
-      throw new ValidationError("Invalid phone format");
-    }
     if (!/^\d{6}$/.test(code)) {
       throw new ValidationError("OTP code must be 6 digits");
     }

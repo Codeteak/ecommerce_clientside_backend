@@ -2,6 +2,7 @@ import { CustomerAuthRepo } from "../../../application/ports/repositories/Custom
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { pool } from "../../../infra/db/pool.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
+import { phoneMatchesStorage } from "./phoneMatchSql.js";
 
 /**
  * Purpose: This file is the PostgreSQL implementation of customer auth data access.
@@ -89,7 +90,8 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     const { rows } = await client.query(
       `SELECT id, email, phone, password_hash, is_active
          FROM users
-        WHERE phone = $1`,
+        WHERE ${phoneMatchesStorage("phone", 1)}
+        LIMIT 1`,
       [phone]
     );
     return withRegistrationSource(rows[0]);
@@ -120,7 +122,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
       `SELECT 1
          FROM users u
          JOIN shop_staff ss ON ss.user_id = u.id
-        WHERE u.phone = $1
+        WHERE ${phoneMatchesStorage("u.phone", 1)}
           AND ss.role IN ('owner', 'admin', 'manager', 'picker')
           AND ss.is_active = true
           AND ss.is_deleted = false
@@ -138,7 +140,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
       `SELECT 1
          FROM users u
          JOIN customers c ON c.user_id = u.id
-        WHERE u.phone = $1
+        WHERE ${phoneMatchesStorage("u.phone", 1)}
           AND u.id <> $2::uuid
           AND u.is_active = true
           AND c.is_blocked = false
@@ -465,7 +467,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     const { rows } = await client.query(
       `SELECT count(*)::int AS cnt
          FROM customer_otp_challenges
-        WHERE phone = $1
+        WHERE ${phoneMatchesStorage("phone", 1)}
           AND shop_id = $2::uuid
           AND created_at >= $3::timestamptz`,
       [phone, shopId, sinceIso]
@@ -477,11 +479,23 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     const { rows } = await client.query(
       `SELECT id, phone, shop_id, code_hash, attempts, consumed_at, expires_at, created_at
          FROM customer_otp_challenges
-        WHERE phone = $1
+        WHERE ${phoneMatchesStorage("phone", 1)}
           AND shop_id = $2::uuid
         ORDER BY created_at DESC
         LIMIT 1`,
       [phone, shopId]
+    );
+    return rows[0] ?? null;
+  }
+
+  async getCustomerShopMembership(client, customerId, shopId) {
+    const { rows } = await client.query(
+      `SELECT id, shop_id, customer_id, is_active, is_blocked, is_deleted
+         FROM customer_shop_memberships
+        WHERE customer_id = $1::uuid
+          AND shop_id = $2::uuid
+        LIMIT 1`,
+      [customerId, shopId]
     );
     return rows[0] ?? null;
   }
@@ -669,5 +683,26 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
       [currentTokenHash, nextTokenHash]
     );
     return rows[0] ?? null;
+  }
+
+  async findRefreshTokenByHash(client, tokenHash) {
+    const { rows } = await client.query(
+      `SELECT id, user_id, customer_id, consumed_at, expires_at
+         FROM auth_refresh_tokens
+        WHERE token_hash = $1
+        LIMIT 1`,
+      [tokenHash]
+    );
+    return rows[0] ?? null;
+  }
+
+  async revokeAllRefreshTokensForUser(client, userId) {
+    await client.query(
+      `UPDATE auth_refresh_tokens
+          SET consumed_at = now()
+        WHERE user_id = $1::uuid
+          AND consumed_at IS NULL`,
+      [userId]
+    );
   }
 }

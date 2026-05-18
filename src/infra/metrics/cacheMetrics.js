@@ -2,6 +2,8 @@
 This file tracks cache hit and miss counters for runtime observability.
 */
 
+import { incrementCachePromMetric } from "./prometheusRegistry.js";
+
 const counters = {
   get_hit: 0,
   get_miss: 0,
@@ -16,6 +18,7 @@ const counters = {
 export function incrementCacheMetric(name) {
   if (!(name in counters)) return;
   counters[name] += 1;
+  incrementCachePromMetric(name);
 }
 
 export function getCacheMetricsSnapshot() {

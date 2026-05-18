@@ -21,14 +21,15 @@ export function createListApplicableCoupons({ promotionRepo, authRepo, orderRepo
 
   /**
    * @param {import("pg").PoolClient} client
-   * @param {{ shopId: string, customerId: string, code?: string | null, cartSubtotalMinor?: number | null, onlyApplicable?: boolean }} input
+   * @param {{ shopId: string, customerId: string, code?: string | null, cartSubtotalMinor?: number | null, onlyApplicable?: boolean, limit?: number | null }} input
    */
   return async function listApplicableCoupons(client, {
     shopId,
     customerId,
     code = null,
     cartSubtotalMinor = null,
-    onlyApplicable = false
+    onlyApplicable = false,
+    limit = null
   }) {
     const normalizedCode = normalizeCouponCode(code);
     const rawSettings = await promotionRepo.getShopPromotionSettings(client, shopId);
@@ -67,11 +68,19 @@ export function createListApplicableCoupons({ promotionRepo, authRepo, orderRepo
     const ms = Math.max(0, eligibilityDays) * 24 * 60 * 60 * 1000;
     const newCustomerCutoff = new Date(Date.now() - ms);
 
+    const repoLimit =
+      limit != null && onlyApplicable
+        ? Math.min(50, Math.max(Number(limit) * 5, 20))
+        : limit != null
+          ? Math.min(50, Number(limit))
+          : null;
+
     const rows = await promotionRepo.listEligibleCouponsWithUsage(
       client,
       shopId,
       customerId,
-      normalizedCode
+      normalizedCode,
+      { limit: repoLimit }
     );
 
     const eligibilityCtx = {
@@ -129,6 +138,10 @@ export function createListApplicableCoupons({ promotionRepo, authRepo, orderRepo
 
     if (onlyApplicable) {
       coupons = coupons.filter((c) => c.eligibility.applicable);
+    }
+
+    if (limit != null) {
+      coupons = coupons.slice(0, Number(limit));
     }
 
     return {

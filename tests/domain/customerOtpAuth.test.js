@@ -33,8 +33,9 @@ describe("customer OTP auth", () => {
 
     expect(out).toMatchObject({ ok: true });
     expect(authRepo.insertOtpChallenge).toHaveBeenCalledTimes(1);
+    expect(authRepo.insertOtpChallenge.mock.calls[0][1].phone).toBe("9999999999");
     const smsArg = smsSender.sendOtp.mock.calls[0][0];
-    expect(smsArg.to).toBe("+919999999999");
+    expect(smsArg.to).toBe("919999999999");
     expect(String(smsArg.code)).toMatch(/^\d{6}$/);
     expect(smsArg.shopName).toBe(mockShopDisplayName);
   });
@@ -82,7 +83,7 @@ describe("customer OTP auth", () => {
       isPhoneUsedByActiveShopStaff: vi.fn().mockResolvedValue(false),
       findLatestOtpChallenge: vi.fn().mockResolvedValue({
         id: "otp-1",
-        phone: "+919999999999",
+        phone: "9999999999",
         shop_id: shopId,
         code_hash: codeHash,
         attempts: 0,
@@ -107,7 +108,7 @@ describe("customer OTP auth", () => {
       isPhoneUsedByActiveShopStaff: vi.fn().mockResolvedValue(false),
       findLatestOtpChallenge: vi.fn().mockResolvedValue({
         id: "otp-1",
-        phone: "+919999999999",
+        phone: "9999999999",
         shop_id: shopId,
         code_hash: codeHash,
         attempts: 0,
@@ -119,10 +120,11 @@ describe("customer OTP auth", () => {
       getUserByPhone: vi.fn().mockResolvedValue({
         id: "u-1",
         email: null,
-        phone: "+919999999999",
+        phone: "9999999999",
         registration_source: "phone_otp",
         is_active: true
       }),
+      updateUserPhone: vi.fn(),
       insertUser: vi.fn(),
       getCustomerByUserId: vi.fn().mockResolvedValue({
         id: "c-1",
@@ -131,6 +133,7 @@ describe("customer OTP auth", () => {
         is_blocked: false,
         is_deleted: false
       }),
+      getCustomerShopMembership: vi.fn().mockResolvedValue(null),
       insertCustomer: vi.fn(),
       upsertCustomerShopMembership: vi.fn().mockResolvedValue({
         id: "m-1",
@@ -143,7 +146,7 @@ describe("customer OTP auth", () => {
       getUserById: vi.fn().mockResolvedValue({
         id: "u-1",
         email: null,
-        phone: "+919999999999",
+        phone: "9999999999",
         registration_source: "phone_otp",
         is_active: true
       }),
@@ -173,7 +176,7 @@ describe("customer OTP auth", () => {
       isPhoneUsedByActiveShopStaff: vi.fn().mockResolvedValue(false),
       findLatestOtpChallenge: vi.fn().mockResolvedValue({
         id: "otp-1",
-        phone: "+919999999999",
+        phone: "9999999999",
         shop_id: shopId,
         code_hash: codeHash,
         attempts: 0,
@@ -185,10 +188,11 @@ describe("customer OTP auth", () => {
       getUserByPhone: vi.fn().mockResolvedValue({
         id: "u-1",
         email: null,
-        phone: "+919999999999",
+        phone: "9999999999",
         registration_source: "phone_otp",
         is_active: true
       }),
+      updateUserPhone: vi.fn(),
       insertUser: vi.fn(),
       getCustomerByUserId: vi.fn().mockResolvedValue({
         id: "c-1",
@@ -197,13 +201,14 @@ describe("customer OTP auth", () => {
         is_blocked: false,
         is_deleted: false
       }),
-      insertCustomer: vi.fn(),
-      upsertCustomerShopMembership: vi.fn().mockResolvedValue({
+      getCustomerShopMembership: vi.fn().mockResolvedValue({
         id: "m-1",
         is_active: true,
         is_blocked: true,
         is_deleted: false
       }),
+      insertCustomer: vi.fn(),
+      upsertCustomerShopMembership: vi.fn(),
       isUserActiveShopStaff: vi.fn().mockResolvedValue(false)
     };
     const run = createVerifyCustomerOtp({ authRepo });
@@ -219,7 +224,7 @@ describe("customer OTP auth", () => {
       isPhoneUsedByActiveShopStaff: vi.fn().mockResolvedValue(true),
       findLatestOtpChallenge: vi.fn().mockResolvedValue({
         id: "otp-1",
-        phone: "+919999999999",
+        phone: "9999999999",
         shop_id: shopId,
         code_hash: codeHash,
         attempts: 0,
@@ -232,5 +237,55 @@ describe("customer OTP auth", () => {
     await expect(run({}, { phone: "+919999999999", shopId, code: "123456" })).rejects.toMatchObject({
       code: "UNAUTHORIZED"
     });
+  });
+
+  it("migrates legacy +91 stored phone to 10 digits on verify", async () => {
+    const codeHash = await hashOtpCode("123456");
+    const authRepo = {
+      getShopById: vi.fn().mockResolvedValue(activeShop()),
+      isPhoneUsedByActiveShopStaff: vi.fn().mockResolvedValue(false),
+      findLatestOtpChallenge: vi.fn().mockResolvedValue({
+        id: "otp-1",
+        phone: "9999999999",
+        shop_id: shopId,
+        code_hash: codeHash,
+        attempts: 0,
+        consumed_at: null,
+        expires_at: new Date(Date.now() + 60_000).toISOString()
+      }),
+      consumeOtpChallenge: vi.fn().mockResolvedValue(undefined),
+      getUserByPhone: vi.fn().mockResolvedValue({
+        id: "u-1",
+        email: null,
+        phone: "+919999999999",
+        is_active: true
+      }),
+      updateUserPhone: vi.fn().mockResolvedValue(undefined),
+      isUserActiveShopStaff: vi.fn().mockResolvedValue(false),
+      getCustomerByUserId: vi.fn().mockResolvedValue({
+        id: "c-1",
+        user_id: "u-1",
+        is_blocked: false,
+        is_deleted: false
+      }),
+      getCustomerShopMembership: vi.fn().mockResolvedValue({
+        id: "m-1",
+        is_active: true,
+        is_blocked: false,
+        is_deleted: false
+      }),
+      upsertCustomerShopMembership: vi.fn().mockResolvedValue({
+        id: "m-1",
+        is_active: true,
+        is_blocked: false,
+        is_deleted: false
+      }),
+      getUserById: vi.fn().mockResolvedValue({ id: "u-1", email: null, phone: "9999999999", is_active: true }),
+      listActiveShopsForCustomer: vi.fn().mockResolvedValue([]),
+      insertRefreshToken: vi.fn().mockResolvedValue(undefined)
+    };
+    const run = createVerifyCustomerOtp({ authRepo });
+    await run({}, { phone: "+919999999999", shopId, code: "123456" });
+    expect(authRepo.updateUserPhone).toHaveBeenCalledWith({}, "u-1", "9999999999");
   });
 });

@@ -9,7 +9,25 @@ services:
       - "4100:4100"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4100/health"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const http=require('http');const p=process.env.PORT||4100;const r=http.get({host:'127.0.0.1',port:p,path:'/health',timeout:3000},res=>process.exit(res.statusCode===200?0:1));r.on('error',()=>process.exit(1));r.on('timeout',()=>{r.destroy();process.exit(1);});"
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  outbox-worker:
+    image: "${ECR_IMAGE_URI:?ECR_IMAGE_URI is required}"
+    container_name: clientside-ecommerce-outbox-worker
+    init: true
+    env_file:
+      - ./.env
+    command: ["node", "src/workers/outbox.worker.js"]
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started

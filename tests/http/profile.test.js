@@ -4,10 +4,11 @@ import { signCustomerAccessToken } from "../../src/infra/auth/jwt.js";
 import { getTestApp } from "../helpers/testApp.js";
 
 function customerBearer() {
-  return signCustomerAccessToken({
+  const { token } = signCustomerAccessToken({
     userId: "00000000-0000-0000-0000-000000000001",
     customerId: "00000000-0000-0000-0000-000000000002"
   });
+  return token;
 }
 
 describe("GET /api/me/profile", () => {

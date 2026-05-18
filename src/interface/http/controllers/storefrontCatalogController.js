@@ -1,6 +1,7 @@
 import { requireShopId } from "../../../application/services/catalog/catalogShopId.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
+import { asyncHandler } from "../asyncHandler.js";
 
 /**
  * Purpose: This file handles storefront catalog HTTP requests.
@@ -23,115 +24,97 @@ function setCatalogHttpCache(ctx, res) {
 }
 
 function listCategoriesHandler(ctx) {
-  return async (req, res, next) => {
-    try {
-      if (!req.shopId) {
-        res.json({});
-        return;
-      }
-      const shopId = shopIdForStorefront(req);
-      const parentId = req.query.parent_id ?? undefined;
-      const categories = await ctx.storefrontCatalog.listCategories(shopId, {
-        parentId,
-        all: req.query.all === true
-      });
-      setCatalogHttpCache(ctx, res);
-      if (!categories.length) {
-        res.json({});
-        return;
-      }
-      res.json({ categories });
-    } catch (err) {
-      next(err);
+  return asyncHandler(async (req, res) => {
+    if (!req.shopId) {
+      res.json({});
+      return;
     }
-  };
+    const shopId = shopIdForStorefront(req);
+    const parentId = req.query.parent_id ?? undefined;
+    const categories = await ctx.storefrontCatalog.listCategories(shopId, {
+      parentId,
+      all: req.query.all === true
+    });
+    setCatalogHttpCache(ctx, res);
+    if (!categories.length) {
+      res.json({});
+      return;
+    }
+    res.json({ categories });
+  });
 }
 
 function listProductsHandler(ctx) {
-  return async (req, res, next) => {
-    try {
-      if (!req.shopId) {
-        res.json({});
-        return;
-      }
-      const shopId = shopIdForStorefront(req);
-      const result = await ctx.storefrontCatalog.listProducts(shopId, {
-        categoryId: req.query.category_id,
-        brandId: req.query.brand_id,
-        search: req.query.search,
-        limit: req.query.limit,
-        cursor: req.query.cursor,
-        offset: req.query.offset,
-        availability: req.query.availability,
-        includeAllAvailability: req.query.include_all_availability === true,
-        minPriceMinor: req.query.min_price_minor,
-        maxPriceMinor: req.query.max_price_minor,
-        sortBy: req.query.sort_by,
-        sortOrder: req.query.sort_order
-      });
-      setCatalogHttpCache(ctx, res);
-      res.json(result);
-    } catch (err) {
-      next(err);
+  return asyncHandler(async (req, res) => {
+    if (!req.shopId) {
+      res.json({});
+      return;
     }
-  };
+    const shopId = shopIdForStorefront(req);
+    const result = await ctx.storefrontCatalog.listProducts(shopId, {
+      categoryId: req.query.category_id,
+      brandId: req.query.brand_id,
+      search: req.query.search,
+      limit: req.query.limit,
+      cursor: req.query.cursor,
+      offset: req.query.offset,
+      availability: req.query.availability,
+      includeAllAvailability: req.query.include_all_availability === true,
+      minPriceMinor: req.query.min_price_minor,
+      maxPriceMinor: req.query.max_price_minor,
+      sortBy: req.query.sort_by,
+      sortOrder: req.query.sort_order,
+      layout: req.query.layout,
+      searchMode: req.query.search_mode
+    });
+    setCatalogHttpCache(ctx, res);
+    res.json(result);
+  });
 }
 
 function getProductBySlugHandler(ctx) {
-  return async (req, res, next) => {
-    try {
-      if (!req.shopId) {
-        throw new NotFoundError("Product not found");
-      }
-      const shopId = shopIdForStorefront(req);
-      const { slug } = req.params;
-      const product = await ctx.storefrontCatalog.getProductBySlug(shopId, slug);
-      if (!product) {
-        throw new NotFoundError("Product not found");
-      }
-      setCatalogHttpCache(ctx, res);
-      res.json(product);
-    } catch (err) {
-      next(err);
+  return asyncHandler(async (req, res) => {
+    if (!req.shopId) {
+      throw new NotFoundError("Product not found");
     }
-  };
+    const shopId = shopIdForStorefront(req);
+    const { slug } = req.params;
+    const product = await ctx.storefrontCatalog.getProductBySlug(shopId, slug);
+    if (!product) {
+      throw new NotFoundError("Product not found");
+    }
+    setCatalogHttpCache(ctx, res);
+    res.json(product);
+  });
 }
 
 function getProductByIdHandler(ctx) {
-  return async (req, res, next) => {
-    try {
-      if (!req.shopId) {
-        throw new NotFoundError("Product not found");
-      }
-      const shopId = shopIdForStorefront(req);
-      const { id } = req.params;
-      const product = await ctx.storefrontCatalog.getProductById(shopId, id);
-      if (!product) {
-        throw new NotFoundError("Product not found");
-      }
-      setCatalogHttpCache(ctx, res);
-      res.json(product);
-    } catch (err) {
-      next(err);
+  return asyncHandler(async (req, res) => {
+    if (!req.shopId) {
+      throw new NotFoundError("Product not found");
     }
-  };
+    const shopId = shopIdForStorefront(req);
+    const { id } = req.params;
+    const product = await ctx.storefrontCatalog.getProductById(shopId, id);
+    if (!product) {
+      throw new NotFoundError("Product not found");
+    }
+    setCatalogHttpCache(ctx, res);
+    res.json(product);
+  });
 }
 
 function getCategoryBySlugHandler(ctx) {
-  return async (req, res, next) => {
-    try {
-      const shopId = shopIdForStorefront(req);
-      const { slug } = req.params;
-      const category = await ctx.storefrontCatalog.getCategoryBySlug(shopId, slug);
-      if (!category) {
-        throw new NotFoundError("Category not found");
-      }
-      setCatalogHttpCache(ctx, res);
-      res.json(category);
-    } catch (err) {
-      next(err);
+  return asyncHandler(async (req, res) => {
+    const shopId = shopIdForStorefront(req);
+    const { slug } = req.params;
+    const category = await ctx.storefrontCatalog.getCategoryBySlug(shopId, slug);
+    if (!category) {
+      throw new NotFoundError("Category not found");
     }
-  };
+    setCatalogHttpCache(ctx, res);
+    res.json(category);
+  });
 }
 
 export const storefrontCatalogController = {

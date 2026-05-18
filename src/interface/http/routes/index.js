@@ -137,6 +137,7 @@ export function createRoutes(ctx) {
     authLimiter,
     otpRequestLimiter,
     otpVerifyLimiter,
+    requireCustomerJwt: ctx.requireCustomerJwt,
     validate,
     handlers: authHandlers,
     otpRequestBodySchema,

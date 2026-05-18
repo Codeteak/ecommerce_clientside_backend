@@ -95,9 +95,9 @@ export function buildPaths() {
     "/metrics": {
       get: {
         tags: ["Root"],
-        summary: "HTTP request counters",
+        summary: "Prometheus metrics scrape endpoint",
         description:
-          "In-process JSON metrics. When `METRICS_SCRAPE_TOKEN` is set, send it as `Authorization: Bearer <token>` or `X-Metrics-Token`.",
+          "Prometheus text exposition format. When `METRICS_SCRAPE_TOKEN` is set, send it as `Authorization: Bearer <token>` or `X-Metrics-Token`. Legacy JSON snapshot: `GET /metrics/json`.",
         parameters: [
           {
             name: "Authorization",
@@ -114,16 +114,10 @@ export function buildPaths() {
         ],
         responses: {
           "200": {
-            description: "OK",
+            description: "Prometheus metrics text",
             content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  properties: {
-                    requests_total: { type: "integer" },
-                    by_method_route_status: { type: "object", additionalProperties: { type: "integer" } }
-                  }
-                }
+              "text/plain": {
+                schema: { type: "string" }
               }
             }
           },
@@ -243,6 +237,35 @@ export function buildPaths() {
           "401": jsonErr,
           "404": jsonErr,
           "429": jsonErr
+        }
+      }
+    },
+    "/api/auth/logout": {
+      post: {
+        tags: ["Auth"],
+        summary: "Logout and revoke access token",
+        description:
+          "Revokes the current access token jti (Redis allowlist) and all refresh tokens for the user. Optional `refreshToken` in body revokes that family as well.",
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/LogoutBody" } }
+          }
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: { ok: { type: "boolean", example: true } }
+                }
+              }
+            }
+          },
+          "401": jsonErr
         }
       }
     },
@@ -563,7 +586,7 @@ export function buildPaths() {
         tags: ["Storefront catalog"],
         summary: "Search and list products",
         description:
-          "Returns shop products with thumbnails, category metadata, and unit pricing (minor currency, string integers). **Default filter:** `status=active` and **`availability=in_stock`** (sellable rows only, aligned with cart/checkout). Pass **`include_all_availability=true`** to list all active rows regardless of stock, or set **`availability`** explicitly (`out_of_stock`, `unknown`). **`actual_price_minor`** = list/MRP; **`offer_price_minor`** = catalog offer when set; **`promo_price_minor`** = campaign SKU replacement unit from `promotion_products` or null. **`total_price_minor`** = compare-at anchor (max of list and catalog baseline) for strikethrough UIs; **`final_price_minor`** = payable unit (`promo` when present, else catalog baseline). **`offer_discount_minor`** = savings from list to baseline; **`promo_discount_minor`** = extra savings from baseline to final when a promo applies; **`total_discount_minor`** = `total_price_minor - final_price_minor` (non-negative). Each product includes **`bundle_rules`**. Empty **`products`**, **`categories`**, null **`nextCursor`**, and false **`promotions_paused`** are omitted from the JSON object. `min_price_minor` / `max_price_minor` and `sort_by=price` use catalog baseline. Catalog cache key v7.",
+          "Returns shop products with thumbnails, category metadata, and unit pricing (minor currency, string integers). **Default filter:** `status=active` and **`availability=in_stock`** (sellable rows only, aligned with cart/checkout). Pass **`include_all_availability=true`** to list all active rows regardless of stock, or set **`availability`** explicitly (`out_of_stock`, `unknown`). **`actual_price_minor`** = list/MRP; **`offer_price_minor`** = catalog offer when set; **`promo_price_minor`** = campaign SKU replacement unit from `promotion_products` or null. **`total_price_minor`** = compare-at anchor (max of list and catalog baseline) for strikethrough UIs; **`final_price_minor`** = payable unit (`promo` when present, else catalog baseline). **`offer_discount_minor`** = savings from list to baseline; **`promo_discount_minor`** = extra savings from baseline to final when a promo applies; **`total_discount_minor`** = `total_price_minor - final_price_minor` (non-negative). Each product includes **`bundle_rules`**. List rows expose **`thumbnail`** only (empty **`images`**). Default **`layout=grouped`** returns **`categories`** only; **`layout=flat`** includes both **`products`** and **`categories`**. Empty arrays, null **`nextCursor`**, and false **`promotions_paused`** are omitted. Catalog cache uses versioned Redis keys.",
         parameters: [
           ...shopParams,
           { name: "category_id", in: "query", schema: { type: "string", format: "uuid" } },
@@ -595,6 +618,20 @@ export function buildPaths() {
             name: "availability",
             in: "query",
             schema: { type: "string", enum: ["in_stock", "out_of_stock", "unknown"] }
+          },
+          {
+            name: "layout",
+            in: "query",
+            description:
+              "Response shape: `grouped` (default) returns categories with nested products only; `flat` returns both top-level products and categories.",
+            schema: { type: "string", enum: ["grouped", "flat"], default: "grouped" }
+          },
+          {
+            name: "search_mode",
+            in: "query",
+            description:
+              "Search pattern: `contains` (default, substring `%term%`) or `prefix` (typeahead `term%`, better index use).",
+            schema: { type: "string", enum: ["contains", "prefix"], default: "contains" }
           }
         ],
         responses: {
@@ -605,7 +642,7 @@ export function buildPaths() {
                 schema: {
                   type: "object",
                   description:
-                    "Omitted keys are absent (not null): empty product/category arrays, absent nextCursor, promotions_paused only when true.",
+                    "Omitted keys are absent (not null): empty product/category arrays, absent nextCursor, promotions_paused only when true. Default layout omits top-level products when categories are present.",
                   properties: {
                     promotions_paused: { type: "boolean" },
                     products: { type: "array", items: { type: "object" } },
@@ -682,9 +719,18 @@ export function buildPaths() {
         tags: ["Storefront cart"],
         summary: "Get cart with live pricing",
         description:
-          "Returns cart lines with **SKU** and **bundle** promos applied. Optional `couponCode` query previews a coupon without persisting it (`promotions.coupon.status`: `applied` | `not_applicable`). Unsellable lines are pruned on read. Use `summary.subtotal_before_coupon_minor` for `GET /storefront/coupons`.",
+          "Returns cart lines with **SKU** and **bundle** promos applied. Optional `couponCode` query previews a coupon without persisting it (`promotions.coupon.status`: `applied` | `not_applicable`). Unsellable lines are pruned on read. Use `summary.subtotal_before_coupon_minor` for `GET /storefront/coupons`. Set `includeSuggestedCoupons=false` to skip suggested-coupon DB reads on repeat polls.",
         security: [{ bearerAuth: [] }],
-        parameters: [...shopParams, P.CouponCodeQuery],
+        parameters: [
+          ...shopParams,
+          P.CouponCodeQuery,
+          {
+            name: "includeSuggestedCoupons",
+            in: "query",
+            description: "When false, skips loading suggested coupons (default true).",
+            schema: { type: "boolean", default: true }
+          }
+        ],
         responses: {
           "200": {
             description: "OK",

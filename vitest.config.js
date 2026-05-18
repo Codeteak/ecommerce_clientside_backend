@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.js"],
+    exclude: ["tests/integration/**/*.integration.test.js"],
     fileParallelism: false,
     testTimeout: 15_000,
     env: {

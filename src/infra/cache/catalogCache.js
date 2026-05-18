@@ -22,8 +22,16 @@ export function createCatalogCache({ redis }) {
       async swr(_key, ttlSec, fn) {
         return fn();
       },
-      async invalidateShopCatalog(_shopId) {}
+      async invalidateShopCatalog(_shopId) {},
+      async shopKeyPrefix(shopId) {
+        return `shop:${String(shopId || "").trim()}:g0:`;
+      }
     };
+  }
+
+  function catalogGenKey(shopId) {
+    const norm = String(shopId || "").trim();
+    return norm ? `shop:${norm}:catalogGen` : "catalogGen:global";
   }
 
   function getClient() {
@@ -153,10 +161,10 @@ export function createCatalogCache({ redis }) {
           const env = fromEnvelope(JSON.parse(raw));
           const ageSec = Math.floor((Date.now() - Number(env.cachedAt || 0)) / 1000);
           if (ageSec < ttlSec) {
-            console.log(`CACHE_HIT ${logLabel} shopId=${shopId}`);
+            logger.debug({ event: "catalog_cache_swr_fresh", logLabel, shopId }, "Catalog SWR fresh hit");
             return env.data;
           }
-          console.log(`CACHE_HIT ${logLabel} shopId=${shopId}`);
+          logger.debug({ event: "catalog_cache_swr_stale", logLabel, shopId }, "Catalog SWR stale hit");
           await refreshInBackground({
             c,
             key,
@@ -175,25 +183,32 @@ export function createCatalogCache({ redis }) {
       return fresh;
     },
 
+    async getCatalogGeneration(shopId) {
+      try {
+        const c = getClient();
+        const raw = await c.get(catalogGenKey(shopId));
+        const n = Number(raw);
+        return Number.isFinite(n) && n >= 0 ? n : 0;
+      } catch {
+        return 0;
+      }
+    },
+
+    /** @param {string} shopId */
+    async shopKeyPrefix(shopId) {
+      const gen = await this.getCatalogGeneration(shopId);
+      const normShopId = String(shopId || "").trim();
+      return normShopId ? `shop:${normShopId}:g${gen}:` : `shop:global:g${gen}:`;
+    },
+
     /**
-     * Deletes Redis keys for catalog cache.
-     * - When `shopId` is provided: removes `shop:<shopId>:*`
-     * - When `shopId` is empty/null: removes `shop:*` (all shops)
+     * Bumps catalog generation so versioned keys miss without SCAN.
+     * Old keys expire via TTL.
      */
     async invalidateShopCatalog(shopId) {
       const c = getClient();
-      const normShopId = String(shopId || "").trim();
-      const pattern = normShopId ? `shop:${normShopId}:*` : "shop:*";
-      let cursor = "0";
       try {
-        do {
-          const res = await c.scan(cursor, "MATCH", pattern, "COUNT", 500);
-          cursor = res[0];
-          const keys = res[1];
-          if (keys.length) {
-            await c.del(...keys);
-          }
-        } while (cursor !== "0");
+        await c.incr(catalogGenKey(shopId));
       } catch {
         // best-effort; callers should not fail storefront reads
       }

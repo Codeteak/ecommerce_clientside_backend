@@ -2,6 +2,7 @@
 This file claims outbox batches and processes them with retry handling.
 */
 import { addOutboxMetric } from "../../infra/metrics/outboxMetrics.js";
+import { getRequestLogger } from "../../infra/logging/requestContext.js";
 
 function parsePayload(payload) {
   if (payload == null) return {};
@@ -90,11 +91,6 @@ function buildRetryDelayMs({ retryCount, baseMs, maxMs }) {
   return Math.min(maxMs, raw + jitter);
 }
 
-async function wait(ms) {
-  if (!ms || ms <= 0) return;
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function withTimeout(promise, timeoutMs) {
   let timer = null;
   try {
@@ -152,6 +148,7 @@ export async function processOutboxBatch({
   retryMaxMs = 30000,
   handlerTimeoutMs = 10000
 }) {
+  const log = logger ?? getRequestLogger();
   const { payloadColumn } = await resolveOutboxSchema(pool);
   const claimClient = await pool.connect();
   let claimedRows = [];
@@ -177,100 +174,101 @@ export async function processOutboxBatch({
   let retried = 0;
   let failed = 0;
 
-  for (const row of claimedRows) {
-    const handler = handlers[row.event_type];
-    const payload = parsePayload(row.payload);
-    const retryCount = Number(row.retry_count || 0);
+  const updateClient = await pool.connect();
+  try {
+    for (const row of claimedRows) {
+      const handler = handlers[row.event_type];
+      const payload = parsePayload(row.payload);
+      const retryCount = Number(row.retry_count || 0);
 
-    logger.info(
-      {
-        event: "outbox.event.processing_started",
-        outboxMessageId: row.id,
-        eventType: row.event_type,
-        retryCount
-      },
-      "Outbox event processing started"
-    );
-
-    const updateClient = await pool.connect();
-    try {
-      if (typeof handler !== "function") {
-        throw new Error(`No outbox handler registered for event type: ${row.event_type}`);
-      }
-
-      await withTimeout(
-        handler(payload, {
-          logger,
-          eventId: row.id,
-          eventType: row.event_type
-        }),
-        handlerTimeoutMs
-      );
-      await updateDone(updateClient, row.id);
-      done += 1;
-      addOutboxMetric("processed");
-      logger.info(
+      log.info(
         {
-          event: "outbox.event.success",
+          event: "outbox.event.processing_started",
           outboxMessageId: row.id,
-          eventType: row.event_type
+          eventType: row.event_type,
+          retryCount
         },
-        "Outbox event processed successfully"
-      );
-    } catch (err) {
-      if (String(err?.message || "").toLowerCase().includes("timed out")) {
-        addOutboxMetric("handler_timeout");
-      }
-      const nextRetryCount = retryCount + 1;
-      const retryDelayMs = buildRetryDelayMs({
-        retryCount: nextRetryCount,
-        baseMs: retryBaseMs,
-        maxMs: retryMaxMs
-      });
-      const { isPermanent } = await updateFailure(
-        updateClient,
-        row.id,
-        nextRetryCount,
-        maxRetries,
-        payloadColumn,
-        err?.message
+        "Outbox event processing started"
       );
 
-      if (isPermanent) {
-        failed += 1;
-        addOutboxMetric("failed");
-        addOutboxMetric("dead_lettered");
-        logger.error(
-          {
-            event: "outbox.event.failed_permanently",
-            outboxMessageId: row.id,
-            eventType: row.event_type,
-            retryCount: nextRetryCount,
-            maxRetries,
-            err
-          },
-          "Outbox event permanently failed"
+      try {
+        if (typeof handler !== "function") {
+          throw new Error(`No outbox handler registered for event type: ${row.event_type}`);
+        }
+
+        await withTimeout(
+          handler(payload, {
+            logger: log,
+            eventId: row.id,
+            eventType: row.event_type
+          }),
+          handlerTimeoutMs
         );
-      } else {
-        retried += 1;
-        addOutboxMetric("retried");
-        logger.warn(
+        await updateDone(updateClient, row.id);
+        done += 1;
+        addOutboxMetric("processed");
+        log.info(
           {
-            event: "outbox.event.retry_scheduled",
+            event: "outbox.event.success",
             outboxMessageId: row.id,
-            eventType: row.event_type,
-            retryCount: nextRetryCount,
-            maxRetries,
-            retryDelayMs,
-            err: err?.message
+            eventType: row.event_type
           },
-          "Outbox event failed and will be retried"
+          "Outbox event processed successfully"
         );
-        await wait(retryDelayMs);
+      } catch (err) {
+        if (String(err?.message || "").toLowerCase().includes("timed out")) {
+          addOutboxMetric("handler_timeout");
+        }
+        const nextRetryCount = retryCount + 1;
+        const retryDelayMs = buildRetryDelayMs({
+          retryCount: nextRetryCount,
+          baseMs: retryBaseMs,
+          maxMs: retryMaxMs
+        });
+        const { isPermanent } = await updateFailure(
+          updateClient,
+          row.id,
+          nextRetryCount,
+          maxRetries,
+          payloadColumn,
+          err?.message
+        );
+
+        if (isPermanent) {
+          failed += 1;
+          addOutboxMetric("failed");
+          addOutboxMetric("dead_lettered");
+          log.error(
+            {
+              event: "outbox.event.failed_permanently",
+              outboxMessageId: row.id,
+              eventType: row.event_type,
+              retryCount: nextRetryCount,
+              maxRetries,
+              err
+            },
+            "Outbox event permanently failed"
+          );
+        } else {
+          retried += 1;
+          addOutboxMetric("retried");
+          log.warn(
+            {
+              event: "outbox.event.retry_scheduled",
+              outboxMessageId: row.id,
+              eventType: row.event_type,
+              retryCount: nextRetryCount,
+              maxRetries,
+              retryDelayMs,
+              err: err?.message
+            },
+            "Outbox event failed and will be retried on next poll"
+          );
+        }
       }
-    } finally {
-      updateClient.release();
     }
+  } finally {
+    updateClient.release();
   }
 
   return {

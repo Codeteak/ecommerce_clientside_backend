@@ -1,12 +1,10 @@
+import { asyncHandler } from "../asyncHandler.js";
+
 function getHandler(ctx) {
-  return async (_req, res, next) => {
-    try {
-      const body = await ctx.getHealth();
-      res.json(body);
-    } catch (err) {
-      next(err);
-    }
-  };
+  return asyncHandler(async (_req, res) => {
+    const body = await ctx.getHealth();
+    res.json(body);
+  });
 }
 
 function readyHandler(ctx) {

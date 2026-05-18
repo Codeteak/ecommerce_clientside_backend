@@ -1,21 +1,22 @@
 import { withClient, withTx } from "../../../infra/db/tx.js";
 import { logSecurityEvent } from "../../../infra/logging/apiLog.js";
 import { AppError } from "../../../domain/errors/AppError.js";
+import { asyncHandler } from "../asyncHandler.js";
 
 /**
  * Purpose: This file handles authentication HTTP endpoints.
  * OTP login handlers.
  */
-function otpRequestHandler(ctx) {
-  return async (req, res, next) => {
+function withSecurityAudit(successEvent, failureEvent, successMeta, handler) {
+  return asyncHandler(async (req, res) => {
     try {
-      const out = await withClient((client) => ctx.requestCustomerOtp(client, req.body));
-      logSecurityEvent("otp.requested", req, { phone: req.body?.phone ? "provided" : "missing" });
+      const out = await handler(req, res);
+      logSecurityEvent(successEvent, req, successMeta?.(req, out) ?? {});
       res.json(out);
     } catch (err) {
       const level = err instanceof AppError ? "warn" : "error";
       logSecurityEvent(
-        "otp.request.failed",
+        failureEvent,
         req,
         {
           code: err?.code || "INTERNAL_ERROR",
@@ -23,116 +24,76 @@ function otpRequestHandler(ctx) {
         },
         level
       );
-      next(err);
+      throw err;
     }
-  };
+  });
+}
+
+function otpRequestHandler(ctx) {
+  return withSecurityAudit(
+    "otp.requested",
+    "otp.request.failed",
+    (req) => ({ phone: req.body?.phone ? "provided" : "missing" }),
+    (req) => withClient((client) => ctx.requestCustomerOtp(client, req.body))
+  );
 }
 
 function otpVerifyHandler(ctx) {
-  return async (req, res, next) => {
-    try {
-      const out = await withTx((client) =>
-        ctx.verifyCustomerOtp(client, {
-          ...req.body,
-          ip: req.ip,
-          userAgent: req.get("user-agent") || null
-        })
-      );
-      logSecurityEvent("otp.verified", req);
-      res.json(out);
-    } catch (err) {
-      const level = err instanceof AppError ? "warn" : "error";
-      logSecurityEvent(
-        "otp.verify.failed",
-        req,
-        {
-          code: err?.code || "INTERNAL_ERROR",
-          message: err?.message
-        },
-        level
-      );
-      next(err);
-    }
-  };
+  return withSecurityAudit("otp.verified", "otp.verify.failed", null, (req) =>
+    withTx((client) =>
+      ctx.verifyCustomerOtp(client, {
+        ...req.body,
+        ip: req.ip,
+        userAgent: req.get("user-agent") || null
+      })
+    )
+  );
 }
 
-//  funciton for requesting email OTP
 function emailOtpRequestHandler(ctx) {
-  return async (req, res, next) => {
-    try {
-      const out = await withClient((client) => ctx.requestCustomerEmailOtp(client, req.body));
-      logSecurityEvent("otp.email.requested", req, { email: req.body?.email ? "provided" : "missing" });
-      res.json(out);
-    } catch (err) {
-      const level = err instanceof AppError ? "warn" : "error";
-      logSecurityEvent(
-        "otp.email.request.failed",
-        req,
-        {
-          code: err?.code || "INTERNAL_ERROR",
-          message: err?.message
-        },
-        level
-      );
-      next(err);
-    }
-  };
+  return withSecurityAudit(
+    "otp.email.requested",
+    "otp.email.request.failed",
+    (req) => ({ email: req.body?.email ? "provided" : "missing" }),
+    (req) => withClient((client) => ctx.requestCustomerEmailOtp(client, req.body))
+  );
 }
 
 function emailOtpVerifyHandler(ctx) {
-  return async (req, res, next) => {
-    try {
-      const out = await withTx((client) =>
-        ctx.verifyCustomerEmailOtp(client, {
-          ...req.body,
-          ip: req.ip,
-          userAgent: req.get("user-agent") || null
-        })
-      );
-      logSecurityEvent("otp.email.verified", req);
-      res.json(out);
-    } catch (err) {
-      const level = err instanceof AppError ? "warn" : "error";
-      logSecurityEvent(
-        "otp.email.verify.failed",
-        req,
-        {
-          code: err?.code || "INTERNAL_ERROR",
-          message: err?.message
-        },
-        level
-      );
-      next(err);
-    }
-  };
+  return withSecurityAudit("otp.email.verified", "otp.email.verify.failed", null, (req) =>
+    withTx((client) =>
+      ctx.verifyCustomerEmailOtp(client, {
+        ...req.body,
+        ip: req.ip,
+        userAgent: req.get("user-agent") || null
+      })
+    )
+  );
 }
 
 function refreshHandler(ctx) {
-  return async (req, res, next) => {
-    try {
-      const out = await withTx((client) =>
-        ctx.rotateCustomerRefreshToken(client, {
-          refreshToken: req.body.refreshToken,
-          ip: req.ip,
-          userAgent: req.get("user-agent") || null
-        })
-      );
-      logSecurityEvent("auth.refresh.succeeded", req);
-      res.json(out);
-    } catch (err) {
-      const level = err instanceof AppError ? "warn" : "error";
-      logSecurityEvent(
-        "auth.refresh.failed",
-        req,
-        {
-          code: err?.code || "INTERNAL_ERROR",
-          message: err?.message
-        },
-        level
-      );
-      next(err);
-    }
-  };
+  return withSecurityAudit("auth.refresh.succeeded", "auth.refresh.failed", null, (req) =>
+    withTx((client) =>
+      ctx.rotateCustomerRefreshToken(client, {
+        refreshToken: req.body.refreshToken,
+        ip: req.ip,
+        userAgent: req.get("user-agent") || null
+      })
+    )
+  );
+}
+
+function logoutHandler(ctx) {
+  return withSecurityAudit("auth.logout", "auth.logout.failed", null, (req) => {
+    const raw = req.headers.authorization || "";
+    const accessToken = raw.startsWith("Bearer ") ? raw.slice(7).trim() : "";
+    return withTx((client) =>
+      ctx.logoutCustomer(client, {
+        accessToken,
+        refreshToken: req.body?.refreshToken ?? null
+      })
+    );
+  });
 }
 
 export const authController = {
@@ -141,6 +102,7 @@ export const authController = {
   refresh: (ctx) => refreshHandler(ctx),
   emailOtpRequest: (ctx) => emailOtpRequestHandler(ctx),
   emailOtpVerify: (ctx) => emailOtpVerifyHandler(ctx),
+  logout: (ctx) => logoutHandler(ctx),
 
   forCtx(ctx) {
     return {
@@ -148,7 +110,8 @@ export const authController = {
       otpVerify: otpVerifyHandler(ctx),
       refresh: refreshHandler(ctx),
       emailOtpRequest: emailOtpRequestHandler(ctx),
-      emailOtpVerify: emailOtpVerifyHandler(ctx)
+      emailOtpVerify: emailOtpVerifyHandler(ctx),
+      logout: logoutHandler(ctx)
     };
   }
 };

@@ -163,10 +163,19 @@ export class CatalogRepoPg extends CatalogRepo {
       categoryId,
       availability,
       qPattern,
+      qRaw = null,
+      useTrgm = false,
       orderBySql,
       limit,
       offset
     } = params;
+    const textFilter = useTrgm && qRaw ? qRaw : qPattern;
+    const textClause =
+      useTrgm && qRaw
+        ? `($4::text IS NULL OR gp.name % $4 OR gp.slug % $4)`
+        : `($4::text IS NULL OR gp.name ILIKE $4 ESCAPE '\\' OR gp.slug ILIKE $4 ESCAPE '\\')`;
+    const orderClause =
+      useTrgm && qRaw ? `similarity(gp.name, $4) DESC, ${orderBySql}` : orderBySql;
     const client = await pool.connect();
     try {
       await setTenantContext(client, shopId);
@@ -218,14 +227,10 @@ export class CatalogRepoPg extends CatalogRepo {
             AND sp.status = 'active'
             AND ($2::uuid IS NULL OR gp.global_category_id = $2)
             AND ($3::text IS NULL OR sp.availability = $3)
-            AND (
-              $4::text IS NULL
-              OR gp.name ILIKE $4 ESCAPE '\\'
-              OR gp.slug ILIKE $4 ESCAPE '\\'
-            )
-          ORDER BY ${orderBySql}
+            AND ${textClause}
+          ORDER BY ${orderClause}
           LIMIT $5 OFFSET $6`,
-        [shopId, categoryId, availability, qPattern, limit, offset]
+        [shopId, categoryId, availability, textFilter, limit, offset]
       );
       return rows.map((r) => ({
         ...r,
@@ -264,7 +269,22 @@ export class CatalogRepoPg extends CatalogRepo {
   }
 
   async searchCategories(shopId, params) {
-    const { parentId, qPattern, orderBySql, limit, offset } = params;
+    const {
+      parentId,
+      qPattern,
+      qRaw = null,
+      useTrgm = false,
+      orderBySql,
+      limit,
+      offset
+    } = params;
+    const textFilter = useTrgm && qRaw ? qRaw : qPattern;
+    const textClause =
+      useTrgm && qRaw
+        ? `($3::text IS NULL OR c.name % $3 OR c.slug % $3)`
+        : `($3::text IS NULL OR c.name ILIKE $3 ESCAPE '\\' OR c.slug ILIKE $3 ESCAPE '\\')`;
+    const orderClause =
+      useTrgm && qRaw ? `similarity(c.name, $3) DESC, ${orderBySql}` : orderBySql;
     const client = await pool.connect();
     try {
       await setTenantContext(client, shopId);
@@ -291,14 +311,10 @@ export class CatalogRepoPg extends CatalogRepo {
               ($2::uuid IS NULL AND c.parent_id IS NULL)
               OR ($2::uuid IS NOT NULL AND c.parent_id = $2)
             )
-            AND (
-              $3::text IS NULL
-              OR c.name ILIKE $3 ESCAPE '\\'
-              OR c.slug ILIKE $3 ESCAPE '\\'
-            )
-          ORDER BY ${orderBySql}
+            AND ${textClause}
+          ORDER BY ${orderClause}
           LIMIT $4 OFFSET $5`,
-        [shopId, parentId, qPattern, limit, offset]
+        [shopId, parentId, textFilter, limit, offset]
       );
       return rows.map((r) => ({
         id: r.id,
@@ -323,11 +339,54 @@ export class CatalogRepoPg extends CatalogRepo {
     }
   }
 
-  async listCategoriesStorefront(shopId, filters = {}) {
-    const parentId = filters.parentId !== undefined ? filters.parentId : null;
+  async listCategoryIdsWithSellableProducts(shopId) {
     const client = await pool.connect();
     try {
       await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `WITH RECURSIVE category_ancestors AS (
+           SELECT DISTINCT gp.global_category_id AS id
+             FROM shop_products sp
+             JOIN global_products gp ON gp.id = sp.global_product_id
+            WHERE sp.shop_id = $1::uuid
+              AND sp.status = 'active'
+              AND sp.availability = 'in_stock'
+              AND gp.global_category_id IS NOT NULL
+           UNION
+           SELECT c.parent_id
+             FROM global_categories c
+             JOIN category_ancestors ca ON c.id = ca.id
+            WHERE c.parent_id IS NOT NULL
+         )
+         SELECT DISTINCT id::text AS id
+           FROM category_ancestors
+          WHERE id IS NOT NULL`,
+        [shopId]
+      );
+      return rows.map((r) => String(r.id));
+    } finally {
+      client.release();
+    }
+  }
+
+  async listCategoriesStorefront(shopId, filters = {}) {
+    const parentId = filters.parentId !== undefined ? filters.parentId : null;
+    const sellableCategoryIds = Array.isArray(filters.sellableCategoryIds)
+      ? filters.sellableCategoryIds.map((id) => String(id)).filter(Boolean)
+      : null;
+
+    if (sellableCategoryIds && sellableCategoryIds.length === 0) {
+      return [];
+    }
+
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const sellableFilter =
+        sellableCategoryIds != null ? `AND c.id = ANY($3::uuid[])` : "";
+      const params =
+        sellableCategoryIds != null ? [shopId, parentId, sellableCategoryIds] : [shopId, parentId];
+
       const { rows } = await client.query(
         `SELECT c.id, c.parent_id, c.name, c.slug, c.sort_order,
                 ma.id AS image_media_id,
@@ -347,29 +406,14 @@ export class CatalogRepoPg extends CatalogRepo {
               c.scope = 'shared'
               OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
             )
-            AND EXISTS (
-              WITH RECURSIVE category_tree AS (
-                SELECT c.id
-                UNION ALL
-                SELECT child.id
-                  FROM global_categories child
-                  JOIN category_tree ct ON child.parent_id = ct.id
-              )
-              SELECT 1
-                FROM shop_products sp
-                JOIN global_products gp ON gp.id = sp.global_product_id
-               WHERE sp.shop_id = $1::uuid
-                 AND sp.status = 'active'
-                 AND sp.availability = 'in_stock'
-                 AND gp.global_category_id IN (SELECT id FROM category_tree)
-            )
+            ${sellableFilter}
             AND (
               ($2::uuid IS NULL AND c.parent_id IS NULL)
               OR ($2::uuid IS NOT NULL AND c.parent_id = $2)
             )
           ORDER BY c.sort_order ASC, c.name ASC
           LIMIT 500`,
-        [shopId, parentId]
+        params
       );
       return rows;
     } finally {
@@ -377,10 +421,22 @@ export class CatalogRepoPg extends CatalogRepo {
     }
   }
 
-  async listAllCategoriesStorefront(shopId) {
+  async listAllCategoriesStorefront(shopId, filters = {}) {
+    const sellableCategoryIds = Array.isArray(filters.sellableCategoryIds)
+      ? filters.sellableCategoryIds.map((id) => String(id)).filter(Boolean)
+      : null;
+
+    if (sellableCategoryIds && sellableCategoryIds.length === 0) {
+      return [];
+    }
+
     const client = await pool.connect();
     try {
       await setTenantContext(client, shopId);
+      const sellableFilter =
+        sellableCategoryIds != null ? `AND c.id = ANY($2::uuid[])` : "";
+      const params = sellableCategoryIds != null ? [shopId, sellableCategoryIds] : [shopId];
+
       const { rows } = await client.query(
         `SELECT c.id, c.parent_id, c.name, c.slug, c.sort_order,
                 ma.id AS image_media_id,
@@ -400,25 +456,10 @@ export class CatalogRepoPg extends CatalogRepo {
               c.scope = 'shared'
               OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
             )
-            AND EXISTS (
-              WITH RECURSIVE category_tree AS (
-                SELECT c.id
-                UNION ALL
-                SELECT child.id
-                  FROM global_categories child
-                  JOIN category_tree ct ON child.parent_id = ct.id
-              )
-              SELECT 1
-                FROM shop_products sp
-                JOIN global_products gp ON gp.id = sp.global_product_id
-               WHERE sp.shop_id = $1::uuid
-                 AND sp.status = 'active'
-                 AND sp.availability = 'in_stock'
-                 AND gp.global_category_id IN (SELECT id FROM category_tree)
-            )
+            ${sellableFilter}
           ORDER BY c.sort_order ASC, c.name ASC
           LIMIT 5000`,
-        [shopId]
+        params
       );
       return rows;
     } finally {

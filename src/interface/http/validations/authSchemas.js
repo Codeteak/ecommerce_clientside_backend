@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { customerPhoneSchema } from "./phoneSchema.js";
 
-const phoneSchema = z.string().regex(/^[0-9+][0-9]{7,31}$/, "Invalid phone format");
+const phoneSchema = customerPhoneSchema;
 const emailSchema = z.string().trim().toLowerCase().email("Invalid email format");
 
 export const otpRequestBodySchema = z
@@ -36,5 +37,11 @@ export const emailOtpVerifyBodySchema = z
 export const refreshTokenBodySchema = z
   .object({
     refreshToken: z.string().min(20, "Refresh token is required")
+  })
+  .strict();
+
+export const logoutBodySchema = z
+  .object({
+    refreshToken: z.string().min(20).optional()
   })
   .strict();

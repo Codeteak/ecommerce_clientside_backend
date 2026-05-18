@@ -6,7 +6,6 @@ import request from "supertest";
 import { createSessionCache } from "../../src/utils/sessionCache.js";
 import { createRequireCustomerJwt } from "../../src/interface/http/middleware/requireCustomerJwt.js";
 import { signCustomerAccessToken } from "../../src/infra/auth/jwt.js";
-import { hashToken } from "../../src/infra/security/tokenHash.js";
 import { processOutboxBatch } from "../../src/application/services/outboxProcessor.js";
 import { createOutboxHandlers } from "../../src/application/services/outboxHandlers.js";
 import { logger } from "../../src/config/logger.js";
@@ -61,11 +60,11 @@ runDescribe("integration: redis session cache and outbox processor", () => {
 
   it("stores and validates session in redis-backed middleware path", async () => {
     const sessionCache = createSessionCache({ redis });
-    const token = signCustomerAccessToken({
+    const { token, jti } = signCustomerAccessToken({
       userId: "11111111-1111-4111-8111-111111111111",
       customerId: "22222222-2222-4222-8222-222222222222"
     });
-    const sessionId = hashToken(token);
+    const sessionId = jti;
     await sessionCache.storeSession({
       userId: "11111111-1111-4111-8111-111111111111",
       sessionId,

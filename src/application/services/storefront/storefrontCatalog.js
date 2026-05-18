@@ -1,39 +1,45 @@
+import { createHash } from "node:crypto";
 import { requireShopId } from "../catalog/catalogShopId.js";
 import { resolveStorefrontListAvailability } from "../catalog/resolveStorefrontListAvailability.js";
-import { toIlikePattern } from "../catalog/catalogSearchPattern.js";
-import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
+import { resolveCatalogSearchPattern } from "../catalog/catalogSearchPattern.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
-import {
-  buildStorefrontListingUnitPriceMap,
-  withStorefrontProductPricing,
-  withStorefrontDetailPricing
-} from "../promotions/resolveStorefrontSkuUnitPrices.js";
-import {
-  filterBundleRuleRowsForProduct,
-  mapActiveBundleRuleRow
-} from "../promotions/mapActiveBundleRulesPublic.js";
+import { withStorefrontProductPricing } from "../promotions/resolveStorefrontSkuUnitPrices.js";
 import {
   mapStorefrontCategoryRow as mapCategoryRow,
   mapStorefrontProductRow as mapProductRow
 } from "./storefrontCatalogMappers.js";
-import { logger } from "../../../config/logger.js";
-
 /** @param {{ promotions_paused?: boolean, products?: unknown[], categories?: unknown[], nextCursor?: string | null }} body */
-function pruneStorefrontProductListPayload(body) {
+function pruneStorefrontProductListPayload(body, { layout = "grouped" } = {}) {
   const out = {};
   if (body.promotions_paused === true) {
     out.promotions_paused = true;
   }
-  if (Array.isArray(body.products) && body.products.length > 0) {
-    out.products = body.products;
+  const categories = Array.isArray(body.categories) ? body.categories : [];
+  const products = Array.isArray(body.products) ? body.products : [];
+  const flatLayout = layout === "flat";
+
+  if (flatLayout) {
+    if (products.length > 0) {
+      out.products = products;
+    }
+    if (categories.length > 0) {
+      out.categories = categories;
+    }
+  } else if (categories.length > 0) {
+    out.categories = categories;
+  } else if (products.length > 0) {
+    out.products = products;
   }
-  if (Array.isArray(body.categories) && body.categories.length > 0) {
-    out.categories = body.categories;
-  }
+
   if (body.nextCursor != null && body.nextCursor !== "") {
     out.nextCursor = body.nextCursor;
   }
   return out;
+}
+
+function listingPromoPageHash(pageRows) {
+  const ids = pageRows.map((r) => String(r.id)).sort();
+  return createHash("sha256").update(ids.join(",")).digest("hex").slice(0, 16);
 }
 
 /**
@@ -47,91 +53,31 @@ export function createStorefrontCatalog({
   ensureShopForCatalog,
   catalogCache,
   catalogCacheTtlSec = 60,
-  pool = null,
-  promotionRepo = null
+  runWithClient,
+  listingPromotions
 }) {
   const ttl = Number(catalogCacheTtlSec) || 0;
   // Keep SWR freshness aligned with configured catalog TTL so updates
   // are reflected within the expected minute-level window.
   const swrTtlSec = ttl > 0 ? ttl : 0;
 
-  function mapProductDetailImage(g) {
-    const out = {
-      sortOrder: g.sort_order,
-      contentType: g.content_type,
-      url: g.url ?? toPublicMediaUrl(g.storage_key)
-    };
-    if (g.media_asset_id != null) {
-      out.mediaAssetId = g.media_asset_id;
+  async function shopPrefix(shopId) {
+    if (typeof catalogCache.shopKeyPrefix === "function") {
+      return catalogCache.shopKeyPrefix(shopId);
     }
-    if (g.storage_key != null) {
-      out.storageKey = g.storage_key;
-    }
-    return out;
+    return `shop:${shopId}:g0:`;
   }
 
-  function mapProductDetail(data) {
-    const { product, gallery } = data;
-    let images = gallery.map(mapProductDetailImage);
-    const globalImageUrl =
-      typeof product.global_image_url === "string" && product.global_image_url !== "" ? product.global_image_url : null;
-    if (images.length === 0 && globalImageUrl) {
-      images = [
-        {
-          sortOrder: 0,
-          contentType: null,
-          url: globalImageUrl
-        }
-      ];
-    }
-    if (globalImageUrl) {
-      images = [
-        {
-          sortOrder: 0,
-          contentType: null,
-          url: globalImageUrl
-        }
-      ];
-    }
-    return {
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      unit: product.base_unit,
-      availability: product.availability,
-      category_id: product.category_id,
-      images
-    };
-  }
-
-  async function cachedSWR(shopId, key, label, fn, ttlOverride = null) {
+  async function cachedSWR(shopId, keySuffix, label, fn, ttlOverride = null) {
     const effective = ttlOverride != null ? ttlOverride : swrTtlSec;
     if (effective <= 0) {
       return fn();
     }
+    const prefix = await shopPrefix(shopId);
+    const key = `${prefix}${keySuffix}`;
     return catalogCache.swr(key, effective, fn, { logLabel: label, shopId });
   }
 
-  /**
-   * When there are no campaigns, paused promos, or promotion DB reads fail:
-   * catalog-only pricing (`promo_price_minor` null) and no bundle rules.
-   */
-  function catalogOnlyPromotionContext(pageRows) {
-    return {
-      promotionsPaused: false,
-      priceMap: buildStorefrontListingUnitPriceMap({
-        promotionsPaused: false,
-        defaultOverlapMode: "priority",
-        products: pageRows,
-        overlays: []
-      }),
-      bundleRowsRaw: []
-    };
-  }
-
-  /**
-   * Loads shop promo settings, SKU overlays, bundle rows (raw); runs outside catalog SWR.
-   */
   async function loadListingPromotionsContext(shopId, pageRows) {
     if (!pageRows.length) {
       return {
@@ -140,112 +86,53 @@ export function createStorefrontCatalog({
         bundleRowsRaw: []
       };
     }
-    if (!pool || !promotionRepo) {
-      return catalogOnlyPromotionContext(pageRows);
+    const listingPromoTtlSec = swrTtlSec > 0 ? Math.max(swrTtlSec, 90) : 0;
+    if (listingPromoTtlSec <= 0 || typeof catalogCache.wrap !== "function") {
+      return runWithClient((client) => listingPromotions.loadListingContext(client, shopId, pageRows));
     }
-    const client = await pool.connect();
-    try {
-      try {
-        const rawSettings = await promotionRepo.getShopPromotionSettings(client, shopId);
-        const promotionsPaused = rawSettings?.promotions_paused === true;
-        const defaultOverlapMode =
-          rawSettings?.default_overlap_mode === "best_for_customer" ? "best_for_customer" : "priority";
-        const ids = pageRows.map((r) => r.id);
-        const overlays = promotionsPaused
-          ? []
-          : await promotionRepo.listActivePromotionProductOverlaysForShopProducts(client, shopId, ids);
-        const bundleRowsRaw = promotionsPaused ? [] : await promotionRepo.listActiveBundleRulesForShop(client, shopId);
-        return {
-          promotionsPaused,
-          priceMap: buildStorefrontListingUnitPriceMap({
-            promotionsPaused,
-            defaultOverlapMode,
-            products: pageRows,
-            overlays
-          }),
-          bundleRowsRaw
-        };
-      } catch (err) {
-        logger.warn(
-          { err, shopId, event: "storefront_listing_promotions_fallback" },
-          "Promotion read failed; returning catalog-only prices"
-        );
-        return catalogOnlyPromotionContext(pageRows);
-      }
-    } finally {
-      client.release();
+    const prefix = await shopPrefix(shopId);
+    const cacheKey = `${prefix}listingPromo:${listingPromoPageHash(pageRows)}`;
+    const cached = await catalogCache.wrap(cacheKey, listingPromoTtlSec, async () => {
+      const ctx = await runWithClient((client) => listingPromotions.loadListingContext(client, shopId, pageRows));
+      return {
+        promotionsPaused: ctx.promotionsPaused,
+        bundleRowsRaw: ctx.bundleRowsRaw,
+        priceMapEntries: [...ctx.priceMap.entries()]
+      };
+    });
+    if (!cached || typeof cached !== "object") {
+      return runWithClient((client) => listingPromotions.loadListingContext(client, shopId, pageRows));
     }
+    return {
+      promotionsPaused: cached.promotionsPaused === true,
+      bundleRowsRaw: Array.isArray(cached.bundleRowsRaw) ? cached.bundleRowsRaw : [],
+      priceMap: new Map(Array.isArray(cached.priceMapEntries) ? cached.priceMapEntries : [])
+    };
   }
 
-  async function enrichProductDetailWithPromotions(shopId, data) {
-    const base = mapProductDetail(data);
-    const row = data.product;
-    const idStr = String(row.id);
-    if (!pool || !promotionRepo) {
-      const priceMap = buildStorefrontListingUnitPriceMap({
-        promotionsPaused: false,
-        defaultOverlapMode: "priority",
-        products: [row],
-        overlays: []
-      });
-      const entry = priceMap.get(idStr);
-      const priced = withStorefrontDetailPricing(base, row, entry?.promoPriceMinor ?? null);
-      return { ...priced, bundle_rules: [] };
+  async function getSellableCategoryIds(shopId) {
+    const listingTtl = swrTtlSec > 0 ? Math.max(swrTtlSec, 60) : 0;
+    if (listingTtl <= 0 || typeof catalogCache.wrap !== "function") {
+      return catalogRepo.listCategoryIdsWithSellableProducts(shopId);
     }
-    const client = await pool.connect();
-    try {
-      try {
-        const rawSettings = await promotionRepo.getShopPromotionSettings(client, shopId);
-        const promotionsPaused = rawSettings?.promotions_paused === true;
-        const defaultOverlapMode =
-          rawSettings?.default_overlap_mode === "best_for_customer" ? "best_for_customer" : "priority";
-        const overlays = promotionsPaused
-          ? []
-          : await promotionRepo.listActivePromotionProductOverlaysForShopProducts(client, shopId, [row.id]);
-        const priceMap = buildStorefrontListingUnitPriceMap({
-          promotionsPaused,
-          defaultOverlapMode,
-          products: [row],
-          overlays
-        });
-        const entry = priceMap.get(idStr);
-        const priced = withStorefrontDetailPricing(base, row, entry?.promoPriceMinor ?? null);
-        const bundleRows = promotionsPaused
-          ? []
-          : await promotionRepo.listActiveBundleRulesForProduct(client, shopId, row.id, row.category_id ?? null);
-        return {
-          ...priced,
-          bundle_rules: bundleRows.map(mapActiveBundleRuleRow)
-        };
-      } catch (err) {
-        logger.warn(
-          { err, shopId, event: "storefront_detail_promotions_fallback" },
-          "Promotion read failed; returning catalog-only prices for product detail"
-        );
-        const priceMap = buildStorefrontListingUnitPriceMap({
-          promotionsPaused: false,
-          defaultOverlapMode: "priority",
-          products: [row],
-          overlays: []
-        });
-        const entry = priceMap.get(idStr);
-        const priced = withStorefrontDetailPricing(base, row, entry?.promoPriceMinor ?? null);
-        return { ...priced, bundle_rules: [] };
-      }
-    } finally {
-      client.release();
-    }
+    const prefix = await shopPrefix(shopId);
+    const cacheKey = `${prefix}categories:sellableIds`;
+    const cached = await catalogCache.wrap(cacheKey, listingTtl, () =>
+      catalogRepo.listCategoryIdsWithSellableProducts(shopId)
+    );
+    return Array.isArray(cached) ? cached : [];
   }
 
   return {
     async listCategories(shopIdRaw, { parentId, all = false } = {}) {
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
-      const key = all ? `shop:${shopId}:categories:all` : `shop:${shopId}:categories:${parentId ?? "root"}`;
+      const key = all ? `categories:all` : `categories:${parentId ?? "root"}`;
       return cachedSWR(shopId, key, "categories:list", async () => {
+        const sellableCategoryIds = await getSellableCategoryIds(shopId);
         const rows = all
-          ? await catalogRepo.listAllCategoriesStorefront(shopId)
-          : await catalogRepo.listCategoriesStorefront(shopId, { parentId });
+          ? await catalogRepo.listAllCategoriesStorefront(shopId, { sellableCategoryIds })
+          : await catalogRepo.listCategoriesStorefront(shopId, { parentId, sellableCategoryIds });
         return rows.map(mapCategoryRow);
       });
     },
@@ -264,7 +151,9 @@ export function createStorefrontCatalog({
         minPriceMinor,
         maxPriceMinor,
         sortBy,
-        sortOrder
+        sortOrder,
+        layout,
+        searchMode
       }
     ) {
       const shopId = requireShopId(shopIdRaw);
@@ -287,8 +176,10 @@ export function createStorefrontCatalog({
         cursorCreatedAt = parsed.t;
         cursorId = parsed.id;
       }
-      const qPattern = toIlikePattern(search ?? null);
-      const key = `shop:${shopId}:products:v7:${categoryId ?? "all"}:${brandId ?? "all"}:${qPattern ?? "q"}:${listAvailability ?? "any"}:${minPriceMinor ?? "min"}:${maxPriceMinor ?? "max"}:${resolvedSortBy}:${resolvedSortOrder}:${lim}:cur:${cursor ?? "none"}:off:${offsetValue ?? "none"}`;
+      const resolvedSearchMode = searchMode === "prefix" ? "prefix" : "contains";
+      const qPattern = resolveCatalogSearchPattern(search ?? null, resolvedSearchMode);
+      const resolvedLayout = layout === "flat" ? "flat" : "grouped";
+      const key = `products:list:v8:${categoryId ?? "all"}:${brandId ?? "all"}:${resolvedSearchMode}:${qPattern ?? "q"}:${listAvailability ?? "any"}:${minPriceMinor ?? "min"}:${maxPriceMinor ?? "max"}:${resolvedSortBy}:${resolvedSortOrder}:${lim}:cur:${cursor ?? "none"}:off:${offsetValue ?? "none"}`;
       const items = await cachedSWR(shopId, key, "products:list", async () => {
         const rows = await catalogRepo.listProductsStorefront(shopId, {
           categoryId: categoryId ?? null,
@@ -318,14 +209,18 @@ export function createStorefrontCatalog({
           : null;
       const { promotionsPaused, priceMap, bundleRowsRaw } = await loadListingPromotionsContext(shopId, page);
       const mapped = page.map((row) => {
-        const base = mapProductRow(row);
+        const base = mapProductRow(row, { listView: true });
         const entry = priceMap.get(String(row.id));
         const promo = entry?.promoPriceMinor ?? null;
         const priced = withStorefrontProductPricing(base, row, promo);
-        const subset = filterBundleRuleRowsForProduct(bundleRowsRaw, String(row.id), row.category_id);
+        const subset = listingPromotions.filterBundleRuleRowsForProduct(
+          bundleRowsRaw,
+          String(row.id),
+          row.category_id
+        );
         return {
           ...priced,
-          bundle_rules: subset.map(mapActiveBundleRuleRow)
+          bundle_rules: subset.map(listingPromotions.mapActiveBundleRuleRow)
         };
       });
       const grouped = new Map();
@@ -351,18 +246,21 @@ export function createStorefrontCatalog({
         delete categoryProduct.category;
         grouped.get(groupId).products.push(categoryProduct);
       }
-      return pruneStorefrontProductListPayload({
-        promotions_paused: promotionsPaused,
-        products: mapped,
-        categories: Array.from(grouped.values()),
-        nextCursor
-      });
+      return pruneStorefrontProductListPayload(
+        {
+          promotions_paused: promotionsPaused,
+          products: mapped,
+          categories: Array.from(grouped.values()),
+          nextCursor
+        },
+        { layout: resolvedLayout }
+      );
     },
 
     async getProductBySlug(shopIdRaw, slug) {
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
-      const key = `shop:${shopId}:product:${String(slug).toLowerCase()}`;
+      const key = `product:slug:${String(slug).toLowerCase()}`;
       const data = await cachedSWR(
         shopId,
         key,
@@ -371,13 +269,13 @@ export function createStorefrontCatalog({
         swrTtlSec
       );
       if (!data) return null;
-      return enrichProductDetailWithPromotions(shopId, data);
+      return runWithClient((client) => listingPromotions.enrichProductDetail(client, shopId, data));
     },
 
     async getProductById(shopIdRaw, id) {
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
-      const key = `shop:${shopId}:product:id:${String(id).toLowerCase()}`;
+      const key = `product:id:${String(id).toLowerCase()}`;
       const data = await cachedSWR(
         shopId,
         key,
@@ -386,13 +284,13 @@ export function createStorefrontCatalog({
         swrTtlSec
       );
       if (!data) return null;
-      return enrichProductDetailWithPromotions(shopId, data);
+      return runWithClient((client) => listingPromotions.enrichProductDetail(client, shopId, data));
     },
 
     async getCategoryBySlug(shopIdRaw, slug) {
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
-      const key = `shop:${shopId}:category:${String(slug).toLowerCase()}`;
+      const key = `category:slug:${String(slug).toLowerCase()}`;
       const row = await cachedSWR(
         shopId,
         key,

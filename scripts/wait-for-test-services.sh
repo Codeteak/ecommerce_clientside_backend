@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PG_HOST="${INTEGRATION_PG_HOST:-127.0.0.1}"
+PG_PORT="${INTEGRATION_PG_PORT:-5433}"
+REDIS_HOST="${INTEGRATION_REDIS_HOST:-127.0.0.1}"
+REDIS_PORT="${INTEGRATION_REDIS_PORT:-6380}"
+MAX_WAIT_SEC="${MAX_WAIT_SEC:-90}"
+
+deadline=$((SECONDS + MAX_WAIT_SEC))
+
+wait_pg() {
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if command -v pg_isready >/dev/null 2>&1; then
+      if pg_isready -h "$PG_HOST" -p "$PG_PORT" -U postgres -d ecommerce_test >/dev/null 2>&1; then
+        return 0
+      fi
+    elif command -v nc >/dev/null 2>&1; then
+      if nc -z "$PG_HOST" "$PG_PORT" 2>/dev/null; then
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+wait_redis() {
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if command -v redis-cli >/dev/null 2>&1; then
+      if redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping 2>/dev/null | grep -q PONG; then
+        return 0
+      fi
+    elif command -v nc >/dev/null 2>&1; then
+      if nc -z "$REDIS_HOST" "$REDIS_PORT" 2>/dev/null; then
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+echo "Waiting for Postgres at ${PG_HOST}:${PG_PORT}..."
+wait_pg || { echo "Postgres not ready"; exit 1; }
+echo "Waiting for Redis at ${REDIS_HOST}:${REDIS_PORT}..."
+wait_redis || { echo "Redis not ready"; exit 1; }
+echo "Test services are ready."

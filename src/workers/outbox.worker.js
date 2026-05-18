@@ -6,7 +6,10 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { pool } from "../infra/db/pool.js";
 import { createOutboxHandlers } from "../application/services/outboxHandlers.js";
+import { getSharedRedisClient } from "../infra/redis/sharedRedis.js";
+import { createOrderPlacedEmitter } from "../infra/realtime/createOrderPlacedEmitter.js";
 import { processOutboxBatch } from "../application/services/outboxProcessor.js";
+import { installFatalProcessHandlers } from "../utils/installFatalProcessHandlers.js";
 
 function delay(ms, signal) {
   if (signal?.aborted) return Promise.resolve();
@@ -25,8 +28,24 @@ function delay(ms, signal) {
   });
 }
 
+installFatalProcessHandlers(logger, { skip: env.NODE_ENV === "test" });
+
 async function runOutboxWorker() {
-  const handlers = createOutboxHandlers();
+  let orderPlacedEmitter = null;
+  if (env.REALTIME_ENABLED) {
+    const redis = getSharedRedisClient();
+    if (redis) {
+      orderPlacedEmitter = await createOrderPlacedEmitter({ redis, logger });
+    } else {
+      logger.warn(
+        { event: "outbox.realtime.disabled_no_redis" },
+        "REALTIME_ENABLED but Redis unavailable; ORDER_PLACED_REALTIME will no-op"
+      );
+    }
+  }
+  const handlers = createOutboxHandlers({
+    emitOrderPlaced: orderPlacedEmitter?.emitOrderPlaced ?? (() => {})
+  });
   const pollIntervalMs = env.OUTBOX_POLL_INTERVAL_MS;
   const batchSize = env.OUTBOX_BATCH_SIZE;
   const maxRetries = env.OUTBOX_MAX_RETRIES;
@@ -59,7 +78,17 @@ async function runOutboxWorker() {
     "Outbox worker started"
   );
 
+  const shutdownDeadline =
+    Date.now() + Math.max(0, Number(env.SHUTDOWN_TIMEOUT_MS) || 30_000);
+
   while (!stopping) {
+    if (Date.now() >= shutdownDeadline) {
+      logger.warn(
+        { event: "outbox.worker.shutdown_timeout", timeoutMs: env.SHUTDOWN_TIMEOUT_MS },
+        "Outbox worker shutdown timeout reached"
+      );
+      break;
+    }
     try {
       const result = await processOutboxBatch({
         pool,

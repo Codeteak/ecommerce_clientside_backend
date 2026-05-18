@@ -4,12 +4,10 @@ import { logger } from "../../../config/logger.js";
 import { randomInt } from "node:crypto";
 import { hashOtpCode } from "../../../infra/security/otpHasher.js";
 import { shopAllowsCustomers } from "./shopPolicy.js";
-
-function normalizePhone(raw) {
-  return String(raw || "")
-    .trim()
-    .replace(/[\s\-()]/g, "");
-}
+import {
+  formatCustomerPhoneForSms,
+  normalizeCustomerPhoneForStorage
+} from "../../../domain/phone/normalizeCustomerPhone.js";
 
 function randomSixDigitCode() {
   return String(randomInt(100000, 1000000));
@@ -24,7 +22,7 @@ export function createRequestCustomerOtp({
   otpMaxRequestsPerWindow = 3
 }) {
   return async function requestCustomerOtp(client, input) {
-    const phone = normalizePhone(input.phone);
+    const phone = normalizeCustomerPhoneForStorage(input.phone);
     const shopId = input.shopId;
 
     const shop = await authRepo.getShopById(client, shopId);
@@ -63,7 +61,7 @@ export function createRequestCustomerOtp({
 
     const shopLabel = String(shop.name || shop.slug || "our store").trim() || "our store";
     try {
-      await smsSender.sendOtp({ to: phone, code, shopName: shopLabel });
+      await smsSender.sendOtp({ to: formatCustomerPhoneForSms(phone), code, shopName: shopLabel });
     } catch (err) {
       try {
         await authRepo.consumeOtpChallenge(client, challenge.id);

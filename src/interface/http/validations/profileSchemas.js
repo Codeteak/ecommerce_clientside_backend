@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { customerPhoneSchema } from "./phoneSchema.js";
 
 const addressPatchSchema = z
   .object({
@@ -44,7 +45,7 @@ export const patchProfileBodySchema = z
     }
   });
 
-const phoneSchema = z.string().regex(/^[0-9+][0-9]{7,31}$/, "Invalid phone format");
+const phoneSchema = customerPhoneSchema;
 
 export const phoneChangeRequestBodySchema = z
   .object({

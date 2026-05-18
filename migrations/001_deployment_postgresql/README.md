@@ -5,4 +5,5 @@
 - `tables/033_promotion_and_category_updates.sql` contains ordered cross-table updates (backfills, function overrides, RLS/policies, and ALTER backfills) that depend on previously created tables.
 - Run via **`npm run db:migrate`**, which applies `000_extensions_and_primitives.sql` then every `tables/*.sql` in numeric filename order (idempotent `CREATE IF NOT EXISTS` plus per-file upgrades such as `023_auth_refresh_tokens.sql`).
 - To apply the monolithic `migrations/001_full_schema.sql` instead (not recommended for DBs that already diverged), use **`npm run db:migrate:full`**.
-- Regenerate the monolith from split files after table changes: **`npm run db:build-full-schema`**.
+- Regenerate the monolith from split files after table changes: **`npm run db:build-full-schema`** (if that script is present).
+- Phase 4 (`037`–`039`): cart index/unique, optional `pg_trgm` for search. See `docs/PHASE4_EXPLAIN_VERIFY.md`. Run `038` only after duplicate-cart audit; use `scripts/ops/dedupe-duplicate-carts.sql` if needed. Skip `039` when extensions are not allowed.

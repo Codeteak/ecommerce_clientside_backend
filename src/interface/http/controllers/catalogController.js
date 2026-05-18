@@ -1,45 +1,36 @@
 // Purpose: This file handles catalog API requests and returns categories, products, and search results.
+import { asyncHandler } from "../asyncHandler.js";
+
 function shopIdFromRequest(req) {
   return req.shopId;
 }
 
 function createListProductsHandler() {
-  return (ctx) => async (req, res, next) => {
-    try {
+  return (ctx) =>
+    asyncHandler(async (req, res) => {
       const items = await ctx.listProducts(shopIdFromRequest(req), {
         categoryId: req.query.categoryId
       });
       res.json({ items });
-    } catch (err) {
-      next(err);
-    }
-  };
+    });
 }
 
 const listProductsHandler = createListProductsHandler();
 
 function listCategoriesHandler(ctx) {
-  return async (req, res, next) => {
-    try {
-      const categories = await ctx.listCategories(shopIdFromRequest(req), {
-        parentId: req.query.parentId
-      });
-      res.json({ categories });
-    } catch (err) {
-      next(err);
-    }
-  };
+  return asyncHandler(async (req, res) => {
+    const categories = await ctx.listCategories(shopIdFromRequest(req), {
+      parentId: req.query.parentId
+    });
+    res.json({ categories });
+  });
 }
 
 function searchHandler(ctx) {
-  return async (req, res, next) => {
-    try {
-      const result = await ctx.searchCatalog(shopIdFromRequest(req), req.query);
-      res.json(result);
-    } catch (err) {
-      next(err);
-    }
-  };
+  return asyncHandler(async (req, res) => {
+    const result = await ctx.searchCatalog(shopIdFromRequest(req), req.query);
+    res.json(result);
+  });
 }
 
 export const catalogController = {

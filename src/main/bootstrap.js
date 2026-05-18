@@ -2,10 +2,14 @@ import http from "node:http";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { pool } from "../infra/db/pool.js";
-import { disconnectSharedRedis } from "../infra/redis/sharedRedis.js";
+import { disconnectSharedRedis, getSharedRedisClient } from "../infra/redis/sharedRedis.js";
+import { createRealtimeServer } from "../infra/realtime/createRealtimeServer.js";
 import { withRetry } from "../utils/withRetry.js";
+import { closeServerWithTimeout } from "../utils/gracefulShutdown.js";
+import { initSentry } from "../infra/observability/sentry.js";
 import { createAppContext } from "./composition.js";
 import { createExpressApp } from "./server.js";
+import { installFatalProcessHandlers } from "../utils/installFatalProcessHandlers.js";
 
 /**
  * Purpose: This file starts the application server.
@@ -15,29 +19,43 @@ import { createExpressApp } from "./server.js";
 
 /** @type {import("node:http").Server | null} */
 let server = null;
+/** @type {{ close?: () => Promise<void> } | null} */
+let realtimeServer = null;
 
 function installGracefulShutdown() {
   const shutdown = async (signal) => {
-    logger.info({ signal }, "Shutdown signal received; draining HTTP connections");
+    logger.info({ signal, event: "shutdown.started" }, "Shutdown signal received; draining HTTP connections");
     if (!server) {
       process.exit(0);
       return;
     }
-    await new Promise((resolve) => {
-      server.close(() => resolve());
-    });
+    const result = await closeServerWithTimeout(server, env.SHUTDOWN_TIMEOUT_MS);
+    if (result === "timeout") {
+      logger.warn(
+        { event: "shutdown.forced", timeoutMs: env.SHUTDOWN_TIMEOUT_MS },
+        "HTTP drain timed out; continuing shutdown"
+      );
+    }
     server = null;
+    if (realtimeServer?.close) {
+      try {
+        await realtimeServer.close();
+      } catch (err) {
+        logger.warn({ err, event: "shutdown.realtime_failed" }, "Realtime close during shutdown");
+      }
+      realtimeServer = null;
+    }
     try {
       await disconnectSharedRedis();
     } catch (err) {
-      logger.warn({ err }, "Cache disconnect during shutdown");
+      logger.warn({ err, event: "shutdown.redis_failed" }, "Cache disconnect during shutdown");
     }
     try {
       await pool.end();
     } catch (err) {
-      logger.warn({ err }, "Pool end during shutdown");
+      logger.warn({ err, event: "shutdown.pool_failed" }, "Pool end during shutdown");
     }
-    logger.info("Graceful shutdown complete");
+    logger.info({ event: "shutdown.complete" }, "Graceful shutdown complete");
     process.exit(0);
   };
 
@@ -46,6 +64,8 @@ function installGracefulShutdown() {
 }
 
 async function main() {
+  initSentry();
+
   await withRetry(() => pool.query("select 1 as ok"), {
     attempts: env.SERVER_DB_RETRY_ATTEMPTS,
     baseDelayMs: env.SERVER_DB_RETRY_BASE_DELAY_MS,
@@ -53,16 +73,23 @@ async function main() {
     event: "server_start_db_retry"
   });
 
-  if (env.NODE_ENV === "production" && !env.REDIS_URL) {
-    logger.warn(
-      "REDIS_URL is not set: rate limits use per-process memory and catalog has no shared cache. " +
-        "Set REDIS_URL when running multiple instances or for shared rate-limit state."
-    );
-  }
-
   const ctx = createAppContext();
   const app = createExpressApp(ctx);
   server = http.createServer(app);
+
+  if (env.REALTIME_ENABLED) {
+    const redis = getSharedRedisClient();
+    if (!redis) {
+      logger.warn(
+        { event: "realtime.disabled_no_redis" },
+        "REALTIME_ENABLED but Redis unavailable; order.placed emits will no-op"
+      );
+    } else {
+      realtimeServer = await createRealtimeServer(server, { redis, logger });
+      ctx.emitOrderPlaced = realtimeServer.emitOrderPlaced;
+      logger.info({ event: "realtime.enabled" }, "Socket.IO realtime server attached");
+    }
+  }
 
   installGracefulShutdown();
 
@@ -74,6 +101,8 @@ async function main() {
     server.on("error", reject);
   });
 }
+
+installFatalProcessHandlers(logger, { skip: env.NODE_ENV === "test" });
 
 async function startWithRetry() {
   await withRetry(() => main(), {

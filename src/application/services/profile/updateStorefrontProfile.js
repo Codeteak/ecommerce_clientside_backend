@@ -1,5 +1,6 @@
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { ConflictError } from "../../../domain/errors/ConflictError.js";
+import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normalizeCustomerPhone.js";
 
 /**
  * Purpose: This file updates storefront profile data for a customer.
@@ -19,8 +20,9 @@ export function createUpdateStorefrontProfile({ authRepo }) {
       ]);
     }
     if (phone !== undefined) {
+      const storedPhone = phone == null ? null : normalizeCustomerPhoneForStorage(phone);
       try {
-        await authRepo.updateUserPhone(client, userId, phone ?? null);
+        await authRepo.updateUserPhone(client, userId, storedPhone);
       } catch (err) {
         if (err?.code === "23505" && err?.constraint === "users_phone_key") {
           throw new ConflictError("Phone number is already in use");

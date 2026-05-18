@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { patchRequestContext } from "../../../infra/logging/requestContext.js";
 
 // Purpose: Resolves shop ID from x-shop-id header, then subdomain, then custom domain (no query params).
 const uuidSchema = z.string().uuid();
@@ -49,6 +50,9 @@ export function createShopResolver({ shopLookupRepo, storefrontRootDomain }) {
       }
 
       req.shopId = shopId ?? undefined;
+      if (req.shopId) {
+        patchRequestContext({ shopId: req.shopId });
+      }
       next();
     } catch (err) {
       next(err);

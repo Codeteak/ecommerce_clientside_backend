@@ -37,7 +37,9 @@ import { createPriceStorefrontLines } from "../application/services/promotions/p
 import { createEnsureShopForCatalog } from "../application/services/catalog/ensureShopForCatalog.js";
 import { createCatalogCache } from "../infra/cache/catalogCache.js";
 import { getSharedRedisClient } from "../infra/redis/sharedRedis.js";
+import { withClient } from "../infra/db/tx.js";
 import { createStorefrontCatalog } from "../application/services/storefront/storefrontCatalog.js";
+import { createStorefrontListingPromotions } from "../application/services/storefront/storefrontListingPromotions.js";
 import { createStorefrontCart } from "../application/services/storefront/storefrontCart.js";
 import { createCheckoutStorefront } from "../application/services/checkout/checkoutStorefront.js";
 import { logger } from "../config/logger.js";
@@ -45,6 +47,8 @@ import { ConsoleSmsSender } from "../adapters/sms/consoleSmsSender.js";
 import { Msg91SmsSender } from "../adapters/sms/msg91SmsSender.js";
 import { SmtpOtpSender } from "../adapters/sms/smtpOtpSender.js";
 import { createSessionCache } from "../utils/sessionCache.js";
+import { createAccessTokenRegistry } from "../infra/auth/accessTokenRegistry.js";
+import { createLogoutCustomer } from "../application/services/auth/logoutCustomer.js";
 
 export function createAppContext() {
   const catalogRepo = new CatalogRepoPg();
@@ -55,7 +59,9 @@ export function createAppContext() {
   const shopServiceAreaRepo = new ShopServiceAreaRepoPg();
   const promotionRepo = new PromotionRepoPg();
   const ensureShopForCatalog = createEnsureShopForCatalog({ authRepo });
-  const sessionCache = createSessionCache({ redis: getSharedRedisClient() });
+  const redis = getSharedRedisClient();
+  const sessionCache = createSessionCache({ redis });
+  const accessTokenRegistry = createAccessTokenRegistry({ redis });
   const sessionValidityCache = {
     async get(key) {
       const [userId, sessionId] = String(key || "").split(":");
@@ -74,10 +80,10 @@ export function createAppContext() {
   };
   const customerJwtMiddleware = createRequireCustomerJwt({
     authRepo,
+    accessTokenRegistry,
     skipDbSessionCheck: env.NODE_ENV === "test",
     sessionValidityCache,
-    shouldUseSessionCache: (req) =>
-      req.method === "GET" && (req.path === "/api/me/profile" || req.path === "/storefront/cart")
+    shouldUseSessionCache: () => false
   });
   const requireCustomerJwt = env.DISABLE_CUSTOMER_AUTH
     ? (req, _res, next) => {
@@ -98,13 +104,15 @@ export function createAppContext() {
 
   const catalogCache = createCatalogCache({ redis: getSharedRedisClient() });
 
+  const storefrontListingPromotions = createStorefrontListingPromotions({ promotionRepo });
+
   const storefrontCatalog = createStorefrontCatalog({
     catalogRepo,
     ensureShopForCatalog,
     catalogCache,
     catalogCacheTtlSec: env.STOREFRONT_CATALOG_CACHE_TTL_SEC,
-    pool,
-    promotionRepo
+    runWithClient: withClient,
+    listingPromotions: storefrontListingPromotions
   });
 
   const priceStorefrontLines = createPriceStorefrontLines({ promotionRepo, authRepo, orderRepo });
@@ -168,7 +176,8 @@ export function createAppContext() {
     authRepo,
     otpMaxAttempts: env.OTP_MAX_ATTEMPTS
   });
-  const rotateCustomerRefreshToken = createRotateCustomerRefreshToken({ authRepo });
+  const rotateCustomerRefreshToken = createRotateCustomerRefreshToken({ authRepo, accessTokenRegistry });
+  const logoutCustomer = createLogoutCustomer({ authRepo, accessTokenRegistry });
   const requestPhoneChangeOtp = createRequestPhoneChangeOtp({
     authRepo,
     smsSender,
@@ -221,10 +230,12 @@ export function createAppContext() {
     buildStorefrontSessionResponse: (client, userId, sessionMeta) =>
       buildStorefrontSessionResponse(authRepo, client, userId, {
         ...sessionMeta,
-        sessionCache
+        sessionCache,
+        accessTokenRegistry
       }),
     requestCustomerOtp,
     verifyCustomerOtp,
+    logoutCustomer,
     rotateCustomerRefreshToken,
     requestCustomerEmailOtp,
     verifyCustomerEmailOtp,

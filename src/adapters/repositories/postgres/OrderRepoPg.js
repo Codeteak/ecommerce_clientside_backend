@@ -1,6 +1,20 @@
 import { OrderRepo } from "../../../application/ports/repositories/OrderRepo.js";
+import { mapStorefrontOrderRow } from "../../../application/services/storefront/formatStorefrontOrderResponse.js";
 import { setTenantContext } from "../../../infra/db/tenantContext.js";
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
+
+/** Coupon-only discount from promotion_redemptions; `ordersAlias` must match the orders table alias in the outer query. */
+const COUPON_DISCOUNT_SELECT = (ordersAlias) => `
+  COALESCE(
+    (
+      SELECT SUM(pr.discount_minor)::bigint
+        FROM promotion_redemptions pr
+       WHERE pr.order_id = ${ordersAlias}.id
+         AND pr.shop_id = ${ordersAlias}.shop_id
+         AND pr.coupon_id IS NOT NULL
+    ),
+    0
+  ) AS coupon_discount_minor`;
 
 /** Record separator for checkout idempotency advisory-lock keys (U+001E, not NUL). */
 const CHECKOUT_IDEM_LOCK_SEP = "\u001e";
@@ -11,16 +25,6 @@ const CHECKOUT_IDEM_LOCK_SEP = "\u001e";
  * data, updates order state, and writes outbox events for downstream workers.
  */
 export class OrderRepoPg extends OrderRepo {
-  debugLog(payload) {
-    // #region agent log
-    fetch("http://127.0.0.1:7565/ingest/29f3d452-098b-4360-9f3f-87401c89013c", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "285b0d" },
-      body: JSON.stringify({ sessionId: "285b0d", ...payload, timestamp: Date.now() })
-    }).catch(() => {});
-    // #endregion
-  }
-
   resolveGlobalImageUrl(raw) {
     const value = typeof raw === "string" ? raw.trim() : "";
     if (!value) return null;
@@ -41,23 +45,6 @@ export class OrderRepoPg extends OrderRepo {
               url: toPublicMediaUrl(row.image_storage_key)
             }
           : null;
-    if (!image) {
-      // #region agent log
-      this.debugLog({
-        runId: "pre-fix",
-        hypothesisId: "H2",
-        location: "src/adapters/repositories/postgres/OrderRepoPg.js:mapOrderItemRow",
-        message: "Order item resolved to null image",
-        data: {
-          orderItemId: row.id ?? null,
-          productId: row.product_id ?? null,
-          productSlug: row.product_slug ?? null,
-          globalImageUrlRaw: row.global_image_url ?? null,
-          imageStorageKey: row.image_storage_key ?? null
-        }
-      });
-      // #endregion
-    }
     return {
       id: row.id,
       product_id: row.product_id,
@@ -138,31 +125,80 @@ export class OrderRepoPg extends OrderRepo {
     );
     const order = oRows[0];
 
-    for (const it of items) {
-      const linePromoIds =
+    if (items.length > 0) {
+      const productIds = items.map((it) => it.productId ?? null);
+      const names = items.map((it) => it.name);
+      const unitLabels = items.map((it) => it.unitLabel ?? null);
+      const quantities = items.map((it) => it.quantity);
+      const unitPrices = items.map((it) => it.unitPriceMinor);
+      const lineTotals = items.map((it) => it.lineTotalMinor);
+      const listPrices = items.map((it) => it.listPriceMinor ?? it.unitPriceMinor);
+      const lineDiscounts = items.map((it) => it.lineDiscountMinor ?? 0);
+      const appliedPromoIds = items.map((it) =>
         Array.isArray(it.appliedPromotionIds) && it.appliedPromotionIds.length
           ? JSON.stringify(it.appliedPromotionIds)
-          : null;
+          : null
+      );
+      const isCustoms = items.map((it) => Boolean(it.isCustom));
+      const customNotes = items.map((it) => it.customNote ?? null);
+
       await client.query(
         `INSERT INTO order_items (
            order_id, product_id, product_name_snapshot, unit_label_snapshot,
            quantity, unit_price_minor_snapshot, line_total_minor,
            list_price_minor, line_discount_minor, applied_promotion_ids,
            is_custom, custom_note
-         ) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12)`,
+         )
+         SELECT $1::uuid,
+                u.product_id,
+                u.product_name_snapshot,
+                u.unit_label_snapshot,
+                u.quantity,
+                u.unit_price_minor_snapshot,
+                u.line_total_minor,
+                u.list_price_minor,
+                u.line_discount_minor,
+                u.applied_promotion_ids,
+                u.is_custom,
+                u.custom_note
+           FROM UNNEST(
+             $2::uuid[],
+             $3::text[],
+             $4::text[],
+             $5::numeric[],
+             $6::int[],
+             $7::int[],
+             $8::int[],
+             $9::int[],
+             $10::jsonb[],
+             $11::boolean[],
+             $12::text[]
+           ) AS u(
+             product_id,
+             product_name_snapshot,
+             unit_label_snapshot,
+             quantity,
+             unit_price_minor_snapshot,
+             line_total_minor,
+             list_price_minor,
+             line_discount_minor,
+             applied_promotion_ids,
+             is_custom,
+             custom_note
+           )`,
         [
           order.id,
-          it.productId,
-          it.name,
-          it.unitLabel,
-          it.quantity,
-          it.unitPriceMinor,
-          it.lineTotalMinor,
-          it.listPriceMinor ?? it.unitPriceMinor,
-          it.lineDiscountMinor ?? 0,
-          linePromoIds,
-          it.isCustom,
-          it.customNote
+          productIds,
+          names,
+          unitLabels,
+          quantities,
+          unitPrices,
+          lineTotals,
+          listPrices,
+          lineDiscounts,
+          appliedPromoIds,
+          isCustoms,
+          customNotes
         ]
       );
     }
@@ -181,12 +217,13 @@ export class OrderRepoPg extends OrderRepo {
     const raw = opts?.limit ?? 50;
     const limit = Math.min(Math.max(Number(raw) || 50, 1), 100);
     const { rows } = await client.query(
-      `SELECT id, order_number, status, subtotal_minor, delivery_fee_minor, total_minor, currency,
-              promotion_discount_total_minor, coupon_code_normalized, applied_promotion_ids,
-              placed_at, picker_id, picker_name
-         FROM orders
-        WHERE shop_id = $1::uuid AND customer_id = $2
-        ORDER BY placed_at DESC
+      `SELECT o.id, o.order_number, o.status, o.subtotal_minor, o.delivery_fee_minor, o.total_minor, o.currency,
+              o.promotion_discount_total_minor, o.coupon_code_normalized, o.applied_promotion_ids,
+              ${COUPON_DISCOUNT_SELECT("o")},
+              o.placed_at, o.picker_id, o.picker_name
+         FROM orders o
+        WHERE o.shop_id = $1::uuid AND o.customer_id = $2
+        ORDER BY o.placed_at DESC
         LIMIT $3::int`,
       [shopId, customerIdText, limit]
     );
@@ -237,21 +274,6 @@ export class OrderRepoPg extends OrderRepo {
         ORDER BY oi.order_id ASC, oi.id ASC`,
       [orderIds]
     );
-    // #region agent log
-    this.debugLog({
-      runId: "pre-fix",
-      hypothesisId: "H1",
-      location: "src/adapters/repositories/postgres/OrderRepoPg.js:listOrdersForCustomer",
-      message: "Order history query image-source diagnostics",
-      data: {
-        ordersCount: rows.length,
-        itemsCount: itemRows.length,
-        missingShopProductJoinCount: itemRows.filter((r) => !r.shop_product_id).length,
-        missingAllImageSourceCount: itemRows.filter((r) => !r.global_image_url && !r.image_storage_key).length,
-        customItemCount: itemRows.filter((r) => r.is_custom).length
-      }
-    });
-    // #endregion
 
     const itemsByOrderId = new Map();
     for (const row of itemRows) {
@@ -265,7 +287,7 @@ export class OrderRepoPg extends OrderRepo {
       const items = itemsByOrderId.get(String(row.id)) ?? [];
       const leadImage = items.find((it) => it?.image?.url || it?.image_url)?.image ?? null;
       return {
-        ...row,
+        ...mapStorefrontOrderRow(row),
         items,
         // Backward-compatible top-level aliases for order-history card UIs.
         image: leadImage,
@@ -279,17 +301,18 @@ export class OrderRepoPg extends OrderRepo {
   async getOrderByIdForCustomer(client, shopId, orderId, customerIdText) {
     await setTenantContext(client, shopId);
     const { rows: o } = await client.query(
-      `SELECT id, shop_id, customer_id, order_number, status, payment_method,
-              subtotal_minor, delivery_fee_minor, total_minor, currency, notes,
-              promotion_discount_total_minor, coupon_code_normalized, applied_promotion_ids,
-              picker_id, picker_name,
-              placed_at, accepted_at, out_for_delivery_at, delivered_at, rejected_at
-         FROM orders
-        WHERE id = $1::uuid AND shop_id = $2::uuid AND customer_id = $3
+      `SELECT o.id, o.shop_id, o.customer_id, o.order_number, o.status, o.payment_method,
+              o.subtotal_minor, o.delivery_fee_minor, o.total_minor, o.currency, o.notes,
+              o.promotion_discount_total_minor, o.coupon_code_normalized, o.applied_promotion_ids,
+              ${COUPON_DISCOUNT_SELECT("o")},
+              o.picker_id, o.picker_name,
+              o.placed_at, o.accepted_at, o.out_for_delivery_at, o.delivered_at, o.rejected_at
+         FROM orders o
+        WHERE o.id = $1::uuid AND o.shop_id = $2::uuid AND o.customer_id = $3
         LIMIT 1`,
       [orderId, shopId, customerIdText]
     );
-    const order = o[0];
+    const order = mapStorefrontOrderRow(o[0]);
     if (!order) return null;
     const { rows: items } = await client.query(
       `SELECT oi.id, oi.product_id, oi.product_name_snapshot, oi.unit_label_snapshot,
@@ -335,21 +358,6 @@ export class OrderRepoPg extends OrderRepo {
         ORDER BY oi.id ASC`,
       [orderId]
     );
-    // #region agent log
-    this.debugLog({
-      runId: "pre-fix",
-      hypothesisId: "H3",
-      location: "src/adapters/repositories/postgres/OrderRepoPg.js:getOrderByIdForCustomer",
-      message: "Order detail query image-source diagnostics",
-      data: {
-        orderId,
-        itemsCount: items.length,
-        productIdNullCount: items.filter((r) => !r.product_id).length,
-        missingShopProductJoinCount: items.filter((r) => !r.shop_product_id).length,
-        missingAllImageSourceCount: items.filter((r) => !r.global_image_url && !r.image_storage_key).length
-      }
-    });
-    // #endregion
     return { order, items: items.map((row) => this.mapOrderItemRow(row)) };
   }
 

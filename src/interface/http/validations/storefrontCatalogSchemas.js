@@ -75,7 +75,15 @@ export const storefrontProductsQuerySchema = z.object({
   include_global_only: booleanOpt,
   include_all_statuses: booleanOpt,
   /** When true, do not default availability to in_stock (list all active rows). */
-  include_all_availability: booleanOpt
+  include_all_availability: booleanOpt,
+  layout: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.enum(["grouped", "flat"]).optional()
+  ),
+  search_mode: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.enum(["contains", "prefix"]).optional()
+  )
 }).superRefine((data, ctx) => {
   if (
     Number.isInteger(data.min_price_minor) &&

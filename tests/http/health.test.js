@@ -54,9 +54,24 @@ describe("GET /metrics", () => {
     app = getTestApp();
   });
 
-  it("returns JSON counters", async () => {
+  it("returns Prometheus text with http_requests_total", async () => {
     await request(app).get("/health");
     const res = await request(app).get("/metrics").expect(200);
+    expect(res.headers["content-type"]).toMatch(/text\/plain/);
+    expect(res.text).toContain("http_requests_total");
+  });
+});
+
+describe("GET /metrics/json", () => {
+  let app;
+
+  beforeAll(() => {
+    app = getTestApp();
+  });
+
+  it("returns JSON counters", async () => {
+    await request(app).get("/health");
+    const res = await request(app).get("/metrics/json").expect(200);
     expect(typeof res.body.requests_total).toBe("number");
     expect(res.body.by_method_route_status).toBeDefined();
   });

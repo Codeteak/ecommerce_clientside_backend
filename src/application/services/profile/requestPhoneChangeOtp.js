@@ -4,12 +4,10 @@ import { randomInt } from "node:crypto";
 import { hashOtpCode } from "../../../infra/security/otpHasher.js";
 import { logger } from "../../../config/logger.js";
 import { shopAllowsCustomers } from "../auth/shopPolicy.js";
-
-function normalizePhone(raw) {
-  return String(raw || "")
-    .trim()
-    .replace(/[\s\-()]/g, "");
-}
+import {
+  formatCustomerPhoneForSms,
+  normalizeCustomerPhoneForStorage
+} from "../../../domain/phone/normalizeCustomerPhone.js";
 
 function randomSixDigitCode() {
   return String(randomInt(100000, 1000000));
@@ -27,16 +25,16 @@ export function createRequestPhoneChangeOtp({
     const userId = input.userId;
     const customerId = input.customerId;
     const shopId = input.shopId;
-    const newPhone = normalizePhone(input.newPhone);
-    if (!/^[0-9+][0-9]{7,31}$/.test(newPhone)) {
-      throw new ValidationError("Invalid phone format");
-    }
+    const newPhone = normalizeCustomerPhoneForStorage(input.newPhone);
 
     const profile = await authRepo.getCustomerProfileByCustomerId(client, customerId);
     if (!profile || profile.user_id !== userId) {
       throw new NotFoundError("Profile not found");
     }
-    if (String(profile.phone || "").trim() === newPhone) {
+    const currentPhone = profile.phone
+      ? normalizeCustomerPhoneForStorage(profile.phone)
+      : null;
+    if (currentPhone === newPhone) {
       throw new ValidationError("New phone number must be different from current phone number");
     }
 
@@ -83,7 +81,7 @@ export function createRequestPhoneChangeOtp({
 
     const shopLabel = String(shop.name || shop.slug || "our store").trim() || "our store";
     try {
-      await smsSender.sendOtp({ to: newPhone, code, shopName: shopLabel });
+      await smsSender.sendOtp({ to: formatCustomerPhoneForSms(newPhone), code, shopName: shopLabel });
     } catch (err) {
       try {
         await authRepo.consumeOtpChallenge(client, challenge.id);

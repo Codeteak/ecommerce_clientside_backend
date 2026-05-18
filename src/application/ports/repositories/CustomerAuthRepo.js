@@ -204,6 +204,13 @@ export class CustomerAuthRepo {
    * inactive rows. Preserves `is_blocked` on update so shop bans are not cleared by OTP.
    * @returns {Promise<{ id: string, shop_id: string, customer_id: string, is_active: boolean, is_blocked: boolean, is_deleted: boolean }>}
    */
+  async getCustomerShopMembership(_client, _customerId, _shopId) {
+    void _client;
+    void _customerId;
+    void _shopId;
+    throw new Error("Not implemented");
+  }
+
   async upsertCustomerShopMembership(_client, _row) {
     void _client;
     void _row;
@@ -233,6 +240,18 @@ export class CustomerAuthRepo {
     void _client;
     void _currentTokenHash;
     void _nextTokenHash;
+    throw new Error("Not implemented");
+  }
+
+  async findRefreshTokenByHash(_client, _tokenHash) {
+    void _client;
+    void _tokenHash;
+    throw new Error("Not implemented");
+  }
+
+  async revokeAllRefreshTokensForUser(_client, _userId) {
+    void _client;
+    void _userId;
     throw new Error("Not implemented");
   }
 }

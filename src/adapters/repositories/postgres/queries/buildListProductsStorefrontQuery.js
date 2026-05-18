@@ -150,7 +150,7 @@ export function buildListProductsStorefrontQuery({
          SELECT ci.media_asset_id, ci.sort_order
            FROM chosen_images ci
           ORDER BY ci.sort_order ASC
-          LIMIT 6
+          LIMIT 1
        ) ci
        JOIN media_assets ma ON ma.id = ci.media_asset_id
      ) pgal ON true

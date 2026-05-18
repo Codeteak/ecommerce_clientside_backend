@@ -1,32 +1,27 @@
+import { AppError } from "../../../domain/errors/AppError.js";
+import { asyncHandler } from "../asyncHandler.js";
+
 export const shopController = {
   /** `GET /api/shops/resolve-by-domain?domain=...` */
-  resolveByDomain: (ctx) => async (req, res, next) => {
-    try {
+  resolveByDomain: (ctx) =>
+    asyncHandler(async (req, res) => {
       const { domain } = req.query;
       const shopId = await ctx.shopLookupRepo.findShopIdByDomain(domain);
       if (!shopId) {
-        return res.status(404).json({
-          error: {
-            code: "SHOP_NOT_FOUND",
-            message: "No shop found for the provided domain."
-          }
+        throw new AppError("No shop found for the provided domain.", {
+          statusCode: 404,
+          code: "SHOP_NOT_FOUND"
         });
       }
       res.json({ shopId });
-    } catch (err) {
-      next(err);
-    }
-  },
+    }),
 
   /** `POST /api/shops/:shopId/service-area/check` */
-  checkServiceArea: (ctx) => async (req, res, next) => {
-    try {
+  checkServiceArea: (ctx) =>
+    asyncHandler(async (req, res) => {
       const { shopId } = req.params;
       const { lat, lng } = req.body;
       const result = await ctx.checkShopServiceArea({ shopId, lat, lng });
       res.json(result);
-    } catch (err) {
-      next(err);
-    }
-  }
+    })
 };

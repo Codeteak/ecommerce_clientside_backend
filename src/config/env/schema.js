@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseJwtDurationMinutes } from "./parseJwtDurationMinutes.js";
 
 function boolFromEnv(val) {
   if (val === true || val === 1) return true;
@@ -64,7 +65,8 @@ export const envSchema = z
     JWT_ISSUER: z.string().min(1),
     JWT_AUDIENCE: z.string().min(1),
     JWT_EXPIRES_IN: z.string().min(1),
-    JWT_ACCESS_EXPIRES_IN: z.string().min(1).default("7d"),
+    JWT_ACCESS_EXPIRES_IN: z.string().min(1).default("15m"),
+    SERVICEABILITY_COOKIE_SECRET: z.string().optional().default(""),
     JWT_REFRESH_EXPIRES_IN: z.string().min(1).default("30d"),
     JWT_KEY_ID: z.string().min(1).default("v1"),
     JWT_ALLOWED_ALGORITHMS: z
@@ -109,7 +111,14 @@ export const envSchema = z
     SERVER_DB_RETRY_MAX_DELAY_MS: z.coerce.number().int().positive().default(5000),
     SERVER_START_RETRY_ATTEMPTS: z.coerce.number().int().positive().default(5),
     SERVER_START_RETRY_BASE_DELAY_MS: z.coerce.number().int().positive().default(500),
-    SERVER_START_RETRY_MAX_DELAY_MS: z.coerce.number().int().positive().default(6000)
+    SERVER_START_RETRY_MAX_DELAY_MS: z.coerce.number().int().positive().default(6000),
+    SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().max(300_000).default(30_000),
+    SENTRY_DSN: z.string().optional().default(""),
+    SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0),
+    ACCESS_JTI_REDIS_REQUIRED: z.preprocess(boolFromEnv, z.boolean()).default(false),
+    REALTIME_ENABLED: z.preprocess(boolFromEnv, z.boolean()).default(false),
+    REALTIME_CONNECT_TOKEN: z.string().optional().default(""),
+    SEARCH_USE_TRGM: z.preprocess(boolFromEnv, z.boolean()).default(false)
   })
   .superRefine((val, ctx) => {
     if (val.NODE_ENV === "production" && !val.DATABASE_URL?.trim()) {
@@ -170,6 +179,53 @@ export const envSchema = z
         path: ["MSG_AUTH_KEY"],
         message: "MSG_AUTH_KEY is required in production for phone OTP (MSG91 Flow SMS)"
       });
+    }
+    if (val.NODE_ENV === "production" && val.DISABLE_CUSTOMER_AUTH) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["DISABLE_CUSTOMER_AUTH"],
+        message: "DISABLE_CUSTOMER_AUTH is forbidden in production"
+      });
+    }
+    if (val.NODE_ENV === "production" && !String(val.METRICS_SCRAPE_TOKEN || "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["METRICS_SCRAPE_TOKEN"],
+        message: "METRICS_SCRAPE_TOKEN is required in production to protect /metrics"
+      });
+    }
+    if (val.NODE_ENV === "production" && !String(val.REDIS_URL || "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["REDIS_URL"],
+        message:
+          "REDIS_URL is required in production for shared rate limits, catalog cache, and session cache"
+      });
+    }
+    if (val.NODE_ENV === "production") {
+      const accessMinutes = parseJwtDurationMinutes(val.JWT_ACCESS_EXPIRES_IN);
+      if (accessMinutes == null || accessMinutes > 60) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["JWT_ACCESS_EXPIRES_IN"],
+          message:
+            "JWT_ACCESS_EXPIRES_IN must be at most 60 minutes in production (e.g. 15m, 30m, 60m)"
+        });
+      }
+      const svcSecret = String(val.SERVICEABILITY_COOKIE_SECRET || "").trim();
+      if (svcSecret.length < 16) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["SERVICEABILITY_COOKIE_SECRET"],
+          message: "SERVICEABILITY_COOKIE_SECRET must be at least 16 characters in production"
+        });
+      } else if (svcSecret === val.JWT_SECRET) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["SERVICEABILITY_COOKIE_SECRET"],
+          message: "SERVICEABILITY_COOKIE_SECRET must differ from JWT_SECRET in production"
+        });
+      }
     }
     if (val.SMTP_HOST) {
       if (!val.SMTP_USER) {
