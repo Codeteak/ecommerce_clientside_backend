@@ -54,6 +54,9 @@ describe("createPriceStorefrontLines", () => {
     });
     expect(out.subtotalMinor).toBe(500);
     expect(out.appliedPromotionIds).toContain("promo-sku");
+    expect(out.appliedPromotionDiscounts).toEqual([
+      { promotionId: "promo-sku", discountMinor: 500 }
+    ]);
   });
 
   it("rejects empty cart with coupon code", async () => {
@@ -124,5 +127,8 @@ describe("createPriceStorefrontLines", () => {
     expect(out.lines[0].display_quantity).toBe(3);
     expect(out.subtotalMinor).toBe(9000);
     expect(out.lines[0].line_total_minor).toBe("9000");
+    expect(out.appliedPromotionDiscounts).toEqual([
+      { promotionId: "promo-bogo", discountMinor: 4500 }
+    ]);
   });
 });

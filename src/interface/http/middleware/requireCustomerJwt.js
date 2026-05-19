@@ -18,7 +18,8 @@ function setCustomerAuth(req, auth) {
  *   accessTokenRegistry?: ReturnType<import("../../../infra/auth/accessTokenRegistry.js").createAccessTokenRegistry>,
  *   skipDbSessionCheck: boolean,
  *   sessionValidityCache?: { get: (key: string) => Promise<boolean | undefined> | boolean | undefined, set: (key: string, valid: boolean, ttlMs?: number) => Promise<void> | void },
- *   shouldUseSessionCache?: (req: import("express").Request) => boolean
+ *   shouldUseSessionCache?: (req: import("express").Request) => boolean,
+ *   allowJtiDbFallback?: boolean
  * }} deps
  */
 export function createRequireCustomerJwt({
@@ -26,7 +27,8 @@ export function createRequireCustomerJwt({
   accessTokenRegistry,
   skipDbSessionCheck,
   sessionValidityCache,
-  shouldUseSessionCache = () => true
+  shouldUseSessionCache = () => true,
+  allowJtiDbFallback = false
 }) {
   return function requireCustomerJwt() {
     /** @type {import("express").RequestHandler} */
@@ -54,25 +56,40 @@ export function createRequireCustomerJwt({
         const jti = payload.jti;
         const sessionId = jti || hashToken(token);
 
-        if (accessTokenRegistry && jti) {
-          const active = await accessTokenRegistry.isAccessJtiActive(jti);
-          if (!active) {
-            logApiWarn("api.auth.rejected", req, {
-              code: "UNAUTHORIZED",
-              reason: "revoked_access_jti",
-              userId,
-              customerId
-            });
-            return res.status(401).json({
-              error: { code: "UNAUTHORIZED", message: "Session is no longer valid" }
-            });
+        let jtiFallbackReason = null;
+        if (accessTokenRegistry && jti && !skipDbSessionCheck) {
+          const status =
+            typeof accessTokenRegistry.getAccessJtiStatus === "function"
+              ? await accessTokenRegistry.getAccessJtiStatus(jti)
+              : { active: await accessTokenRegistry.isAccessJtiActive(jti), reason: "legacy" };
+          if (!status.active) {
+            const canFallback = allowJtiDbFallback && !skipDbSessionCheck;
+            if (canFallback) {
+              jtiFallbackReason = status.reason || "inactive_jti";
+              logApiWarn("api.auth.jti_db_fallback", req, {
+                code: "ACCESS_JTI_DB_FALLBACK",
+                reason: jtiFallbackReason,
+                userId,
+                customerId
+              });
+            } else {
+              logApiWarn("api.auth.rejected", req, {
+                code: "UNAUTHORIZED",
+                reason: status.reason || "revoked_access_jti",
+                userId,
+                customerId
+              });
+              return res.status(401).json({
+                error: { code: "UNAUTHORIZED", message: "Session is no longer valid" }
+              });
+            }
           }
         }
 
         if (!skipDbSessionCheck) {
           const cacheKey = `${userId}:${sessionId}`;
           const useCache = shouldUseSessionCache(req);
-          if (useCache) {
+          if (useCache && !jtiFallbackReason) {
             const cached = await sessionValidityCache?.get(cacheKey);
             if (cached === true) {
               setCustomerAuth(req, {
@@ -98,7 +115,7 @@ export function createRequireCustomerJwt({
 
           const ok = await authRepo.isCustomerSessionValid(userId, customerId);
           const ttlMs = Number(payload.exp) * 1000 - Date.now();
-          if (useCache) {
+          if (useCache && !jtiFallbackReason) {
             await sessionValidityCache?.set(cacheKey, ok, ttlMs);
           }
           if (!ok) {

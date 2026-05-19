@@ -6,7 +6,9 @@ export const shopController = {
   resolveByDomain: (ctx) =>
     asyncHandler(async (req, res) => {
       const { domain } = req.query;
-      const shopId = await ctx.shopLookupRepo.findShopIdByDomain(domain);
+      const shopId = ctx.shopResolveCache
+        ? await ctx.shopResolveCache.findShopIdByDomain(domain)
+        : await ctx.shopLookupRepo.findShopIdByDomain(domain);
       if (!shopId) {
         throw new AppError("No shop found for the provided domain.", {
           statusCode: 404,

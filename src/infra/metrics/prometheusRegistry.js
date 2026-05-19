@@ -19,38 +19,53 @@ export const httpRequestDurationSeconds = new Histogram({
   registers: [prometheusRegistry]
 });
 
-const cacheCounterDefs = [
-  ["cache_get_hit_total", "Catalog cache get hits"],
-  ["cache_get_miss_total", "Catalog cache get misses"],
-  ["cache_get_error_total", "Catalog cache get errors"],
-  ["cache_set_ok_total", "Catalog cache set successes"],
-  ["cache_set_error_total", "Catalog cache set errors"],
-  ["cache_wrap_recompute_total", "Catalog cache wrap recomputes"],
-  ["cache_lock_acquired_total", "Catalog cache lock acquired"],
-  ["cache_lock_contended_total", "Catalog cache lock contended"]
+const cacheLayers = ["catalog", "promo", "resolve", "meta"];
+const cacheOpNames = [
+  "get_hit",
+  "get_miss",
+  "get_error",
+  "set_ok",
+  "set_error",
+  "wrap_recompute",
+  "lock_acquired",
+  "lock_contended"
 ];
 
 /** @type {Record<string, Counter<string>>} */
 const cachePromCounters = {};
-for (const [name, help] of cacheCounterDefs) {
-  cachePromCounters[name] = new Counter({ name, help, registers: [prometheusRegistry] });
+for (const layer of cacheLayers) {
+  for (const op of cacheOpNames) {
+    const name = `cache_${layer}_${op}_total`;
+    cachePromCounters[`${layer}:${op}`] = new Counter({
+      name,
+      help: `Cache ${op} (${layer})`,
+      registers: [prometheusRegistry]
+    });
+  }
 }
 
-const cacheMetricToProm = {
-  get_hit: "cache_get_hit_total",
-  get_miss: "cache_get_miss_total",
-  get_error: "cache_get_error_total",
-  set_ok: "cache_set_ok_total",
-  set_error: "cache_set_error_total",
-  wrap_recompute: "cache_wrap_recompute_total",
-  lock_acquired: "cache_lock_acquired_total",
-  lock_contended: "cache_lock_contended_total"
+/** Legacy catalog-only names (same series as cache_catalog_*). */
+const legacyCatalogAliases = {
+  cache_get_hit_total: "catalog:get_hit",
+  cache_get_miss_total: "catalog:get_miss",
+  cache_get_error_total: "catalog:get_error",
+  cache_set_ok_total: "catalog:set_ok",
+  cache_set_error_total: "catalog:set_error",
+  cache_wrap_recompute_total: "catalog:wrap_recompute",
+  cache_lock_acquired_total: "catalog:lock_acquired",
+  cache_lock_contended_total: "catalog:lock_contended"
 };
 
-export function incrementCachePromMetric(name) {
-  const promName = cacheMetricToProm[name];
-  if (promName && cachePromCounters[promName]) {
-    cachePromCounters[promName].inc();
+/** @param {string} name @param {string} [layer] */
+export function incrementCachePromMetric(name, layer = "catalog") {
+  const key = `${layer}:${name}`;
+  if (cachePromCounters[key]) {
+    cachePromCounters[key].inc();
+    return;
+  }
+  const legacy = legacyCatalogAliases[`cache_${name}_total`];
+  if (layer === "catalog" && legacy && cachePromCounters[legacy]) {
+    cachePromCounters[legacy].inc();
   }
 }
 

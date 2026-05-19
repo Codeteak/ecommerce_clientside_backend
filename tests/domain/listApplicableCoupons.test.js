@@ -146,4 +146,43 @@ describe("createListApplicableCoupons", () => {
     });
     expect(out.coupons.map((c) => c.id)).toEqual(["keep"]);
   });
+
+  it("uses live redemption counts when shop promotion cache is enabled", async () => {
+    const cachedRow = baseRow({
+      id: "cached-stale",
+      code_normalized: "STALE",
+      max_redemptions_total: 2,
+      total_redemptions: 0,
+      customer_redemptions: 0
+    });
+    const list = createListApplicableCoupons({
+      promotionRepo: {
+        getShopPromotionSettings: vi.fn(),
+        getCouponRedemptionCounts: vi.fn().mockResolvedValue(
+          new Map([
+            [
+              "cached-stale",
+              { total_redemptions: 2, customer_redemptions: 0 }
+            ]
+          ])
+        )
+      },
+      shopPromotionCache: {
+        getShopPromotionSettings: vi.fn().mockResolvedValue({ promotions_paused: false }),
+        listShopCouponCatalogRows: vi.fn().mockResolvedValue([cachedRow])
+      },
+      authRepo: {
+        getCustomerCreatedAtById: vi.fn().mockResolvedValue({
+          created_at: new Date("2025-06-01T00:00:00.000Z")
+        })
+      },
+      orderRepo: { countDeliveredOrdersForCustomer: vi.fn().mockResolvedValue(0) }
+    });
+
+    const out = await list(fakeClient, {
+      shopId: "00000000-0000-4000-8000-000000000001",
+      customerId: "00000000-0000-4000-8000-000000000002"
+    });
+    expect(out.coupons).toEqual([]);
+  });
 });

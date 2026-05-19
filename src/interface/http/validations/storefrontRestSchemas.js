@@ -104,5 +104,12 @@ export const storefrontCouponsListQuerySchema = z.object({
 });
 
 export const storefrontCatalogCacheInvalidateBodySchema = z.object({
-  shopId: z.string().uuid()
+  shopId: z.string().uuid(),
+  prewarm: z.boolean().optional(),
+  topCategoryLimit: z.coerce.number().int().min(1).max(20).optional()
+});
+
+export const storefrontCatalogCachePrewarmBodySchema = z.object({
+  shopId: z.string().uuid(),
+  topCategoryLimit: z.coerce.number().int().min(1).max(20).optional()
 });

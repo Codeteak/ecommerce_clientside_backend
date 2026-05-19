@@ -1,12 +1,22 @@
 import { AuthError } from "../../../domain/errors/AuthError.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
-import { buildStorefrontSessionResponse } from "./buildStorefrontSessionResponse.js";
 import { shopAllowsCustomers } from "./shopPolicy.js";
 import { verifyOtpCode } from "../../../infra/security/otpHasher.js";
 import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normalizeCustomerPhone.js";
 
-export function createVerifyCustomerOtp({ authRepo, otpMaxAttempts = 5 }) {
+/**
+ * @param {{
+ *   authRepo: import("../../ports/repositories/CustomerAuthRepo.js").CustomerAuthRepo,
+ *   buildStorefrontSession: (
+ *     client: import("pg").PoolClient,
+ *     userId: string,
+ *     sessionMeta?: object
+ *   ) => Promise<object>,
+ *   otpMaxAttempts?: number
+ * }} deps
+ */
+export function createVerifyCustomerOtp({ authRepo, buildStorefrontSession, otpMaxAttempts = 5 }) {
   return async function verifyCustomerOtp(client, input) {
     const phone = normalizeCustomerPhoneForStorage(input.phone);
     const shopId = input.shopId;
@@ -81,6 +91,6 @@ export function createVerifyCustomerOtp({ authRepo, otpMaxAttempts = 5 }) {
       throw new AuthError("Invalid credentials");
     }
 
-    return buildStorefrontSessionResponse(authRepo, client, user.id, { ip, userAgent });
+    return buildStorefrontSession(client, user.id, { ip, userAgent });
   };
 }

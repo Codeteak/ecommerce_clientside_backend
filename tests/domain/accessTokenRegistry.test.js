@@ -63,6 +63,10 @@ describe("accessTokenRegistry", () => {
     await registry.registerAccessJti("user-1", "jti-a", 120);
     await expect(registry.isAccessJtiActive("jti-a")).resolves.toBe(true);
     await expect(registry.isAccessJtiActive("jti-missing")).resolves.toBe(false);
+    await expect(registry.getAccessJtiStatus("jti-missing")).resolves.toMatchObject({
+      active: false,
+      reason: "jti_missing"
+    });
   });
 
   it("revokes a single jti", async () => {

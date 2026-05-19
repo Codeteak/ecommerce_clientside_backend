@@ -22,11 +22,13 @@ function normalizeCouponCode(code) {
 /**
  * @param {{
  *   promotionRepo: import("../../ports/repositories/PromotionRepo.js").PromotionRepo,
+ *   shopPromotionCache?: ReturnType<import("../../../infra/cache/shopPromotionCache.js").createShopPromotionCache>,
  *   authRepo?: import("../../ports/repositories/CustomerAuthRepo.js").CustomerAuthRepo,
  *   orderRepo?: import("../../ports/repositories/OrderRepo.js").OrderRepo
  * }} deps
  */
-export function createPriceStorefrontLines({ promotionRepo, authRepo, orderRepo }) {
+export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, authRepo, orderRepo }) {
+  const promoReads = shopPromotionCache ?? promotionRepo;
   /**
    * @param {import("pg").PoolClient} client
    * @param {{
@@ -52,7 +54,7 @@ export function createPriceStorefrontLines({ promotionRepo, authRepo, orderRepo 
       throw pricingError("EMPTY_CART_WITH_COUPON", "Cannot apply a coupon to an empty cart.");
     }
 
-    const settings = await promotionRepo.getShopPromotionSettings(client, shopId);
+    const settings = await promoReads.getShopPromotionSettings(client, shopId);
     const promotionsPaused = settings?.promotions_paused === true;
     const defaultOverlapMode = settings?.default_overlap_mode ?? "priority";
     const allowCombineAutoCampaigns = settings?.allow_combine_auto_campaigns !== false;
@@ -62,8 +64,8 @@ export function createPriceStorefrontLines({ promotionRepo, authRepo, orderRepo 
     const [overlays, bundleRulesRaw] = await Promise.all([
       promotionsPaused || !productIds.length
         ? []
-        : promotionRepo.listActivePromotionProductOverlaysForShopProducts(client, shopId, productIds),
-      promotionsPaused ? [] : promotionRepo.listActiveBundleRulesForShop(client, shopId)
+        : promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, productIds),
+      promotionsPaused ? [] : promoReads.listActiveBundleRulesForShop(client, shopId)
     ]);
 
     const priceMap = buildStorefrontListingUnitPriceMap({
@@ -81,6 +83,8 @@ export function createPriceStorefrontLines({ promotionRepo, authRepo, orderRepo 
     const pricedLines = [];
     /** @type {string[]} */
     const appliedPromotionIds = [];
+    /** @type {Map<string, number>} */
+    const appliedPromotionDiscounts = new Map();
 
     let subtotalBeforeCoupon = 0;
     let linePromoDiscountTotal = 0;
@@ -106,9 +110,17 @@ export function createPriceStorefrontLines({ promotionRepo, authRepo, orderRepo 
             parseMinor(o.promo_price_minor_per_unit) === promoPriceMinor
         );
         if (winner?.promotion_id) {
-          linePromoIds.push(String(winner.promotion_id));
-          if (!appliedPromotionIds.includes(String(winner.promotion_id))) {
-            appliedPromotionIds.push(String(winner.promotion_id));
+          const promotionId = String(winner.promotion_id);
+          linePromoIds.push(promotionId);
+          if (!appliedPromotionIds.includes(promotionId)) {
+            appliedPromotionIds.push(promotionId);
+          }
+          const discountMinor = Math.max(0, Math.round(qty * unit.promoDiscountMinor));
+          if (discountMinor > 0) {
+            appliedPromotionDiscounts.set(
+              promotionId,
+              (appliedPromotionDiscounts.get(promotionId) ?? 0) + discountMinor
+            );
           }
         }
       }
@@ -134,6 +146,10 @@ export function createPriceStorefrontLines({ promotionRepo, authRepo, orderRepo 
     });
     for (const pid of appliedByPromotion.keys()) {
       if (!appliedPromotionIds.includes(pid)) appliedPromotionIds.push(pid);
+      const discountMinor = Number(appliedByPromotion.get(pid)) || 0;
+      if (discountMinor > 0) {
+        appliedPromotionDiscounts.set(pid, (appliedPromotionDiscounts.get(pid) ?? 0) + discountMinor);
+      }
     }
 
     const subtotalAfterBundles = pricedLines.reduce((s, l) => s + (l.linePayableMinor ?? l.lineTotalMinor), 0);
@@ -259,6 +275,12 @@ export function createPriceStorefrontLines({ promotionRepo, authRepo, orderRepo 
       couponDiscountMinor,
       promotionDiscountTotalMinor,
       appliedPromotionIds,
+      appliedPromotionDiscounts: [...appliedPromotionDiscounts.entries()].map(
+        ([promotionId, discountMinor]) => ({
+          promotionId,
+          discountMinor
+        })
+      ),
       coupon: couponCodeNormalized
         ? {
             id: couponId,

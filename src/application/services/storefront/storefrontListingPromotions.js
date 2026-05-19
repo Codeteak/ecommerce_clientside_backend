@@ -24,8 +24,14 @@ function catalogOnlyPromotionContext(pageRows) {
 
 /**
  * Storefront catalog promotion reads (requires an active PoolClient).
+ * @param {{
+ *   promotionRepo?: import("../../ports/repositories/PromotionRepo.js").PromotionRepo,
+ *   shopPromotionCache?: ReturnType<import("../../../infra/cache/shopPromotionCache.js").createShopPromotionCache>
+ * }} deps
  */
-export function createStorefrontListingPromotions({ promotionRepo }) {
+export function createStorefrontListingPromotions({ promotionRepo, shopPromotionCache }) {
+  const promoReads = shopPromotionCache ?? promotionRepo;
+
   async function loadListingContext(client, shopId, pageRows) {
     if (!pageRows.length) {
       return {
@@ -34,21 +40,21 @@ export function createStorefrontListingPromotions({ promotionRepo }) {
         bundleRowsRaw: []
       };
     }
-    if (!promotionRepo) {
+    if (!promoReads) {
       return catalogOnlyPromotionContext(pageRows);
     }
     try {
-      const rawSettings = await promotionRepo.getShopPromotionSettings(client, shopId);
+      const rawSettings = await promoReads.getShopPromotionSettings(client, shopId);
       const promotionsPaused = rawSettings?.promotions_paused === true;
       const defaultOverlapMode =
         rawSettings?.default_overlap_mode === "best_for_customer" ? "best_for_customer" : "priority";
       const ids = pageRows.map((r) => r.id);
       const overlays = promotionsPaused
         ? []
-        : await promotionRepo.listActivePromotionProductOverlaysForShopProducts(client, shopId, ids);
+        : await promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, ids);
       const bundleRowsRaw = promotionsPaused
         ? []
-        : await promotionRepo.listActiveBundleRulesForShop(client, shopId);
+        : await promoReads.listActiveBundleRulesForShop(client, shopId);
       return {
         promotionsPaused,
         priceMap: buildStorefrontListingUnitPriceMap({
@@ -109,7 +115,7 @@ export function createStorefrontListingPromotions({ promotionRepo }) {
     const base = mapProductDetailBase(data);
     const row = data.product;
     const idStr = String(row.id);
-    if (!promotionRepo) {
+    if (!promoReads) {
       const priceMap = buildStorefrontListingUnitPriceMap({
         promotionsPaused: false,
         defaultOverlapMode: "priority",
@@ -121,13 +127,13 @@ export function createStorefrontListingPromotions({ promotionRepo }) {
       return { ...priced, bundle_rules: [] };
     }
     try {
-      const rawSettings = await promotionRepo.getShopPromotionSettings(client, shopId);
+      const rawSettings = await promoReads.getShopPromotionSettings(client, shopId);
       const promotionsPaused = rawSettings?.promotions_paused === true;
       const defaultOverlapMode =
         rawSettings?.default_overlap_mode === "best_for_customer" ? "best_for_customer" : "priority";
       const overlays = promotionsPaused
         ? []
-        : await promotionRepo.listActivePromotionProductOverlaysForShopProducts(client, shopId, [row.id]);
+        : await promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, [row.id]);
       const priceMap = buildStorefrontListingUnitPriceMap({
         promotionsPaused,
         defaultOverlapMode,
@@ -138,7 +144,7 @@ export function createStorefrontListingPromotions({ promotionRepo }) {
       const priced = withStorefrontDetailPricing(base, row, entry?.promoPriceMinor ?? null);
       const bundleRows = promotionsPaused
         ? []
-        : await promotionRepo.listActiveBundleRulesForProduct(client, shopId, row.id, row.category_id ?? null);
+        : await promoReads.listActiveBundleRulesForProduct(client, shopId, row.id, row.category_id ?? null);
       return {
         ...priced,
         bundle_rules: bundleRows.map(mapActiveBundleRuleRow)

@@ -1,7 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
 import { createRequestCustomerOtp } from "../../src/application/services/auth/requestCustomerOtp.js";
 import { createVerifyCustomerOtp } from "../../src/application/services/auth/verifyCustomerOtp.js";
+import { buildStorefrontSessionResponse } from "../../src/application/services/auth/buildStorefrontSessionResponse.js";
 import { hashOtpCode } from "../../src/infra/security/otpHasher.js";
+
+function createVerifyOtpForTests(authRepo, sessionMeta = {}) {
+  const buildStorefrontSession = (client, userId, meta) =>
+    buildStorefrontSessionResponse(authRepo, client, userId, { ...sessionMeta, ...meta });
+  return createVerifyCustomerOtp({ authRepo, buildStorefrontSession });
+}
 
 const shopId = "c0000001-0000-4000-8000-000000000001";
 /** Matches `shops` row shape from `getShopById`; `name` is passed to SMS as `shopName` (MSG91 VAR2). */
@@ -93,7 +100,7 @@ describe("customer OTP auth", () => {
       incrementOtpChallengeAttempts: vi.fn().mockResolvedValue({ id: "otp-1", attempts: 1 }),
       consumeOtpChallenge: vi.fn()
     };
-    const run = createVerifyCustomerOtp({ authRepo });
+    const run = createVerifyOtpForTests(authRepo);
 
     await expect(
       run({}, { phone: "+919999999999", shopId, code: "000000" })
@@ -155,7 +162,7 @@ describe("customer OTP auth", () => {
       insertRefreshToken: vi.fn().mockResolvedValue(undefined)
     };
 
-    const run = createVerifyCustomerOtp({ authRepo });
+    const run = createVerifyOtpForTests(authRepo);
     const out = await run({}, { phone: "+919999999999", shopId, code: "123456" });
 
     expect(out.accessToken).toBeTypeOf("string");
@@ -166,6 +173,65 @@ describe("customer OTP auth", () => {
     expect(authRepo.upsertCustomerShopMembership).toHaveBeenCalledWith(
       {},
       { shop_id: shopId, customer_id: "c-1" }
+    );
+  });
+
+  it("registers access token jti when accessTokenRegistry is provided", async () => {
+    const codeHash = await hashOtpCode("123456");
+    const accessTokenRegistry = {
+      required: true,
+      registerAccessJti: vi.fn().mockResolvedValue(true)
+    };
+    const authRepo = {
+      getShopById: vi.fn().mockResolvedValue(activeShop()),
+      isPhoneUsedByActiveShopStaff: vi.fn().mockResolvedValue(false),
+      findLatestOtpChallenge: vi.fn().mockResolvedValue({
+        id: "otp-1",
+        phone: "9999999999",
+        shop_id: shopId,
+        code_hash: codeHash,
+        attempts: 0,
+        consumed_at: null,
+        expires_at: new Date(Date.now() + 60_000).toISOString()
+      }),
+      consumeOtpChallenge: vi.fn(),
+      getUserByPhone: vi.fn().mockResolvedValue({
+        id: "u-1",
+        email: null,
+        phone: "9999999999",
+        registration_source: "phone_otp",
+        is_active: true
+      }),
+      updateUserPhone: vi.fn(),
+      getCustomerByUserId: vi.fn().mockResolvedValue({
+        id: "c-1",
+        user_id: "u-1",
+        is_blocked: false,
+        is_deleted: false
+      }),
+      getCustomerShopMembership: vi.fn().mockResolvedValue(null),
+      upsertCustomerShopMembership: vi.fn().mockResolvedValue({
+        id: "m-1",
+        shop_id: shopId,
+        customer_id: "c-1",
+        is_blocked: false
+      }),
+      getUserById: vi.fn().mockResolvedValue({
+        id: "u-1",
+        is_active: true
+      }),
+      listActiveShopsForCustomer: vi.fn().mockResolvedValue([{ id: shopId, name: "Demo", slug: "demo" }]),
+      isUserActiveShopStaff: vi.fn().mockResolvedValue(false),
+      insertRefreshToken: vi.fn()
+    };
+
+    const run = createVerifyOtpForTests(authRepo, { accessTokenRegistry });
+    await run({}, { phone: "+919999999999", shopId, code: "123456" });
+
+    expect(accessTokenRegistry.registerAccessJti).toHaveBeenCalledWith(
+      "u-1",
+      expect.any(String),
+      expect.any(Number)
     );
   });
 
@@ -211,7 +277,7 @@ describe("customer OTP auth", () => {
       upsertCustomerShopMembership: vi.fn(),
       isUserActiveShopStaff: vi.fn().mockResolvedValue(false)
     };
-    const run = createVerifyCustomerOtp({ authRepo });
+    const run = createVerifyOtpForTests(authRepo);
     await expect(run({}, { phone: "+919999999999", shopId, code: "123456" })).rejects.toMatchObject({
       code: "UNAUTHORIZED"
     });
@@ -233,7 +299,7 @@ describe("customer OTP auth", () => {
       }),
       consumeOtpChallenge: vi.fn()
     };
-    const run = createVerifyCustomerOtp({ authRepo });
+    const run = createVerifyOtpForTests(authRepo);
     await expect(run({}, { phone: "+919999999999", shopId, code: "123456" })).rejects.toMatchObject({
       code: "UNAUTHORIZED"
     });
@@ -284,7 +350,7 @@ describe("customer OTP auth", () => {
       listActiveShopsForCustomer: vi.fn().mockResolvedValue([]),
       insertRefreshToken: vi.fn().mockResolvedValue(undefined)
     };
-    const run = createVerifyCustomerOtp({ authRepo });
+    const run = createVerifyOtpForTests(authRepo);
     await run({}, { phone: "+919999999999", shopId, code: "123456" });
     expect(authRepo.updateUserPhone).toHaveBeenCalledWith({}, "u-1", "9999999999");
   });

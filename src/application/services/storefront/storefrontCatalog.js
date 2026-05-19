@@ -8,6 +8,7 @@ import {
   mapStorefrontCategoryRow as mapCategoryRow,
   mapStorefrontProductRow as mapProductRow
 } from "./storefrontCatalogMappers.js";
+import { shouldCacheProductList } from "./shouldCacheProductList.js";
 /** @param {{ promotions_paused?: boolean, products?: unknown[], categories?: unknown[], nextCursor?: string | null }} body */
 function pruneStorefrontProductListPayload(body, { layout = "grouped" } = {}) {
   const out = {};
@@ -52,7 +53,9 @@ export function createStorefrontCatalog({
   catalogRepo,
   ensureShopForCatalog,
   catalogCache,
+  shopPromotionCache,
   catalogCacheTtlSec = 60,
+  productListCachePolicy = {},
   runWithClient,
   listingPromotions
 }) {
@@ -66,6 +69,15 @@ export function createStorefrontCatalog({
       return catalogCache.shopKeyPrefix(shopId);
     }
     return `shop:${shopId}:g0:`;
+  }
+
+  async function enrichProductDetailCached(shopId, productId, data) {
+    const enrich = () =>
+      runWithClient((client) => listingPromotions.enrichProductDetail(client, shopId, data));
+    if (shopPromotionCache && typeof shopPromotionCache.wrapProductDetailPromo === "function") {
+      return shopPromotionCache.wrapProductDetailPromo(shopId, productId, enrich);
+    }
+    return enrich();
   }
 
   async function cachedSWR(shopId, keySuffix, label, fn, ttlOverride = null) {
@@ -179,8 +191,23 @@ export function createStorefrontCatalog({
       const resolvedSearchMode = searchMode === "prefix" ? "prefix" : "contains";
       const qPattern = resolveCatalogSearchPattern(search ?? null, resolvedSearchMode);
       const resolvedLayout = layout === "flat" ? "flat" : "grouped";
-      const key = `products:list:v8:${categoryId ?? "all"}:${brandId ?? "all"}:${resolvedSearchMode}:${qPattern ?? "q"}:${listAvailability ?? "any"}:${minPriceMinor ?? "min"}:${maxPriceMinor ?? "max"}:${resolvedSortBy}:${resolvedSortOrder}:${lim}:cur:${cursor ?? "none"}:off:${offsetValue ?? "none"}`;
-      const items = await cachedSWR(shopId, key, "products:list", async () => {
+      const cacheDecision = shouldCacheProductList({
+        search,
+        qPattern,
+        limit: lim,
+        cursor,
+        offset: offsetValue,
+        categoryId,
+        brandId,
+        minPriceMinor: Number.isInteger(minPriceMinor) ? minPriceMinor : null,
+        maxPriceMinor: Number.isInteger(maxPriceMinor) ? maxPriceMinor : null,
+        sortBy: resolvedSortBy,
+        maxLimit: productListCachePolicy.maxLimit,
+        maxOffset: productListCachePolicy.maxOffset,
+        searchMinChars: productListCachePolicy.searchMinChars
+      });
+      const key = `products:list:v9:${categoryId ?? "all"}:${brandId ?? "all"}:${resolvedSearchMode}:${qPattern ?? "q"}:${listAvailability ?? "any"}:${minPriceMinor ?? "min"}:${maxPriceMinor ?? "max"}:${resolvedSortBy}:${resolvedSortOrder}:${lim}:cur:${cursor ?? "none"}:off:${offsetValue ?? "none"}`;
+      const loadProducts = async () => {
         const rows = await catalogRepo.listProductsStorefront(shopId, {
           categoryId: categoryId ?? null,
           brandId: brandId ?? null,
@@ -196,7 +223,11 @@ export function createStorefrontCatalog({
           sortOrder: resolvedSortOrder
         });
         return rows;
-      });
+      };
+      const items =
+        cacheDecision.cache && swrTtlSec > 0
+          ? await cachedSWR(shopId, key, "products:list", loadProducts)
+          : await loadProducts();
       const hasMore = items.length > lim;
       const page = offsetValue == null && hasMore ? items.slice(0, lim) : items;
       const last = page[page.length - 1];
@@ -269,7 +300,7 @@ export function createStorefrontCatalog({
         swrTtlSec
       );
       if (!data) return null;
-      return runWithClient((client) => listingPromotions.enrichProductDetail(client, shopId, data));
+      return enrichProductDetailCached(shopId, data.product.id, data);
     },
 
     async getProductById(shopIdRaw, id) {
@@ -284,7 +315,7 @@ export function createStorefrontCatalog({
         swrTtlSec
       );
       if (!data) return null;
-      return runWithClient((client) => listingPromotions.enrichProductDetail(client, shopId, data));
+      return enrichProductDetailCached(shopId, id, data);
     },
 
     async getCategoryBySlug(shopIdRaw, slug) {

@@ -15,6 +15,46 @@ import {
 import { buildCheckoutOrderLines } from "./checkoutOrderAssembly.js";
 import { OUTBOX_EVENT_TYPES } from "../../constants/outboxEventTypes.js";
 
+async function recordPromotionRedemptions({
+  promotionRepo,
+  client,
+  shopId,
+  orderId,
+  customerId,
+  pricedResult,
+  couponDiscountMinor
+}) {
+  if (!promotionRepo || !pricedResult) return;
+
+  if (pricedResult.coupon && couponDiscountMinor > 0) {
+    await promotionRepo.insertPromotionRedemption(client, {
+      shopId,
+      orderId,
+      customerId,
+      promotionId: pricedResult.coupon.promotionId,
+      couponId: pricedResult.coupon.id,
+      discountMinor: couponDiscountMinor
+    });
+  }
+
+  const autoRows = Array.isArray(pricedResult.appliedPromotionDiscounts)
+    ? pricedResult.appliedPromotionDiscounts
+    : [];
+  for (const row of autoRows) {
+    const promotionId = row?.promotionId != null ? String(row.promotionId) : "";
+    const discountMinor = Math.max(0, Math.trunc(Number(row?.discountMinor) || 0));
+    if (!promotionId || discountMinor <= 0) continue;
+    await promotionRepo.insertPromotionRedemption(client, {
+      shopId,
+      orderId,
+      customerId,
+      promotionId,
+      couponId: null,
+      discountMinor
+    });
+  }
+}
+
 /**
  * Purpose: Storefront checkout business logic — validates input, creates orders, notifies pickers.
  */
@@ -139,16 +179,15 @@ export function createCheckoutStorefront({
         outboxPayload
       });
 
-      if (promotionRepo && pricedResult?.coupon && couponDiscountMinor > 0) {
-        await promotionRepo.insertPromotionRedemption(client, {
-          shopId,
-          orderId: order.id,
-          customerId: custKey,
-          promotionId: pricedResult.coupon.promotionId,
-          couponId: pricedResult.coupon.id,
-          discountMinor: couponDiscountMinor
-        });
-      }
+      await recordPromotionRedemptions({
+        promotionRepo,
+        client,
+        shopId,
+        orderId: order.id,
+        customerId: custKey,
+        pricedResult,
+        couponDiscountMinor
+      });
 
       await recordCheckoutIdempotency({
         orderRepo,

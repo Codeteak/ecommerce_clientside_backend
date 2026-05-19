@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import { createRequestCustomerEmailOtp } from "../../src/application/services/auth/requestCustomerEmailOtp.js";
 import { createVerifyCustomerEmailOtp } from "../../src/application/services/auth/verifyCustomerEmailOtp.js";
+import { buildStorefrontSessionResponse } from "../../src/application/services/auth/buildStorefrontSessionResponse.js";
+
+function createVerifyEmailOtpForTests(authRepo) {
+  const buildStorefrontSession = (client, userId, meta) =>
+    buildStorefrontSessionResponse(authRepo, client, userId, meta);
+  return createVerifyCustomerEmailOtp({ authRepo, buildStorefrontSession });
+}
 import { hashOtpCode } from "../../src/infra/security/otpHasher.js";
 
 const shopId = "c0000001-0000-4000-8000-000000000001";
@@ -102,7 +109,7 @@ describe("customer email OTP auth", () => {
       insertRefreshToken: vi.fn().mockResolvedValue(undefined)
     };
 
-    const run = createVerifyCustomerEmailOtp({ authRepo });
+    const run = createVerifyEmailOtpForTests(authRepo);
     const out = await run({}, { email: "user@example.com", shopId, code: "123456" });
 
     expect(out.accessToken).toBeTypeOf("string");

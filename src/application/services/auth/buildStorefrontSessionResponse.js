@@ -40,7 +40,14 @@ export async function buildStorefrontSessionResponse(authRepo, client, userId, s
   const ttlSec = accessTokenTtlSec();
 
   if (sessionMeta?.accessTokenRegistry) {
-    await sessionMeta.accessTokenRegistry.registerAccessJti(user.id, access.jti, ttlSec);
+    const registered = await sessionMeta.accessTokenRegistry.registerAccessJti(
+      user.id,
+      access.jti,
+      ttlSec
+    );
+    if (!registered && sessionMeta.accessTokenRegistry.required) {
+      throw new AuthError("Unable to establish session. Please try again.");
+    }
   }
 
   if (sessionMeta?.sessionCache && ttlMs > 0) {

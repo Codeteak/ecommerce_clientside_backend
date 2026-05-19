@@ -5,6 +5,7 @@ import { env } from "../../../config/env.js";
 import { validate } from "../middleware/validate.js";
 import {
   storefrontCatalogCacheInvalidateBodySchema,
+  storefrontCatalogCachePrewarmBodySchema,
   storefrontOrdersListQuerySchema
 } from "../validations/storefrontRestSchemas.js";
 
@@ -48,8 +49,23 @@ export function mountStorefrontRoutes(r, deps) {
     storefrontAccount,
     storefrontOrders,
     storefrontPromotions,
-    invalidateShopCatalogCache
+    invalidateShopCatalogCache,
+    prewarmStorefrontCache
   } = deps;
+
+  function catalogCacheOpsAuth(req, res) {
+    const token = req.get("X-Catalog-Cache-Invalidate");
+    if (!token || token !== env.CATALOG_CACHE_INVALIDATE_TOKEN) {
+      res.status(403).json({
+        error: {
+          code: "FORBIDDEN",
+          message: "Invalid or missing X-Catalog-Cache-Invalidate token"
+        }
+      });
+      return false;
+    }
+    return true;
+  }
 
   function mountForPrefix(prefix) {
     r.post(
@@ -186,17 +202,36 @@ export function mountStorefrontRoutes(r, deps) {
         authLimiter,
         validate({ body: storefrontCatalogCacheInvalidateBodySchema }),
         (req, res, next) => {
-          const token = req.get("X-Catalog-Cache-Invalidate");
-          if (!token || token !== env.CATALOG_CACHE_INVALIDATE_TOKEN) {
-            return res.status(403).json({
-              error: {
-                code: "FORBIDDEN",
-                message: "Invalid or missing X-Catalog-Cache-Invalidate token"
+          if (!catalogCacheOpsAuth(req, res)) return;
+          Promise.resolve(
+            invalidateShopCatalogCache(req.body.shopId, {
+              prewarm: req.body.prewarm === true,
+              topCategoryLimit: req.body.topCategoryLimit
+            })
+          )
+            .then((prewarmResult) => {
+              if (prewarmResult) {
+                return res.status(200).json(prewarmResult);
               }
-            });
-          }
-          Promise.resolve(invalidateShopCatalogCache(req.body.shopId))
-            .then(() => res.status(204).send())
+              return res.status(204).send();
+            })
+            .catch(next);
+        }
+      );
+    }
+    if (env.CATALOG_CACHE_INVALIDATE_TOKEN && typeof prewarmStorefrontCache === "function") {
+      r.post(
+        `${prefix}/catalog/cache/prewarm`,
+        authLimiter,
+        validate({ body: storefrontCatalogCachePrewarmBodySchema }),
+        (req, res, next) => {
+          if (!catalogCacheOpsAuth(req, res)) return;
+          Promise.resolve(
+            prewarmStorefrontCache(req.body.shopId, {
+              topCategoryLimit: req.body.topCategoryLimit
+            })
+          )
+            .then((result) => res.status(200).json(result))
             .catch(next);
         }
       );

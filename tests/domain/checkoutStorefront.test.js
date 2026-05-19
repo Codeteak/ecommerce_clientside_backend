@@ -412,6 +412,52 @@ describe("checkoutStorefront validations", () => {
     });
   });
 
+  it("records automatic promotion redemptions after checkout", async () => {
+    const d = pricedDeps();
+    d.priceStorefrontLines = vi.fn().mockResolvedValue({
+      subtotalMinor: 450,
+      promotionDiscountTotalMinor: 50,
+      couponDiscountMinor: 0,
+      appliedPromotionIds: ["promo-sku"],
+      appliedPromotionDiscounts: [{ promotionId: "promo-sku", discountMinor: 50 }],
+      coupon: null,
+      lines: [
+        {
+          cartItemId: "cart-item-1",
+          productId: "11111111-1111-4111-8111-111111111111",
+          quantity: 1,
+          list_price_minor: "500",
+          total_price_minor: "500",
+          final_price_minor: "450",
+          line_total_minor: "450",
+          offer_discount_minor: "0",
+          promo_discount_minor: "50",
+          total_discount_minor: "50",
+          applied_promotion_ids: ["promo-sku"]
+        }
+      ]
+    });
+
+    const run = createCheckoutStorefront(d);
+    await run(
+      {},
+      {
+        shopId: "00000000-0000-4000-8000-000000000001",
+        customerId: "cust-1",
+        userId: "user-1"
+      }
+    );
+
+    expect(d.promotionRepo.insertPromotionRedemption).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        promotionId: "promo-sku",
+        couponId: null,
+        discountMinor: 50
+      })
+    );
+  });
+
   it("rejects coupon on empty cart before pricing", async () => {
     const d = deps();
     d.cartRepo.validateCartForCheckoutCommit = vi.fn().mockRejectedValue(

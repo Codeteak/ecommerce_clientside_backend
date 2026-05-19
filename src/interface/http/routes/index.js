@@ -190,7 +190,8 @@ export function createRoutes(ctx) {
     storefrontAccount,
     storefrontOrders,
     storefrontPromotions,
-    invalidateShopCatalogCache: ctx.invalidateShopCatalogCache
+    invalidateShopCatalogCache: ctx.invalidateShopCatalogCache,
+    prewarmStorefrontCache: ctx.prewarmStorefrontCache
   });
 
   return r;

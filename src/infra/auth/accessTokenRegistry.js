@@ -42,19 +42,32 @@ export function createAccessTokenRegistry({ redis }) {
     }
   }
 
-  async function isAccessJtiActive(jti) {
-    if (!jti) return false;
+  async function getAccessJtiStatus(jti) {
+    if (!jti) return { active: false, reason: "missing_jti" };
     if (!redis) {
-      return !required;
+      return {
+        active: !required,
+        reason: required ? "redis_unavailable" : "redis_not_configured"
+      };
     }
     try {
       const v = await withRetry(() => redis.exists(jtiKey(jti)), {
         event: "access_jti_exists_retry"
       });
-      return Number(v) === 1;
+      return Number(v) === 1
+        ? { active: true, reason: "active" }
+        : { active: false, reason: "jti_missing" };
     } catch {
-      return !required;
+      return {
+        active: !required,
+        reason: "redis_unavailable"
+      };
     }
+  }
+
+  async function isAccessJtiActive(jti) {
+    const status = await getAccessJtiStatus(jti);
+    return status.active;
   }
 
   async function revokeAccessJti(jti) {
@@ -89,6 +102,7 @@ export function createAccessTokenRegistry({ redis }) {
 
   return {
     registerAccessJti,
+    getAccessJtiStatus,
     isAccessJtiActive,
     revokeAccessJti,
     revokeAllAccessForUser,

@@ -4,8 +4,27 @@ import { patchRequestContext } from "../../../infra/logging/requestContext.js";
 // Purpose: Resolves shop ID from x-shop-id header, then subdomain, then custom domain (no query params).
 const uuidSchema = z.string().uuid();
 
-export function createShopResolver({ shopLookupRepo, storefrontRootDomain }) {
+/**
+ * @param {{
+ *   shopResolveCache?: {
+ *     findShopIdBySlug: (slug: string) => Promise<string | null>,
+ *     findShopIdByCustomDomain: (host: string) => Promise<string | null>
+ *   },
+ *   shopLookupRepo?: {
+ *     findShopIdBySlug: (slug: string) => Promise<string | null>,
+ *     findShopIdByCustomDomain: (host: string) => Promise<string | null>
+ *   },
+ *   storefrontRootDomain: string | null
+ * }} deps
+ */
+export function createShopResolver({ shopResolveCache, shopLookupRepo, storefrontRootDomain }) {
   const root = storefrontRootDomain?.trim()?.toLowerCase() || null;
+  const resolveSlug =
+    shopResolveCache?.findShopIdBySlug?.bind(shopResolveCache) ??
+    shopLookupRepo?.findShopIdBySlug?.bind(shopLookupRepo);
+  const resolveHost =
+    shopResolveCache?.findShopIdByCustomDomain?.bind(shopResolveCache) ??
+    shopLookupRepo?.findShopIdByCustomDomain?.bind(shopLookupRepo);
 
   function skipCustomDomainLookup(hostRaw) {
     const host = String(hostRaw || "")
@@ -31,21 +50,21 @@ export function createShopResolver({ shopLookupRepo, storefrontRootDomain }) {
         if (parsed.success) shopId = parsed.data;
       }
 
-      if (!shopId && root) {
+      if (!shopId && root && resolveSlug) {
         const host = (req.hostname || "").trim().toLowerCase();
         if (host.endsWith(`.${root}`)) {
           const slug = host.slice(0, -(root.length + 1));
           if (slug && slug !== "www") {
-            shopId = await shopLookupRepo.findShopIdBySlug(slug);
+            shopId = await resolveSlug(slug);
           }
         }
       }
 
-      if (!shopId) {
+      if (!shopId && resolveHost) {
         const hostHdr = req.get("host") || "";
         const host = (req.hostname || hostHdr.split(":")[0] || "").trim().toLowerCase();
         if (host && !skipCustomDomainLookup(hostHdr || host)) {
-          shopId = await shopLookupRepo.findShopIdByCustomDomain(host);
+          shopId = await resolveHost(host);
         }
       }
 

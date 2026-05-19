@@ -36,9 +36,12 @@ import { createListApplicableCoupons } from "../application/services/promotions/
 import { createPriceStorefrontLines } from "../application/services/promotions/priceStorefrontLines.js";
 import { createEnsureShopForCatalog } from "../application/services/catalog/ensureShopForCatalog.js";
 import { createCatalogCache } from "../infra/cache/catalogCache.js";
+import { createShopPromotionCache } from "../infra/cache/shopPromotionCache.js";
+import { createShopResolveCache } from "../infra/cache/shopResolveCache.js";
 import { getSharedRedisClient } from "../infra/redis/sharedRedis.js";
 import { withClient } from "../infra/db/tx.js";
 import { createStorefrontCatalog } from "../application/services/storefront/storefrontCatalog.js";
+import { createPrewarmStorefrontCache } from "../application/services/cache/prewarmStorefrontCache.js";
 import { createStorefrontListingPromotions } from "../application/services/storefront/storefrontListingPromotions.js";
 import { createStorefrontCart } from "../application/services/storefront/storefrontCart.js";
 import { createCheckoutStorefront } from "../application/services/checkout/checkoutStorefront.js";
@@ -58,8 +61,33 @@ export function createAppContext() {
   const shopLookupRepo = new ShopLookupRepoPg();
   const shopServiceAreaRepo = new ShopServiceAreaRepoPg();
   const promotionRepo = new PromotionRepoPg();
-  const ensureShopForCatalog = createEnsureShopForCatalog({ authRepo });
   const redis = getSharedRedisClient();
+  const catalogCache = createCatalogCache({ redis });
+  const promoCacheTtlSec =
+    env.STOREFRONT_PROMO_CACHE_TTL_SEC > 0
+      ? env.STOREFRONT_PROMO_CACHE_TTL_SEC
+      : env.STOREFRONT_CATALOG_CACHE_TTL_SEC;
+  const shopPromotionCache = createShopPromotionCache({
+    catalogCache,
+    promotionRepo,
+    ttlSec: promoCacheTtlSec
+  });
+  const shopResolveCache = createShopResolveCache({
+    redis,
+    shopLookupRepo,
+    getShopById: async (shopId) => {
+      const client = await pool.connect();
+      try {
+        return authRepo.getShopById(client, shopId);
+      } finally {
+        client.release();
+      }
+    },
+    resolveTtlSec: env.SHOP_RESOLVE_CACHE_TTL_SEC,
+    metaTtlSec: env.SHOP_RESOLVE_CACHE_TTL_SEC,
+    serviceHubTtlSec: env.SHOP_SERVICE_AREA_CACHE_TTL_SEC
+  });
+  const ensureShopForCatalog = createEnsureShopForCatalog({ shopResolveCache });
   const sessionCache = createSessionCache({ redis });
   const accessTokenRegistry = createAccessTokenRegistry({ redis });
   const sessionValidityCache = {
@@ -83,7 +111,8 @@ export function createAppContext() {
     accessTokenRegistry,
     skipDbSessionCheck: env.NODE_ENV === "test",
     sessionValidityCache,
-    shouldUseSessionCache: () => false
+    shouldUseSessionCache: () => false,
+    allowJtiDbFallback: env.ACCESS_JTI_DB_FALLBACK_ENABLED
   });
   const requireCustomerJwt = env.DISABLE_CUSTOMER_AUTH
     ? (req, _res, next) => {
@@ -98,25 +127,45 @@ export function createAppContext() {
     : customerJwtMiddleware();
 
   const shopResolver = createShopResolver({
+    shopResolveCache,
     shopLookupRepo,
     storefrontRootDomain: env.STOREFRONT_ROOT_DOMAIN || null
   });
 
-  const catalogCache = createCatalogCache({ redis: getSharedRedisClient() });
-
-  const storefrontListingPromotions = createStorefrontListingPromotions({ promotionRepo });
+  const storefrontListingPromotions = createStorefrontListingPromotions({
+    promotionRepo,
+    shopPromotionCache
+  });
 
   const storefrontCatalog = createStorefrontCatalog({
     catalogRepo,
     ensureShopForCatalog,
     catalogCache,
+    shopPromotionCache,
     catalogCacheTtlSec: env.STOREFRONT_CATALOG_CACHE_TTL_SEC,
+    productListCachePolicy: {
+      maxLimit: env.STOREFRONT_PRODUCT_LIST_CACHE_MAX_LIMIT,
+      maxOffset: env.STOREFRONT_PRODUCT_LIST_CACHE_MAX_OFFSET,
+      searchMinChars: env.STOREFRONT_PRODUCT_SEARCH_CACHE_MIN_CHARS
+    },
     runWithClient: withClient,
     listingPromotions: storefrontListingPromotions
   });
 
-  const priceStorefrontLines = createPriceStorefrontLines({ promotionRepo, authRepo, orderRepo });
-  const listApplicableCoupons = createListApplicableCoupons({ promotionRepo, authRepo, orderRepo });
+  const prewarmStorefrontCache = createPrewarmStorefrontCache({ storefrontCatalog });
+
+  const priceStorefrontLines = createPriceStorefrontLines({
+    promotionRepo,
+    shopPromotionCache,
+    authRepo,
+    orderRepo
+  });
+  const listApplicableCoupons = createListApplicableCoupons({
+    promotionRepo,
+    shopPromotionCache,
+    authRepo,
+    orderRepo
+  });
   const storefrontCart = createStorefrontCart({
     cartRepo,
     ensureShopForCatalog,
@@ -160,8 +209,16 @@ export function createAppContext() {
     otpRequestWindowSeconds: env.OTP_REQUEST_WINDOW_SECONDS,
     otpMaxRequestsPerWindow: env.OTP_MAX_REQUESTS_PER_WINDOW
   });
+  const buildStorefrontSession = (client, userId, sessionMeta) =>
+    buildStorefrontSessionResponse(authRepo, client, userId, {
+      ...sessionMeta,
+      sessionCache,
+      accessTokenRegistry
+    });
+
   const verifyCustomerOtp = createVerifyCustomerOtp({
     authRepo,
+    buildStorefrontSession,
     otpMaxAttempts: env.OTP_MAX_ATTEMPTS
   });
   const requestCustomerEmailOtp = createRequestCustomerEmailOtp({
@@ -174,6 +231,7 @@ export function createAppContext() {
   });
   const verifyCustomerEmailOtp = createVerifyCustomerEmailOtp({
     authRepo,
+    buildStorefrontSession,
     otpMaxAttempts: env.OTP_MAX_ATTEMPTS
   });
   const rotateCustomerRefreshToken = createRotateCustomerRefreshToken({ authRepo, accessTokenRegistry });
@@ -188,10 +246,12 @@ export function createAppContext() {
   });
   const verifyPhoneChangeOtp = createVerifyPhoneChangeOtp({
     authRepo,
+    buildStorefrontSession,
     otpMaxAttempts: env.OTP_MAX_ATTEMPTS
   });
   const checkShopServiceArea = createCheckShopServiceArea({
     shopServiceAreaRepo,
+    shopResolveCache,
     defaultMaxRadiusM: env.SERVICE_AREA_RADIUS_METERS
   });
 
@@ -212,6 +272,7 @@ export function createAppContext() {
 
   return {
     shopLookupRepo,
+    shopResolveCache,
     shopResolver,
     authRepo,
     cartRepo,
@@ -227,12 +288,7 @@ export function createAppContext() {
     listProducts: createListProducts({ catalogRepo, ensureShopForCatalog }),
     searchCatalog: createSearchCatalog({ catalogRepo, ensureShopForCatalog }),
     provisionCustomerForOAuthShop: provisionCustomerForOAuthShop({ authRepo }),
-    buildStorefrontSessionResponse: (client, userId, sessionMeta) =>
-      buildStorefrontSessionResponse(authRepo, client, userId, {
-        ...sessionMeta,
-        sessionCache,
-        accessTokenRegistry
-      }),
+    buildStorefrontSessionResponse: buildStorefrontSession,
     requestCustomerOtp,
     verifyCustomerOtp,
     logoutCustomer,
@@ -254,7 +310,16 @@ export function createAppContext() {
     listApplicableCoupons,
     checkoutStorefront,
     storefrontCatalogHttpCacheSec: env.STOREFRONT_CATALOG_HTTP_CACHE_SEC,
-    invalidateShopCatalogCache: (shopId) => catalogCache.invalidateShopCatalog(shopId),
+    invalidateShopCatalogCache: async (shopId, opts = {}) => {
+      await catalogCache.invalidateShopCatalog(shopId);
+      await shopResolveCache.invalidateShop(shopId);
+      if (opts.prewarm === true) {
+        return prewarmStorefrontCache(shopId, {
+          topCategoryLimit: opts.topCategoryLimit
+        });
+      }
+    },
+    prewarmStorefrontCache,
     get emitOrderPlaced() {
       return realtime.emitOrderPlaced;
     },

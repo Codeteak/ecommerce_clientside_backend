@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import pg from "pg";
 import { createRequestCustomerOtp } from "../../src/application/services/auth/requestCustomerOtp.js";
 import { createVerifyCustomerOtp } from "../../src/application/services/auth/verifyCustomerOtp.js";
+import { buildStorefrontSessionResponse } from "../../src/application/services/auth/buildStorefrontSessionResponse.js";
 import { CustomerAuthRepoPg } from "../../src/adapters/repositories/postgres/CustomerAuthRepoPg.js";
 import {
   defaultIntegrationDbUrl,
@@ -49,7 +50,11 @@ integrationDescribe("integration: customer OTP auth", () => {
       otpResendSeconds: 0
     });
 
-    verifyOtp = createVerifyCustomerOtp({ authRepo });
+    verifyOtp = createVerifyCustomerOtp({
+      authRepo,
+      buildStorefrontSession: (client, userId, meta) =>
+        buildStorefrontSessionResponse(authRepo, client, userId, meta)
+    });
   });
 
   afterAll(async () => {

@@ -86,6 +86,87 @@ export class PromotionRepoPg extends PromotionRepo {
     return rows;
   }
 
+  async listEligibleCouponDefinitions(client, shopId, codeNormalized, options = {}) {
+    await setTenantContext(client, shopId);
+    const limit =
+      Number.isInteger(options?.limit) && options.limit > 0 ? Math.min(options.limit, 50) : null;
+    const { rows } = await client.query(
+      `SELECT
+         c.id,
+         c.shop_id,
+         c.promotion_id,
+         c.code_normalized,
+         c.starts_at,
+         c.ends_at,
+         c.min_subtotal_minor,
+         c.first_order_only,
+         c.new_customer_only,
+         c.max_redemptions_total,
+         c.max_redemptions_per_customer,
+         p.name AS promotion_name,
+         pub_rules.promotion_rules_public
+       FROM promotion_coupons c
+       JOIN promotions p
+         ON p.id = c.promotion_id
+        AND p.shop_id = c.shop_id
+       LEFT JOIN LATERAL (
+         SELECT json_agg(
+                  json_build_object(
+                    'kind', pr.rule_kind,
+                    'percentBps', pr.percent_bps,
+                    'amountMinor', pr.amount_minor,
+                    'minSubtotalMinor', pr.min_subtotal_minor
+                  )
+                  ORDER BY pr.created_at ASC
+                ) AS promotion_rules_public
+           FROM promotion_rules pr
+          WHERE pr.shop_id = c.shop_id
+            AND pr.promotion_id = c.promotion_id
+            AND pr.is_deleted = false
+       ) pub_rules ON true
+       WHERE c.shop_id = $1::uuid
+         AND c.is_deleted = false
+         AND p.status = 'active'
+         AND p.is_deleted = false
+         AND c.starts_at <= now()
+         AND c.ends_at >= now()
+         AND p.starts_at <= now()
+         AND p.ends_at >= now()
+         AND ($2::text IS NULL OR c.code_normalized = $2)
+       ORDER BY p.priority ASC, p.created_at DESC, c.code_normalized ASC
+       ${limit != null ? "LIMIT $3" : ""}`,
+      limit != null ? [shopId, codeNormalized, limit] : [shopId, codeNormalized]
+    );
+    return rows;
+  }
+
+  async getCouponRedemptionCounts(client, shopId, couponIds, customerId) {
+    const ids = Array.isArray(couponIds) ? couponIds.map((x) => String(x)).filter(Boolean) : [];
+    if (!ids.length) {
+      return new Map();
+    }
+    await setTenantContext(client, shopId);
+    const cust = customerId != null && String(customerId).trim() !== "" ? String(customerId) : null;
+    const { rows } = await client.query(
+      `SELECT coupon_id,
+              count(*)::int AS total_redemptions,
+              count(*) FILTER (WHERE customer_id = $3)::int AS customer_redemptions
+         FROM promotion_redemptions
+        WHERE shop_id = $1::uuid
+          AND coupon_id = ANY($2::uuid[])
+        GROUP BY coupon_id`,
+      [shopId, ids, cust]
+    );
+    const map = new Map();
+    for (const row of rows) {
+      map.set(String(row.coupon_id), {
+        total_redemptions: Number(row.total_redemptions) || 0,
+        customer_redemptions: Number(row.customer_redemptions) || 0
+      });
+    }
+    return map;
+  }
+
   async findCouponByCodeForShop(client, shopId, codeNormalized, customerId = null) {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
@@ -180,6 +261,28 @@ export class PromotionRepoPg extends PromotionRepo {
        ) VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5::uuid, $6)`,
       [shopId, orderId, String(customerId), promotionId ?? null, couponId ?? null, discountMinor]
     );
+  }
+
+  async getCouponRedemptionCountsForCustomer(client, shopId, customerId, couponIds) {
+    const ids = Array.isArray(couponIds) ? couponIds.map((x) => String(x)).filter(Boolean) : [];
+    if (!ids.length) {
+      return new Map();
+    }
+    await setTenantContext(client, shopId);
+    const { rows } = await client.query(
+      `SELECT coupon_id, count(*)::int AS customer_redemptions
+         FROM promotion_redemptions
+        WHERE shop_id = $1::uuid
+          AND customer_id = $2
+          AND coupon_id = ANY($3::uuid[])
+        GROUP BY coupon_id`,
+      [shopId, String(customerId), ids]
+    );
+    const map = new Map();
+    for (const row of rows) {
+      map.set(String(row.coupon_id), Number(row.customer_redemptions) || 0);
+    }
+    return map;
   }
 
   async listActivePromotionProductOverlaysForShopProducts(client, shopId, shopProductIds) {

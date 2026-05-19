@@ -23,6 +23,45 @@ export class PromotionRepo {
   }
 
   /**
+   * Eligible coupon definitions without redemption aggregates (safe to cache).
+   */
+  async listEligibleCouponDefinitions(_client, _shopId, _codeNormalized, _options = {}) {
+    void _client;
+    void _shopId;
+    void _codeNormalized;
+    void _options;
+    throw new Error("Not implemented");
+  }
+
+  /**
+   * Live total and per-customer redemption counts for coupon IDs.
+   * @returns {Promise<Map<string, { total_redemptions: number, customer_redemptions: number }>>}
+   */
+  async getCouponRedemptionCounts(_client, _shopId, _couponIds, _customerId) {
+    void _client;
+    void _shopId;
+    void _couponIds;
+    void _customerId;
+    throw new Error("Not implemented");
+  }
+
+  /**
+   * Per-customer redemption counts for coupon limit checks (lightweight vs full coupon list).
+   * @param {import("pg").PoolClient} _client
+   * @param {string} _shopId
+   * @param {string} _customerId
+   * @param {string[]} _couponIds
+   * @returns {Promise<Map<string, number>>}
+   */
+  async getCouponRedemptionCountsForCustomer(_client, _shopId, _customerId, _couponIds) {
+    void _client;
+    void _shopId;
+    void _customerId;
+    void _couponIds;
+    throw new Error("Not implemented");
+  }
+
+  /**
    * Active campaign SKU overlays for storefront pricing (eligible promotions only).
    * @param {import("pg").PoolClient} _client
    * @param {string} _shopId

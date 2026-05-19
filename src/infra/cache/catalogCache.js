@@ -203,6 +203,7 @@ export function createCatalogCache({ redis }) {
 
     /**
      * Bumps catalog generation so versioned keys miss without SCAN.
+     * Promotion keys under shopKeyPrefix (promo:*) share the same generation.
      * Old keys expire via TTL.
      */
     async invalidateShopCatalog(shopId) {

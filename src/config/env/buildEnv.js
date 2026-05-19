@@ -88,6 +88,12 @@ export const env = {
     parsed.data.SERVICEABILITY_COOKIE_SECRET?.trim() ||
     (parsed.data.NODE_ENV === "production" ? "" : parsed.data.JWT_SECRET),
   STOREFRONT_CATALOG_CACHE_TTL_SEC: parsed.data.STOREFRONT_CATALOG_CACHE_TTL_SEC ?? 60,
+  STOREFRONT_PROMO_CACHE_TTL_SEC:
+    parsed.data.STOREFRONT_PROMO_CACHE_TTL_SEC > 0
+      ? parsed.data.STOREFRONT_PROMO_CACHE_TTL_SEC
+      : parsed.data.STOREFRONT_CATALOG_CACHE_TTL_SEC ?? 60,
+  SHOP_RESOLVE_CACHE_TTL_SEC: parsed.data.SHOP_RESOLVE_CACHE_TTL_SEC ?? 300,
+  SHOP_SERVICE_AREA_CACHE_TTL_SEC: parsed.data.SHOP_SERVICE_AREA_CACHE_TTL_SEC ?? 180,
   STOREFRONT_CATALOG_HTTP_CACHE_SEC: parsed.data.STOREFRONT_CATALOG_HTTP_CACHE_SEC ?? 0,
   CATALOG_CACHE_INVALIDATE_TOKEN: parsed.data.CATALOG_CACHE_INVALIDATE_TOKEN?.trim() || "",
   METRICS_SCRAPE_TOKEN: parsed.data.METRICS_SCRAPE_TOKEN?.trim() || "",
@@ -115,6 +121,7 @@ export const env = {
         ? false
         : true
       : parsed.data.ACCESS_JTI_REDIS_REQUIRED ?? false,
+  ACCESS_JTI_DB_FALLBACK_ENABLED: parsed.data.ACCESS_JTI_DB_FALLBACK_ENABLED ?? true,
   REALTIME_ENABLED: parsed.data.REALTIME_ENABLED ?? false,
   REALTIME_CONNECT_TOKEN: parsed.data.REALTIME_CONNECT_TOKEN?.trim() || "",
   SEARCH_USE_TRGM: parsed.data.SEARCH_USE_TRGM ?? false

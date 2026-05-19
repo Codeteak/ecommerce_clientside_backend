@@ -4,9 +4,13 @@ import { shopAllowsCustomers } from "../auth/shopPolicy.js";
 
 /**
  * Purpose: Decide if a delivery point is within the configured radius of the shop’s address hub.
- * @param {{ shopServiceAreaRepo: import("../../ports/repositories/ShopServiceAreaRepo.js").ShopServiceAreaRepo, defaultMaxRadiusM: number }} deps
+ * @param {{
+ *   shopServiceAreaRepo: import("../../ports/repositories/ShopServiceAreaRepo.js").ShopServiceAreaRepo,
+ *   shopResolveCache?: ReturnType<import("../../../infra/cache/shopResolveCache.js").createShopResolveCache>,
+ *   defaultMaxRadiusM: number
+ * }} deps
  */
-export function createCheckShopServiceArea({ shopServiceAreaRepo, defaultMaxRadiusM }) {
+export function createCheckShopServiceArea({ shopServiceAreaRepo, shopResolveCache, defaultMaxRadiusM }) {
   function toFiniteNumber(value) {
     const normalized =
       typeof value === "string" ? value.trim().replace(",", ".") : value;
@@ -32,7 +36,9 @@ export function createCheckShopServiceArea({ shopServiceAreaRepo, defaultMaxRadi
       };
     }
 
-    const row = await shopServiceAreaRepo.getShopHubForServiceCheck(shopId);
+    const row = shopResolveCache
+      ? await shopResolveCache.getShopServiceHub(shopId, shopServiceAreaRepo)
+      : await shopServiceAreaRepo.getShopHubForServiceCheck(shopId);
     if (!row) {
       throw new NotFoundError("Shop not found");
     }

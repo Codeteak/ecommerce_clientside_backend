@@ -3,10 +3,9 @@ import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { AuthError } from "../../../domain/errors/AuthError.js";
 import { ConflictError } from "../../../domain/errors/ConflictError.js";
 import { verifyOtpCode } from "../../../infra/security/otpHasher.js";
-import { buildStorefrontSessionResponse } from "../auth/buildStorefrontSessionResponse.js";
 import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normalizeCustomerPhone.js";
 
-export function createVerifyPhoneChangeOtp({ authRepo, otpMaxAttempts = 5 }) {
+export function createVerifyPhoneChangeOtp({ authRepo, buildStorefrontSession, otpMaxAttempts = 5 }) {
   return async function verifyPhoneChangeOtp(client, input) {
     const userId = input.userId;
     const customerId = input.customerId;
@@ -60,7 +59,7 @@ export function createVerifyPhoneChangeOtp({ authRepo, otpMaxAttempts = 5 }) {
       throw err;
     }
 
-    const session = await buildStorefrontSessionResponse(authRepo, client, userId, {
+    const session = await buildStorefrontSession(client, userId, {
       ip,
       userAgent
     });

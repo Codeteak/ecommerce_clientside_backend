@@ -7,11 +7,12 @@ import { mapPublicPromotionBenefits } from "./publicPromotionBenefits.js";
  *
  * @param {{
  *   promotionRepo: import("../../ports/repositories/PromotionRepo.js").PromotionRepo,
+ *   shopPromotionCache?: ReturnType<import("../../../infra/cache/shopPromotionCache.js").createShopPromotionCache>,
  *   authRepo: import("../../ports/repositories/CustomerAuthRepo.js").CustomerAuthRepo,
  *   orderRepo: import("../../ports/repositories/OrderRepo.js").OrderRepo
  * }} deps
  */
-export function createListApplicableCoupons({ promotionRepo, authRepo, orderRepo }) {
+export function createListApplicableCoupons({ promotionRepo, shopPromotionCache, authRepo, orderRepo }) {
   const defaultSettings = {
     promotions_paused: false,
     first_coupon_eligibility_days: 30,
@@ -32,7 +33,9 @@ export function createListApplicableCoupons({ promotionRepo, authRepo, orderRepo
     limit = null
   }) {
     const normalizedCode = normalizeCouponCode(code);
-    const rawSettings = await promotionRepo.getShopPromotionSettings(client, shopId);
+    const rawSettings = shopPromotionCache
+      ? await shopPromotionCache.getShopPromotionSettings(client, shopId)
+      : await promotionRepo.getShopPromotionSettings(client, shopId);
     const settings = { ...defaultSettings, ...(rawSettings || {}) };
     const promotionsPaused = settings.promotions_paused === true;
 
@@ -75,13 +78,28 @@ export function createListApplicableCoupons({ promotionRepo, authRepo, orderRepo
           ? Math.min(50, Number(limit))
           : null;
 
-    const rows = await promotionRepo.listEligibleCouponsWithUsage(
-      client,
-      shopId,
-      customerId,
-      normalizedCode,
-      { limit: repoLimit }
-    );
+    const rows = shopPromotionCache
+      ? await shopPromotionCache.listShopCouponCatalogRows(client, shopId, normalizedCode, {
+          limit: repoLimit
+        })
+      : await promotionRepo.listEligibleCouponsWithUsage(
+          client,
+          shopId,
+          customerId,
+          normalizedCode,
+          { limit: repoLimit }
+        );
+
+    let redemptionByCoupon = new Map();
+    if (shopPromotionCache && rows.length > 0) {
+      const couponIds = rows.map((r) => String(r.id));
+      redemptionByCoupon = await promotionRepo.getCouponRedemptionCounts(
+        client,
+        shopId,
+        couponIds,
+        customerId
+      );
+    }
 
     const eligibilityCtx = {
       deliveredCount,
@@ -94,8 +112,15 @@ export function createListApplicableCoupons({ promotionRepo, authRepo, orderRepo
       .filter((row) => {
         const totalLimit = row.max_redemptions_total;
         const perCustomerLimit = row.max_redemptions_per_customer;
-        if (typeof totalLimit === "number" && row.total_redemptions >= totalLimit) return false;
-        if (typeof perCustomerLimit === "number" && row.customer_redemptions >= perCustomerLimit) return false;
+        const liveCounts = shopPromotionCache ? redemptionByCoupon.get(String(row.id)) : null;
+        const totalRedemptions = shopPromotionCache
+          ? (liveCounts?.total_redemptions ?? 0)
+          : Number(row.total_redemptions) || 0;
+        const customerRedemptions = shopPromotionCache
+          ? (liveCounts?.customer_redemptions ?? 0)
+          : Number(row.customer_redemptions) || 0;
+        if (typeof totalLimit === "number" && totalRedemptions >= totalLimit) return false;
+        if (typeof perCustomerLimit === "number" && customerRedemptions >= perCustomerLimit) return false;
 
         const minSub = row.min_subtotal_minor != null ? Number(row.min_subtotal_minor) : null;
         const firstOrderOnly = row.first_order_only === true;
