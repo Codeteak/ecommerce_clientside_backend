@@ -502,6 +502,20 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return rows[0] ?? null;
   }
 
+  async listRecentOtpChallenges(client, phone, shopId, limit = 5) {
+    const safeLimit = Math.max(1, Math.min(10, Number(limit) || 5));
+    const { rows } = await client.query(
+      `SELECT id, phone, shop_id, code_hash, attempts, consumed_at, expires_at, created_at
+         FROM customer_otp_challenges
+        WHERE ${phoneMatchesStorage("phone", 1)}
+          AND shop_id = $2::uuid
+        ORDER BY created_at DESC
+        LIMIT $3::int`,
+      [phone, shopId, safeLimit]
+    );
+    return rows;
+  }
+
   async getCustomerShopMembership(client, customerId, shopId) {
     const { rows } = await client.query(
       `SELECT id, shop_id, customer_id, is_active, is_blocked, is_deleted

@@ -142,6 +142,14 @@ export class CustomerAuthRepo {
     throw new Error("Not implemented");
   }
 
+  async listRecentOtpChallenges(_client, _phone, _shopId, _limit = 5) {
+    void _client;
+    void _phone;
+    void _shopId;
+    void _limit;
+    throw new Error("Not implemented");
+  }
+
   async incrementOtpChallengeAttempts(_client, _challengeId) {
     void _client;
     void _challengeId;

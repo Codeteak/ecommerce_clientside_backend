@@ -197,6 +197,80 @@ describe("customer OTP auth", () => {
     );
   });
 
+  it("accepts a previous still-active OTP when multiple active challenges exist", async () => {
+    const olderHash = await hashOtpCode("123456");
+    const newestHash = await hashOtpCode("654321");
+    const authRepo = {
+      getShopById: vi.fn().mockResolvedValue(activeShop()),
+      isPhoneUsedByActiveShopStaff: vi.fn().mockResolvedValue(false),
+      listRecentOtpChallenges: vi.fn().mockResolvedValue([
+        {
+          id: "otp-2",
+          phone: "9999999999",
+          shop_id: shopId,
+          code_hash: newestHash,
+          attempts: 0,
+          consumed_at: null,
+          expires_at: new Date(Date.now() + 60_000).toISOString()
+        },
+        {
+          id: "otp-1",
+          phone: "9999999999",
+          shop_id: shopId,
+          code_hash: olderHash,
+          attempts: 0,
+          consumed_at: null,
+          expires_at: new Date(Date.now() + 60_000).toISOString()
+        }
+      ]),
+      findLatestOtpChallenge: vi.fn().mockResolvedValue(null),
+      incrementOtpChallengeAttempts: vi.fn(),
+      consumeOtpChallenge: vi.fn().mockResolvedValue(undefined),
+      getUserByPhone: vi.fn().mockResolvedValue({
+        id: "u-1",
+        email: null,
+        phone: "9999999999",
+        registration_source: "phone_otp",
+        is_active: true
+      }),
+      updateUserPhone: vi.fn(),
+      insertUser: vi.fn(),
+      getCustomerByUserId: vi.fn().mockResolvedValue({
+        id: "c-1",
+        user_id: "u-1",
+        display_name: null,
+        is_blocked: false,
+        is_deleted: false
+      }),
+      getCustomerShopMembership: vi.fn().mockResolvedValue(null),
+      upsertCustomerShopMembership: vi.fn().mockResolvedValue({
+        id: "m-1",
+        shop_id: shopId,
+        customer_id: "c-1",
+        is_active: true,
+        is_blocked: false,
+        is_deleted: false
+      }),
+      getUserById: vi.fn().mockResolvedValue({
+        id: "u-1",
+        email: null,
+        phone: "9999999999",
+        registration_source: "phone_otp",
+        is_active: true
+      }),
+      listActiveShopsForCustomer: vi.fn().mockResolvedValue([listActiveShopRow()]),
+      isUserActiveShopStaff: vi.fn().mockResolvedValue(false),
+      insertRefreshToken: vi.fn().mockResolvedValue(undefined)
+    };
+
+    const run = createVerifyOtpForTests(authRepo);
+    const out = await run({}, { phone: "+919999999999", shopId, code: "123456" });
+
+    expect(out.accessToken).toBeTypeOf("string");
+    expect(authRepo.consumeOtpChallenge).toHaveBeenCalledWith({}, "otp-1");
+    expect(authRepo.incrementOtpChallengeAttempts).not.toHaveBeenCalled();
+  });
+
   it("registers access token jti when accessTokenRegistry is provided", async () => {
     const codeHash = await hashOtpCode("123456");
     const accessTokenRegistry = {
