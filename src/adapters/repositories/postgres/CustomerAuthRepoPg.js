@@ -252,9 +252,23 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
 
   async listActiveShopsForCustomer(client, customerId) {
     const { rows } = await client.query(
-      `SELECT s.id, s.name, s.slug
+      `SELECT s.id,
+              s.name,
+              s.slug,
+              s.is_active,
+              s.status,
+              shop_img.storage_key AS shop_image_storage_key
          FROM customer_shop_memberships m
          JOIN shops s ON s.id = m.shop_id
+         LEFT JOIN LATERAL (
+           SELECT ma.storage_key
+             FROM entity_images ei
+             JOIN media_assets ma ON ma.id = ei.media_asset_id
+            WHERE ei.shop_id = s.id
+              AND ei.entity_type = 'shop'
+            ORDER BY ei.updated_at DESC NULLS LAST, ei.created_at DESC
+            LIMIT 1
+         ) shop_img ON true
         WHERE m.customer_id = $1
           AND m.is_active = true
           AND m.is_blocked = false

@@ -14,6 +14,18 @@ const shopId = "c0000001-0000-4000-8000-000000000001";
 /** Matches `shops` row shape from `getShopById`; `name` is passed to SMS as `shopName` (MSG91 VAR2). */
 const mockShopDisplayName = "Fixture Shop";
 
+function listActiveShopRow(overrides = {}) {
+  return {
+    id: shopId,
+    name: "Demo",
+    slug: "demo",
+    is_active: true,
+    status: "active",
+    shop_image_storage_key: null,
+    ...overrides
+  };
+}
+
 function activeShop() {
   return {
     id: shopId,
@@ -157,7 +169,7 @@ describe("customer OTP auth", () => {
         registration_source: "phone_otp",
         is_active: true
       }),
-      listActiveShopsForCustomer: vi.fn().mockResolvedValue([{ id: shopId, name: "Demo", slug: "demo" }]),
+      listActiveShopsForCustomer: vi.fn().mockResolvedValue([listActiveShopRow()]),
       isUserActiveShopStaff: vi.fn().mockResolvedValue(false),
       insertRefreshToken: vi.fn().mockResolvedValue(undefined)
     };
@@ -168,7 +180,16 @@ describe("customer OTP auth", () => {
     expect(out.accessToken).toBeTypeOf("string");
     expect(out.refreshToken).toBeTypeOf("string");
     expect(authRepo.insertRefreshToken).toHaveBeenCalledTimes(1);
-    expect(out.customer).toMatchObject({ id: "c-1" });
+    expect(out.profile).toEqual([
+      expect.objectContaining({
+        shopId,
+        shopSlug: "demo",
+        isActive: true,
+        status: "active",
+        image: null
+      })
+    ]);
+    expect(out.shopIds).toEqual([shopId]);
     expect(authRepo.consumeOtpChallenge).toHaveBeenCalledWith({}, "otp-1");
     expect(authRepo.upsertCustomerShopMembership).toHaveBeenCalledWith(
       {},
@@ -220,7 +241,7 @@ describe("customer OTP auth", () => {
         id: "u-1",
         is_active: true
       }),
-      listActiveShopsForCustomer: vi.fn().mockResolvedValue([{ id: shopId, name: "Demo", slug: "demo" }]),
+      listActiveShopsForCustomer: vi.fn().mockResolvedValue([listActiveShopRow()]),
       isUserActiveShopStaff: vi.fn().mockResolvedValue(false),
       insertRefreshToken: vi.fn()
     };

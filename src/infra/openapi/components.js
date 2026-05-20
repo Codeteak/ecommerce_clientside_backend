@@ -133,15 +133,33 @@ export const schemas = {
       message: { type: "string" }
     }
   },
+  SessionProfileShopImage: {
+    type: "object",
+    description: "Shop logo from entity_images + media_assets when configured.",
+    properties: {
+      storageKey: { type: "string" },
+      url: { type: "string", nullable: true }
+    }
+  },
+  SessionProfileShopEntry: {
+    type: "object",
+    properties: {
+      name: { type: "string", nullable: true, description: "Customer display name for this membership context" },
+      shopName: { type: "string" },
+      shopId: { type: "string", format: "uuid" },
+      shopSlug: { type: "string" },
+      isActive: { type: "boolean", description: "Shop row is_active" },
+      status: { type: "string", enum: ["active", "blocked", "deleted"], description: "Shop row status" },
+      image: { oneOf: [{ $ref: "#/components/schemas/SessionProfileShopImage" }, { type: "null" }] }
+    }
+  },
   SessionResponse: {
     type: "object",
     properties: {
       accessToken: { type: "string" },
-      role: { type: "string", example: "customer" },
-      user: { type: "object" },
-      customer: { type: "object" },
+      refreshToken: { type: "string" },
       shopIds: { type: "array", items: { type: "string", format: "uuid" } },
-      shop: { type: "object" }
+      profile: { type: "array", items: { $ref: "#/components/schemas/SessionProfileShopEntry" } }
     }
   },
   ProfileResponse: {

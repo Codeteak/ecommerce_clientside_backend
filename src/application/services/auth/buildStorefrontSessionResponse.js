@@ -76,13 +76,6 @@ export async function buildStorefrontSessionResponse(authRepo, client, userId, s
   return {
     accessToken: access.token,
     refreshToken: refresh.token,
-    role: "customer",
-    user: {
-      id: user.id,
-      email: user.email,
-      registrationSource: user.registration_source
-    },
-    customer: { id: customer.id },
     shopIds,
     profile
   };

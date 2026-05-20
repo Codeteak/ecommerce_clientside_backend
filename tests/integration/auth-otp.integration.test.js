@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import jwt from "jsonwebtoken";
 import pg from "pg";
+import { env } from "../../src/config/env.js";
 import { createRequestCustomerOtp } from "../../src/application/services/auth/requestCustomerOtp.js";
 import { createVerifyCustomerOtp } from "../../src/application/services/auth/verifyCustomerOtp.js";
 import { buildStorefrontSessionResponse } from "../../src/application/services/auth/buildStorefrontSessionResponse.js";
@@ -78,8 +80,14 @@ integrationDescribe("integration: customer OTP auth", () => {
 
       expect(verifyOut.accessToken).toBeTruthy();
       expect(verifyOut.refreshToken).toBeTruthy();
-      expect(verifyOut.customerId).toBeTruthy();
-      expect(verifyOut.userId).toBeTruthy();
+      const payload = jwt.verify(verifyOut.accessToken, env.JWT_SECRET, {
+        algorithms: env.JWT_ALLOWED_ALGORITHMS,
+        issuer: env.JWT_ISSUER,
+        audience: env.JWT_AUDIENCE
+      });
+      expect(payload.customerId).toBeTruthy();
+      expect(payload.sub).toBeTruthy();
+      expect(Array.isArray(verifyOut.profile)).toBe(true);
     } finally {
       client.release();
     }
