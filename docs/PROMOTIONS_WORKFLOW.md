@@ -50,6 +50,8 @@ flowchart TB
 5. **Coupon cart rules** (`promotion_rules` via `promotion_coupons`) on **post-bundle subtotal**
 6. Payable subtotal (delivery fee added separately at checkout)
 
+Cart responses pass `invalidCouponBehavior: "omit"` so invalid coupons return `couponRejected` on the same pricing result (no second full pricing pass). Checkout omits that flag so invalid coupons still throw.
+
 ---
 
 ## 2. Database tables

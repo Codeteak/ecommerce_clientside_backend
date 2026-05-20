@@ -195,7 +195,8 @@ export function createCheckoutStorefront({
         shopId,
         customerIdText: custKey,
         rawIdem,
-        orderId: order.id
+        orderId: order.id,
+        cartId: cart.id
       });
 
       await cartRepo.deleteCartItemsForCart(client, shopId, cart.id);

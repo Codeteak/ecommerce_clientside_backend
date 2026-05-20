@@ -42,13 +42,16 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
    *     offerMinor?: unknown,
    *     categoryId?: string | null
    *   }>,
-   *   couponCode?: string | null
+   *   couponCode?: string | null,
+   *   invalidCouponBehavior?: "throw" | "omit"
    * }} input
+   * When invalidCouponBehavior is "omit", invalid coupons return couponRejected on the result instead of throwing (cart preview). Checkout omits this flag so invalid coupons still throw.
    */
   return async function priceStorefrontLines(client, input) {
     const shopId = String(input.shopId);
     const linesIn = Array.isArray(input.lines) ? input.lines : [];
     const couponCode = normalizeCouponCode(input.couponCode ?? null);
+    const couponErrorMode = input.invalidCouponBehavior === "omit" ? "omit" : "throw";
 
     if (couponCode && linesIn.length === 0) {
       throw pricingError("EMPTY_CART_WITH_COUPON", "Cannot apply a coupon to an empty cart.");
@@ -67,6 +70,14 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
         : promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, productIds),
       promotionsPaused ? [] : promoReads.listActiveBundleRulesForShop(client, shopId)
     ]);
+
+    /** @type {Map<string, unknown[]>} */
+    const overlaysByProductId = new Map();
+    for (const o of overlays || []) {
+      const pid = String(o.shop_product_id);
+      if (!overlaysByProductId.has(pid)) overlaysByProductId.set(pid, []);
+      overlaysByProductId.get(pid).push(o);
+    }
 
     const priceMap = buildStorefrontListingUnitPriceMap({
       promotionsPaused,
@@ -104,11 +115,8 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
       /** @type {string[]} */
       const linePromoIds = [];
       if (promoPriceMinor != null) {
-        const winner = (overlays || []).find(
-          (o) =>
-            String(o.shop_product_id) === productId &&
-            parseMinor(o.promo_price_minor_per_unit) === promoPriceMinor
-        );
+        const candidates = overlaysByProductId.get(productId) ?? [];
+        const winner = candidates.find((o) => parseMinor(o.promo_price_minor_per_unit) === promoPriceMinor);
         if (winner?.promotion_id) {
           const promotionId = String(winner.promotion_id);
           linePromoIds.push(promotionId);
@@ -161,80 +169,95 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
     let couponId = null;
     /** @type {string | null} */
     let couponPromotionId = null;
+    /** @type {{ code: string, message: string } | null} */
+    let couponRejected = null;
 
     if (couponCode && !promotionsPaused) {
-      const couponRow = await promotionRepo.findCouponByCodeForShop(
-        client,
-        shopId,
-        couponCode,
-        input.customerId ?? null
-      );
-      if (!couponRow) {
-        throw pricingError("COUPON_NOT_FOUND", "Coupon code is not valid.");
-      }
-      if (couponRow.has_sku_products && !couponRow.has_coupon_rules) {
-        throw pricingError("COUPON_NOT_APPLICABLE", "This code cannot be applied at checkout.");
-      }
-      if (!couponRow.has_coupon_rules) {
-        throw pricingError("COUPON_NO_CART_BENEFIT", "This coupon has no cart discount rules.");
-      }
-
-      const customerId = input.customerId != null ? String(input.customerId) : null;
-      if (customerId && authRepo && orderRepo) {
-        const [customerRow, deliveredCount] = await Promise.all([
-          authRepo.getCustomerCreatedAtById(client, customerId),
-          orderRepo.countDeliveredOrdersForCustomer(client, shopId, customerId)
-        ]);
-        const eligibilityDays = Number(settings?.first_coupon_eligibility_days ?? 30);
-        const ms = Math.max(0, eligibilityDays) * 24 * 60 * 60 * 1000;
-        const newCustomerCutoff = new Date(Date.now() - ms);
-        const eligibility = buildCouponEligibility(
-          {
-            minSubtotalMinor: couponRow.min_subtotal_minor,
-            firstOrderOnly: couponRow.first_order_only,
-            newCustomerOnly: couponRow.new_customer_only
-          },
-          {
-            deliveredCount,
-            customerCreatedAt: customerRow?.created_at ? new Date(customerRow.created_at) : new Date(0),
-            newCustomerCutoff,
-            cartSubtotalMinor: subtotalAfterBundles
-          }
+      try {
+        const couponRow = await promotionRepo.findCouponByCodeForShop(
+          client,
+          shopId,
+          couponCode,
+          input.customerId ?? null
         );
-        if (!eligibility.applicable) {
-          const code = eligibility.ineligibilityCodes[0] || "COUPON_NOT_APPLICABLE";
-          throw pricingError(code, "Coupon cannot be applied to this order.");
+        if (!couponRow) {
+          throw pricingError("COUPON_NOT_FOUND", "Coupon code is not valid.");
         }
-      }
+        if (couponRow.has_sku_products && !couponRow.has_coupon_rules) {
+          throw pricingError("COUPON_NOT_APPLICABLE", "This code cannot be applied at checkout.");
+        }
+        if (!couponRow.has_coupon_rules) {
+          throw pricingError("COUPON_NO_CART_BENEFIT", "This coupon has no cart discount rules.");
+        }
 
-      const totalLimit = couponRow.max_redemptions_total;
-      const perCustomerLimit = couponRow.max_redemptions_per_customer;
-      if (typeof totalLimit === "number" && Number(couponRow.total_redemptions) >= totalLimit) {
-        throw pricingError("COUPON_EXHAUSTED", "This coupon has reached its redemption limit.");
-      }
-      if (
-        customerId &&
-        typeof perCustomerLimit === "number" &&
-        Number(couponRow.customer_redemptions) >= perCustomerLimit
-      ) {
-        throw pricingError("COUPON_EXHAUSTED", "You have already used this coupon the maximum number of times.");
-      }
+        const customerId = input.customerId != null ? String(input.customerId) : null;
+        if (customerId && authRepo && orderRepo) {
+          const [customerRow, deliveredCount] = await Promise.all([
+            authRepo.getCustomerCreatedAtById(client, customerId),
+            orderRepo.countDeliveredOrdersForCustomer(client, shopId, customerId)
+          ]);
+          const eligibilityDays = Number(settings?.first_coupon_eligibility_days ?? 30);
+          const ms = Math.max(0, eligibilityDays) * 24 * 60 * 60 * 1000;
+          const newCustomerCutoff = new Date(Date.now() - ms);
+          const eligibility = buildCouponEligibility(
+            {
+              minSubtotalMinor: couponRow.min_subtotal_minor,
+              firstOrderOnly: couponRow.first_order_only,
+              newCustomerOnly: couponRow.new_customer_only
+            },
+            {
+              deliveredCount,
+              customerCreatedAt: customerRow?.created_at ? new Date(customerRow.created_at) : new Date(0),
+              newCustomerCutoff,
+              cartSubtotalMinor: subtotalAfterBundles
+            }
+          );
+          if (!eligibility.applicable) {
+            const code = eligibility.ineligibilityCodes[0] || "COUPON_NOT_APPLICABLE";
+            throw pricingError(code, "Coupon cannot be applied to this order.");
+          }
+        }
 
-      const rules = Array.isArray(couponRow.promotion_rules) ? couponRow.promotion_rules : [];
-      couponDiscountMinor = evaluateCartPromotionRules(rules, {
-        subtotalMinor: subtotalAfterBundles,
-        lines: pricedLines.map((l) => ({
-          lineTotalMinor: l.linePayableMinor ?? l.lineTotalMinor,
-          categoryId: l.categoryId
-        }))
-      });
-      couponDiscountMinor = Math.min(couponDiscountMinor, subtotalAfterBundles);
+        const totalLimit = couponRow.max_redemptions_total;
+        const perCustomerLimit = couponRow.max_redemptions_per_customer;
+        if (typeof totalLimit === "number" && Number(couponRow.total_redemptions) >= totalLimit) {
+          throw pricingError("COUPON_EXHAUSTED", "This coupon has reached its redemption limit.");
+        }
+        if (
+          customerId &&
+          typeof perCustomerLimit === "number" &&
+          Number(couponRow.customer_redemptions) >= perCustomerLimit
+        ) {
+          throw pricingError("COUPON_EXHAUSTED", "You have already used this coupon the maximum number of times.");
+        }
 
-      couponCodeNormalized = couponRow.code_normalized;
-      couponId = String(couponRow.id);
-      couponPromotionId = String(couponRow.promotion_id);
-      if (!appliedPromotionIds.includes(couponPromotionId)) {
-        appliedPromotionIds.push(couponPromotionId);
+        const rules = Array.isArray(couponRow.promotion_rules) ? couponRow.promotion_rules : [];
+        couponDiscountMinor = evaluateCartPromotionRules(rules, {
+          subtotalMinor: subtotalAfterBundles,
+          lines: pricedLines.map((l) => ({
+            lineTotalMinor: l.linePayableMinor ?? l.lineTotalMinor,
+            categoryId: l.categoryId
+          }))
+        });
+        couponDiscountMinor = Math.min(couponDiscountMinor, subtotalAfterBundles);
+
+        couponCodeNormalized = couponRow.code_normalized;
+        couponId = String(couponRow.id);
+        couponPromotionId = String(couponRow.promotion_id);
+        if (!appliedPromotionIds.includes(couponPromotionId)) {
+          appliedPromotionIds.push(couponPromotionId);
+        }
+      } catch (err) {
+        if (!(err instanceof AppError)) {
+          throw err;
+        }
+        if (couponErrorMode !== "omit") {
+          throw err;
+        }
+        couponRejected = {
+          code: err.code || "COUPON_NOT_APPLICABLE",
+          message: err.message || "Coupon cannot be applied to this order."
+        };
       }
     }
 
@@ -288,7 +311,8 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
             promotionId: couponPromotionId,
             discountMinor: couponDiscountMinor
           }
-        : null
+        : null,
+      ...(couponRejected ? { couponRejected } : {})
     };
   };
 }

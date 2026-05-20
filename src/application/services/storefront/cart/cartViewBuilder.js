@@ -53,7 +53,9 @@ export function createCartViewBuilder({
       items = await cartRepo.listCartItems(client, shopId, cart.id);
     }
 
-    const { priced, couponError } = await runPricing(client, shopId, customerId, items, couponCode);
+    const pricingOut = await runPricing(client, shopId, customerId, items, couponCode);
+    const priced = pricingOut?.priced ?? null;
+    const couponError = pricingOut?.couponError ?? null;
 
     const promotionsBase = buildPromotionBlock(priced, couponCode, couponError);
     let suggested_coupons = [];

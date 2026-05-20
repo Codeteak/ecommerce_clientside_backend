@@ -265,7 +265,8 @@ describe("checkoutStorefront validations", () => {
       {},
       expect.objectContaining({
         idempotencyKey: "checkout-key-abcdefgh",
-        orderId: "order-1"
+        orderId: "order-1",
+        cartId: "cart-1"
       })
     );
   });

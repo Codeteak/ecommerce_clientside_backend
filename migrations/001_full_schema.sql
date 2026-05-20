@@ -401,6 +401,7 @@ CREATE TABLE IF NOT EXISTS checkout_idempotency (
   customer_id TEXT NOT NULL,
   idempotency_key TEXT NOT NULL,
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  cart_id UUID REFERENCES carts(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (shop_id, customer_id, idempotency_key),
   CONSTRAINT checkout_idempotency_key_len_chk
@@ -409,6 +410,10 @@ CREATE TABLE IF NOT EXISTS checkout_idempotency (
 
 CREATE INDEX IF NOT EXISTS idx_checkout_idempotency_order_id
   ON checkout_idempotency (order_id);
+
+CREATE INDEX IF NOT EXISTS idx_checkout_idempotency_cart_id
+  ON checkout_idempotency (cart_id)
+  WHERE cart_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS outbox_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

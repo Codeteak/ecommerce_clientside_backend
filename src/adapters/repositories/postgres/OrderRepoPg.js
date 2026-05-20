@@ -425,12 +425,12 @@ export class OrderRepoPg extends OrderRepo {
     return rows[0]?.order_id ?? null;
   }
 
-  async insertCheckoutIdempotency(client, { shopId, customerIdText, idempotencyKey, orderId }) {
+  async insertCheckoutIdempotency(client, { shopId, customerIdText, idempotencyKey, orderId, cartId = null }) {
     await setTenantContext(client, shopId);
     await client.query(
-      `INSERT INTO checkout_idempotency (shop_id, customer_id, idempotency_key, order_id)
-       VALUES ($1::uuid, $2, $3, $4::uuid)`,
-      [shopId, customerIdText, idempotencyKey, orderId]
+      `INSERT INTO checkout_idempotency (shop_id, customer_id, idempotency_key, order_id, cart_id)
+       VALUES ($1::uuid, $2, $3, $4::uuid, $5::uuid)`,
+      [shopId, customerIdText, idempotencyKey, orderId, cartId]
     );
   }
 

@@ -42,7 +42,7 @@ phases:
       - echo "Starting integration test services..."
       - docker compose -f docker-compose.test.yml up -d
       - chmod +x scripts/wait-for-test-services.sh
-      - bash scripts/wait-for-test-services.sh
+      - MAX_WAIT_SEC=180 INTEGRATION_COMPOSE_FILE=docker-compose.test.yml bash scripts/wait-for-test-services.sh
       - export DATABASE_URL=postgresql://postgres:test@127.0.0.1:5433/ecommerce_test
       - export INTEGRATION_DATABASE_URL=$DATABASE_URL
       - export INTEGRATION_REDIS_URL=redis://127.0.0.1:6380

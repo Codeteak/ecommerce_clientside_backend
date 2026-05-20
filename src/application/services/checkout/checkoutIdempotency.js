@@ -67,13 +67,15 @@ export async function recordCheckoutIdempotency({
   shopId,
   customerIdText,
   rawIdem,
-  orderId
+  orderId,
+  cartId = null
 }) {
   if (!rawIdem) return;
   await orderRepo.insertCheckoutIdempotency(client, {
     shopId,
     customerIdText,
     idempotencyKey: rawIdem,
-    orderId
+    orderId,
+    cartId
   });
 }

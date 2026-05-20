@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import { ValidationError } from "../../src/domain/errors/ValidationError.js";
-import { AppError } from "../../src/domain/errors/AppError.js";
 import { createStorefrontCart } from "../../src/application/services/storefront/storefrontCart.js";
 
 const shopId = "00000000-0000-4000-8000-000000000001";
@@ -186,9 +185,10 @@ describe("storefront cart", () => {
 
   it("returns coupon not_applicable when pricing rejects coupon", async () => {
     const d = deps();
-    d.priceStorefrontLines
-      .mockRejectedValueOnce(new AppError("Min subtotal", { statusCode: 400, code: "MIN_SUBTOTAL_NOT_MET" }))
-      .mockResolvedValueOnce(pricedResult());
+    d.priceStorefrontLines.mockResolvedValueOnce({
+      ...pricedResult(),
+      couponRejected: { code: "MIN_SUBTOTAL_NOT_MET", message: "Min subtotal" }
+    });
     const service = createStorefrontCart(d);
     const out = await service.getCartContents({}, shopId, { customerId: "cust-1" }, {
       couponCode: "SAVE10"

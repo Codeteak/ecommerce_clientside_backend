@@ -131,4 +131,31 @@ describe("createPriceStorefrontLines", () => {
       { promotionId: "promo-bogo", discountMinor: 4500 }
     ]);
   });
+
+  it("invalidCouponBehavior omit returns base pricing and couponRejected without second pricing pass", async () => {
+    const price = createPriceStorefrontLines({ promotionRepo: basePromotionRepo() });
+    const out = await price(fakeClient, {
+      shopId,
+      customerId: "cust-1",
+      couponCode: "BADCODE",
+      invalidCouponBehavior: "omit",
+      lines: [{ productId, quantity: 1, listMinor: 1000, offerMinor: null }]
+    });
+    expect(out.couponRejected).toMatchObject({ code: "COUPON_NOT_FOUND" });
+    expect(out.subtotalMinor).toBe(1000);
+    expect(out.couponDiscountMinor).toBe(0);
+    expect(out.coupon).toBeNull();
+  });
+
+  it("default throw on invalid coupon when omit not set", async () => {
+    const price = createPriceStorefrontLines({ promotionRepo: basePromotionRepo() });
+    await expect(
+      price(fakeClient, {
+        shopId,
+        customerId: "cust-1",
+        couponCode: "BADCODE",
+        lines: [{ productId, quantity: 1, listMinor: 1000, offerMinor: null }]
+      })
+    ).rejects.toMatchObject({ code: "COUPON_NOT_FOUND" });
+  });
 });

@@ -7,8 +7,6 @@ REDIS_HOST="${INTEGRATION_REDIS_HOST:-127.0.0.1}"
 REDIS_PORT="${INTEGRATION_REDIS_PORT:-6380}"
 MAX_WAIT_SEC="${MAX_WAIT_SEC:-90}"
 
-deadline=$((SECONDS + MAX_WAIT_SEC))
-
 can_connect_tcp() {
   # Use bash built-in TCP sockets as a no-dependency fallback in CI.
   local host="$1"
@@ -17,7 +15,9 @@ can_connect_tcp() {
 }
 
 wait_pg() {
-  while [ "$SECONDS" -lt "$deadline" ]; do
+  # Fresh deadline per service: a slow Postgres must not steal Redis's wait budget.
+  local end=$((SECONDS + MAX_WAIT_SEC))
+  while [ "$SECONDS" -lt "$end" ]; do
     if command -v pg_isready >/dev/null 2>&1; then
       if pg_isready -h "$PG_HOST" -p "$PG_PORT" -U postgres -d ecommerce_test >/dev/null 2>&1; then
         return 0
@@ -35,7 +35,8 @@ wait_pg() {
 }
 
 wait_redis() {
-  while [ "$SECONDS" -lt "$deadline" ]; do
+  local end=$((SECONDS + MAX_WAIT_SEC))
+  while [ "$SECONDS" -lt "$end" ]; do
     if command -v redis-cli >/dev/null 2>&1; then
       if redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping 2>/dev/null | grep -q PONG; then
         return 0
@@ -52,8 +53,26 @@ wait_redis() {
   return 1
 }
 
+compose_diagnose() {
+  local compose_file="${INTEGRATION_COMPOSE_FILE:-docker-compose.test.yml}"
+  if [ -f "$compose_file" ]; then
+    echo "=== docker compose ps ($compose_file) ==="
+    docker compose -f "$compose_file" ps -a 2>&1 || true
+    echo "=== docker compose logs (tail) ==="
+    docker compose -f "$compose_file" logs --tail 80 2>&1 || true
+  fi
+}
+
 echo "Waiting for Postgres at ${PG_HOST}:${PG_PORT}..."
-wait_pg || { echo "Postgres not ready after ${MAX_WAIT_SEC}s"; exit 1; }
+wait_pg || {
+  echo "Postgres not ready after ${MAX_WAIT_SEC}s"
+  compose_diagnose
+  exit 1
+}
 echo "Waiting for Redis at ${REDIS_HOST}:${REDIS_PORT}..."
-wait_redis || { echo "Redis not ready after ${MAX_WAIT_SEC}s"; exit 1; }
+wait_redis || {
+  echo "Redis not ready after ${MAX_WAIT_SEC}s"
+  compose_diagnose
+  exit 1
+}
 echo "Test services are ready."

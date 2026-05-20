@@ -1,4 +1,3 @@
-import { AppError } from "../../../../domain/errors/AppError.js";
 import {
   mapCouponReasonMessage,
   normalizeCouponCode,
@@ -24,32 +23,26 @@ export function createCartPricing({ priceStorefrontLines }) {
 
     const normalizedCoupon = normalizeCouponCode(couponCode);
 
-    try {
-      const priced = await priceStorefrontLines(client, {
-        shopId,
-        customerId,
-        couponCode: normalizedCoupon,
-        lines: billableLines
-      });
-      return { priced, couponError: null };
-    } catch (err) {
-      if (!normalizedCoupon || !(err instanceof AppError)) {
-        throw err;
-      }
-      const priced = await priceStorefrontLines(client, {
-        shopId,
-        customerId,
-        couponCode: null,
-        lines: billableLines
-      });
+    const priced = await priceStorefrontLines(client, {
+      shopId,
+      customerId,
+      couponCode: normalizedCoupon,
+      lines: billableLines,
+      ...(normalizedCoupon ? { invalidCouponBehavior: "omit" } : {})
+    });
+    if (!priced) {
+      return null;
+    }
+    if (priced.couponRejected) {
       return {
         priced,
         couponError: {
-          code: err.code || "COUPON_NOT_APPLICABLE",
-          message: err.message || mapCouponReasonMessage(err.code)
+          code: priced.couponRejected.code,
+          message: priced.couponRejected.message || mapCouponReasonMessage(priced.couponRejected.code)
         }
       };
     }
+    return { priced, couponError: null };
   }
 
   function buildPromotionBlock(priced, couponCode, couponError) {
