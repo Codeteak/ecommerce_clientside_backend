@@ -9,6 +9,13 @@ MAX_WAIT_SEC="${MAX_WAIT_SEC:-90}"
 
 deadline=$((SECONDS + MAX_WAIT_SEC))
 
+can_connect_tcp() {
+  # Use bash built-in TCP sockets as a no-dependency fallback in CI.
+  local host="$1"
+  local port="$2"
+  (echo >"/dev/tcp/${host}/${port}") >/dev/null 2>&1
+}
+
 wait_pg() {
   while [ "$SECONDS" -lt "$deadline" ]; do
     if command -v pg_isready >/dev/null 2>&1; then
@@ -19,6 +26,8 @@ wait_pg() {
       if nc -z "$PG_HOST" "$PG_PORT" 2>/dev/null; then
         return 0
       fi
+    elif can_connect_tcp "$PG_HOST" "$PG_PORT"; then
+      return 0
     fi
     sleep 1
   done
@@ -35,6 +44,8 @@ wait_redis() {
       if nc -z "$REDIS_HOST" "$REDIS_PORT" 2>/dev/null; then
         return 0
       fi
+    elif can_connect_tcp "$REDIS_HOST" "$REDIS_PORT"; then
+      return 0
     fi
     sleep 1
   done
@@ -42,7 +53,7 @@ wait_redis() {
 }
 
 echo "Waiting for Postgres at ${PG_HOST}:${PG_PORT}..."
-wait_pg || { echo "Postgres not ready"; exit 1; }
+wait_pg || { echo "Postgres not ready after ${MAX_WAIT_SEC}s"; exit 1; }
 echo "Waiting for Redis at ${REDIS_HOST}:${REDIS_PORT}..."
-wait_redis || { echo "Redis not ready"; exit 1; }
+wait_redis || { echo "Redis not ready after ${MAX_WAIT_SEC}s"; exit 1; }
 echo "Test services are ready."
