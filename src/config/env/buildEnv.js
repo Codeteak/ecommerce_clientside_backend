@@ -17,6 +17,8 @@ function rawEnv() {
   }
   const nodeEnv = src.NODE_ENV || "development";
   const devLikeDefaults = getDevLikeDefaults(nodeEnv);
+  const runIntegration =
+    src.RUN_INTEGRATION_TESTS === "true" || src.RUN_INTEGRATION_TESTS === "1";
 
   if (devLikeDefaults) {
     for (const [k, v] of Object.entries(devLikeDefaults)) {
@@ -27,8 +29,21 @@ function rawEnv() {
   }
 
   if (nodeEnv === "test") {
-    src.JWT_SECRET ??= "test_jwt_secret_16_chars";
-    src.JWT_REFRESH_SECRET ??= "test_jwt_refresh_secret_16_chars";
+    // CodeBuild may inject deploy secrets that fail zod (e.g. short JWT). Coerce only when invalid.
+    if (!runIntegration) {
+      if (!String(src.JWT_SECRET || "").trim() || String(src.JWT_SECRET).length < 16) {
+        src.JWT_SECRET = "test_jwt_secret_16_chars";
+      }
+      if (
+        !String(src.JWT_REFRESH_SECRET || "").trim() ||
+        String(src.JWT_REFRESH_SECRET).length < 16
+      ) {
+        src.JWT_REFRESH_SECRET = "test_jwt_refresh_secret_16_chars";
+      }
+    } else {
+      src.JWT_SECRET ??= "test_jwt_secret_16_chars";
+      src.JWT_REFRESH_SECRET ??= "test_jwt_refresh_secret_16_chars";
+    }
   }
 
   if (nodeEnv === "development") {

@@ -38,7 +38,8 @@ phases:
       - echo "=== BUILD $(date -u +%FT%TZ) ==="
       - echo "ECR_URI=${ECR_URI} IMAGE_TAG=${IMAGE_TAG}"
       - echo "Running unit tests (integration tests skipped in CI)..."
-      - RUN_INTEGRATION_TESTS=0 NODE_ENV=test npm test -- --reporter=verbose
+      - chmod +x scripts/cicd/run-unit-tests.sh
+      - bash scripts/cicd/run-unit-tests.sh -- --reporter=verbose
       - echo "PWD=$(pwd) CODEBUILD_SRC_DIR=${CODEBUILD_SRC_DIR}"
       - ls -la "${CODEBUILD_SRC_DIR}"
       - docker version
