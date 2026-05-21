@@ -30,9 +30,6 @@ phases:
       - npm ci --include=dev --loglevel=info
       - echo "Logging in to Amazon ECR..."
       - aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-      - echo "Preparing Docker Buildx..."
-      - docker buildx create --name clientside-builder --use 2>/dev/null || docker buildx use clientside-builder
-      - docker buildx inspect --bootstrap
   build:
     commands:
       - echo "=== BUILD $(date -u +%FT%TZ) ==="
@@ -51,7 +48,7 @@ phases:
       - bash scripts/cicd/docker-build-push.sh
       - |
         echo "Updating latest tag (best effort)..."
-        docker buildx imagetools create -t "${ECR_URI}:latest" "${ECR_URI}:${IMAGE_TAG}" || \
+        docker tag "${ECR_URI}:${IMAGE_TAG}" "${ECR_URI}:latest" && docker push "${ECR_URI}:latest" || \
         echo "Skipping latest tag update (likely ECR tag immutability)"
   post_build:
     commands:
