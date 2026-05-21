@@ -3,7 +3,14 @@ import { envSchema } from "./schema.js";
 import { getDevLikeDefaults } from "./defaults.js";
 import { applyProductionEnvDefaults } from "./productionDefaults.js";
 
-dotenv.config();
+// Unit tests on CI have no .env; avoid loading a local .env that re-injects deploy values after unset.
+const skipDotenvForUnitTests =
+  process.env.NODE_ENV === "test" &&
+  process.env.RUN_INTEGRATION_TESTS !== "1" &&
+  process.env.RUN_INTEGRATION_TESTS !== "true";
+if (!skipDotenvForUnitTests) {
+  dotenv.config();
+}
 
 function rawEnv() {
   const src = { ...process.env };

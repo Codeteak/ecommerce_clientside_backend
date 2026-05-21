@@ -1,5 +1,7 @@
 export function getDevLikeDefaults(nodeEnv) {
   if (nodeEnv !== "test" && nodeEnv !== "development") return null;
+  const objectStoragePublicBaseUrl =
+    nodeEnv === "test" ? "https://storage.test" : "";
   return {
     PORT: "4100",
     CORS_ORIGIN: [
@@ -47,7 +49,7 @@ export function getDevLikeDefaults(nodeEnv) {
     MSG91_SHORT_URL: "0",
     MSG91_REQUEST_TIMEOUT_MS: "15000",
     DISABLE_RATE_LIMITING: "true",
-    OBJECT_STORAGE_PUBLIC_BASE_URL: "",
+    OBJECT_STORAGE_PUBLIC_BASE_URL: objectStoragePublicBaseUrl,
     ENABLE_API_DOCS: "true",
     ALLOW_API_DOCS_IN_PRODUCTION: "false",
     TRUST_PROXY: "false",
