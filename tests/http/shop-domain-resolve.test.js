@@ -20,4 +20,5 @@ describe("GET /api/shops/resolve-by-domain", () => {
       .query({ domain: "missing.example.com" });
     expect(res.status).not.toBe(401);
   });
+
 });

@@ -58,6 +58,14 @@ export function createShopResolveCache({
       return cachedResolve(`domain:${d}`, resolveTtl, () => shopLookupRepo.findShopIdByDomain(d));
     },
 
+    findShopByDomain(domain) {
+      const d = String(domain || "").trim().toLowerCase();
+      if (!d) return Promise.resolve(null);
+      return cachedResolve(`domain-summary:${d}`, resolveTtl, () =>
+        shopLookupRepo.findShopByDomain(d)
+      );
+    },
+
     async ensureShopAllowsCustomers(shopId) {
       if (metaTtl <= 0) {
         return getShopById(shopId);

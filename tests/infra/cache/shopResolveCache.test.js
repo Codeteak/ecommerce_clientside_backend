@@ -29,7 +29,8 @@ describe("shopResolveCache", () => {
     const shopLookupRepo = {
       findShopIdBySlug: vi.fn().mockResolvedValue("shop-uuid-1"),
       findShopIdByCustomDomain: vi.fn(),
-      findShopIdByDomain: vi.fn()
+      findShopIdByDomain: vi.fn(),
+      findShopByDomain: vi.fn()
     };
     const cache = createShopResolveCache({
       redis: mockRedis(),
@@ -51,7 +52,8 @@ describe("shopResolveCache", () => {
     const shopLookupRepo = {
       findShopIdBySlug: vi.fn(),
       findShopIdByCustomDomain: vi.fn(),
-      findShopIdByDomain: vi.fn()
+      findShopIdByDomain: vi.fn(),
+      findShopByDomain: vi.fn()
     };
     const getShopById = vi.fn().mockResolvedValue({ id: "s1", is_active: true });
     const cache = createShopResolveCache({
@@ -66,5 +68,32 @@ describe("shopResolveCache", () => {
     await cache.ensureShopAllowsCustomers("s1");
 
     expect(getShopById).toHaveBeenCalledTimes(2);
+  });
+
+  it("caches domain summary resolution", async () => {
+    const summary = {
+      id: "shop-uuid-2",
+      name: "Cached Shop",
+      shop_image_storage_key: "shops/cached/logo.png"
+    };
+    const shopLookupRepo = {
+      findShopIdBySlug: vi.fn(),
+      findShopIdByCustomDomain: vi.fn(),
+      findShopIdByDomain: vi.fn(),
+      findShopByDomain: vi.fn().mockResolvedValue(summary)
+    };
+    const cache = createShopResolveCache({
+      redis: mockRedis(),
+      shopLookupRepo,
+      getShopById: vi.fn(),
+      resolveTtlSec: 300
+    });
+
+    const a = await cache.findShopByDomain("shop.example.com");
+    const b = await cache.findShopByDomain("shop.example.com");
+
+    expect(a).toEqual(summary);
+    expect(b).toEqual(summary);
+    expect(shopLookupRepo.findShopByDomain).toHaveBeenCalledTimes(1);
   });
 });

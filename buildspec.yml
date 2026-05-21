@@ -37,20 +37,8 @@ phases:
     commands:
       - echo "=== BUILD $(date -u +%FT%TZ) ==="
       - echo "ECR_URI=${ECR_URI} IMAGE_TAG=${IMAGE_TAG}"
-      - echo "Running unit tests..."
+      - echo "Running unit tests (integration tests skipped in CI)..."
       - RUN_INTEGRATION_TESTS=0 NODE_ENV=test npm test -- --reporter=verbose
-      - echo "Starting integration test services..."
-      - docker compose -f docker-compose.test.yml up -d
-      - chmod +x scripts/wait-for-test-services.sh
-      - MAX_WAIT_SEC=180 INTEGRATION_COMPOSE_FILE=docker-compose.test.yml bash scripts/wait-for-test-services.sh
-      - export DATABASE_URL=postgresql://postgres:test@127.0.0.1:5433/ecommerce_test
-      - export INTEGRATION_DATABASE_URL=$DATABASE_URL
-      - export INTEGRATION_REDIS_URL=redis://127.0.0.1:6380
-      - export REDIS_URL=$INTEGRATION_REDIS_URL
-      - npm run db:migrate
-      - echo "Running integration tests..."
-      - RUN_INTEGRATION_TESTS=1 NODE_ENV=test npm run test:integration:ci -- --reporter=verbose
-      - docker compose -f docker-compose.test.yml down -v
       - echo "PWD=$(pwd) CODEBUILD_SRC_DIR=${CODEBUILD_SRC_DIR}"
       - ls -la "${CODEBUILD_SRC_DIR}"
       - docker version

@@ -1,4 +1,5 @@
 import { AppError } from "../../../domain/errors/AppError.js";
+import { formatShopResolveByDomain } from "../../../application/services/shops/formatShopResolveByDomain.js";
 import { asyncHandler } from "../asyncHandler.js";
 
 export const shopController = {
@@ -6,16 +7,17 @@ export const shopController = {
   resolveByDomain: (ctx) =>
     asyncHandler(async (req, res) => {
       const { domain } = req.query;
-      const shopId = ctx.shopResolveCache
-        ? await ctx.shopResolveCache.findShopIdByDomain(domain)
-        : await ctx.shopLookupRepo.findShopIdByDomain(domain);
-      if (!shopId) {
+      const row = ctx.shopResolveCache
+        ? await ctx.shopResolveCache.findShopByDomain(domain)
+        : await ctx.shopLookupRepo.findShopByDomain(domain);
+      const payload = formatShopResolveByDomain(row);
+      if (!payload) {
         throw new AppError("No shop found for the provided domain.", {
           statusCode: 404,
           code: "SHOP_NOT_FOUND"
         });
       }
-      res.json({ shopId });
+      res.json(payload);
     }),
 
   /** `POST /api/shops/:shopId/service-area/check` */

@@ -80,3 +80,11 @@ HTTP tests use [Vitest](https://vitest.dev/) and [Supertest](https://github.com/
 npm test
 npm run test:watch
 ```
+
+Integration tests (Postgres + Redis required, not run in CI):
+
+```bash
+export INTEGRATION_DATABASE_URL=...
+export INTEGRATION_REDIS_URL=...
+RUN_INTEGRATION_TESTS=1 npm run test:integration:ci
+```

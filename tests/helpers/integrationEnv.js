@@ -9,9 +9,6 @@ export function integrationDescribe(name, fn) {
   return run(name, fn);
 }
 
-export const defaultIntegrationDbUrl =
-  process.env.INTEGRATION_DATABASE_URL ||
-  "postgresql://postgres:test@127.0.0.1:5433/ecommerce_test";
-
-export const defaultIntegrationRedisUrl =
-  process.env.INTEGRATION_REDIS_URL || "redis://127.0.0.1:6380";
+/** Set INTEGRATION_DATABASE_URL / INTEGRATION_REDIS_URL when running integration tests locally. */
+export const defaultIntegrationDbUrl = process.env.INTEGRATION_DATABASE_URL || "";
+export const defaultIntegrationRedisUrl = process.env.INTEGRATION_REDIS_URL || "";

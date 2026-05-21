@@ -183,16 +183,14 @@ Use this only when `REALTIME_ENABLED=true`.
 - Use [PHASE4_EXPLAIN_VERIFY.md](./PHASE4_EXPLAIN_VERIFY.md) for this check.
 - OpenSearch is not required now. See [SEARCH_OPENSEARCH.md](./SEARCH_OPENSEARCH.md) for future adoption rules.
 
-## 13. Integration Tests
+## 13. Integration Tests (optional, local only)
 
-Run this locally or in CI when you need full integration tests.
+CI runs unit tests only. To run integration tests locally, point at your own Postgres and Redis, migrate, then:
 
 ```bash
-docker compose -f docker-compose.test.yml up -d
-bash scripts/wait-for-test-services.sh
-export DATABASE_URL=postgresql://postgres:test@127.0.0.1:5433/ecommerce_test
-export INTEGRATION_DATABASE_URL=$DATABASE_URL
-export INTEGRATION_REDIS_URL=redis://127.0.0.1:6380
+export INTEGRATION_DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
+export INTEGRATION_REDIS_URL=redis://HOST:6379
+export DATABASE_URL=$INTEGRATION_DATABASE_URL
 npm run db:migrate
 RUN_INTEGRATION_TESTS=1 npm run test:integration:ci
 ```

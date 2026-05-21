@@ -11,4 +11,11 @@ export class ShopLookupRepo {
   async findShopIdByDomain(_domain) {
     throw new Error("Not implemented");
   }
+
+  /**
+   * @returns {Promise<{ id: string, name: string, shop_image_storage_key?: string | null } | null>}
+   */
+  async findShopByDomain(_domain) {
+    throw new Error("Not implemented");
+  }
 }

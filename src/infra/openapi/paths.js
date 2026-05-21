@@ -129,7 +129,8 @@ export function buildPaths() {
       get: {
         tags: ["Shops"],
         summary: "Resolve shop by domain",
-        description: "Returns the `shopId` for a matching `shops.domain` or `shops.custom_domain`.",
+        description:
+          "Returns `shopId`, `shopName`, and `shopImage` (public logo URL when configured) for a matching `shops.domain` or `shops.custom_domain`.",
         parameters: [
           {
             name: "domain",
@@ -146,9 +147,11 @@ export function buildPaths() {
                 schema: {
                   type: "object",
                   properties: {
-                    shopId: { type: "string", format: "uuid" }
+                    shopId: { type: "string", format: "uuid" },
+                    shopName: { type: "string" },
+                    shopImage: { type: "string", nullable: true, format: "uri" }
                   },
-                  required: ["shopId"]
+                  required: ["shopId", "shopName", "shopImage"]
                 }
               }
             }
