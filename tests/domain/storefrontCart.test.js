@@ -130,6 +130,23 @@ describe("storefront cart", () => {
     expect(out.summary.coupon_discount_minor).toBe(0);
   });
 
+  it("rejects quantity above max per line", async () => {
+    const d = deps();
+    const service = createStorefrontCart(d);
+    await expect(
+      service.addItem({}, shopId, { customerId: "cust-1" }, { productId, quantity: 11 })
+    ).rejects.toMatchObject({ code: "LINE_QUANTITY_CAP" });
+  });
+
+  it("rejects merge that would exceed max per line", async () => {
+    const d = deps();
+    d.cartRepo.findMatchingCartItem.mockResolvedValue({ id: cartItemId, quantity: "8" });
+    const service = createStorefrontCart(d);
+    await expect(
+      service.addItem({}, shopId, { customerId: "cust-1" }, { productId, quantity: 3 })
+    ).rejects.toMatchObject({ code: "LINE_QUANTITY_CAP" });
+  });
+
   it("PATCH with delta -1 at quantity 1 returns MINIMUM_QUANTITY", async () => {
     const d = deps();
     d.cartRepo.findCartItemWithCart.mockResolvedValue({

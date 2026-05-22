@@ -290,7 +290,12 @@ export const schemas = {
         format: "uuid",
         description: "Shop product UUID (`shop_products.id`), not global product ID."
       },
-      quantity: { type: "number", exclusiveMinimum: 0, description: "Absolute quantity after add/merge." },
+      quantity: {
+        type: "number",
+        exclusiveMinimum: 0,
+        maximum: 10,
+        description: "Absolute quantity after add/merge (max 10 per line)."
+      },
       delta: {
         type: "integer",
         description: "Relative change when adding (must be positive for new lines)."
@@ -307,7 +312,12 @@ export const schemas = {
     type: "object",
     description: "Provide `quantity` (absolute) or `delta` (relative, integer). Optional `couponCode` reprices the returned cart.",
     properties: {
-      quantity: { type: "number", exclusiveMinimum: 0 },
+      quantity: {
+        type: "number",
+        exclusiveMinimum: 0,
+        maximum: 10,
+        description: "Absolute line quantity (max 10)."
+      },
       delta: { type: "integer", description: "Relative change; use -1 to decrement. At qty 1, negative delta returns MINIMUM_QUANTITY." },
       couponCode: { type: "string", minLength: 1, maxLength: 64 }
     }

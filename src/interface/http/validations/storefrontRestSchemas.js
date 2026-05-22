@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_LINE_QUANTITY } from "../../../application/services/storefront/cart/cartLineRules.js";
 
 /**
  * Purpose: This file defines request validation schemas for
@@ -20,7 +21,11 @@ export const storefrontCartGetQuerySchema = z.object({
 export const storefrontCartItemBodySchema = z
   .object({
     productId: z.string().uuid(),
-    quantity: z.coerce.number().positive().optional(),
+    quantity: z.coerce
+      .number()
+      .positive()
+      .max(MAX_LINE_QUANTITY)
+      .optional(),
     delta: z.coerce.number().int().optional(),
     couponCode: optionalCouponCode
   })
@@ -30,7 +35,11 @@ export const storefrontCartItemBodySchema = z
 
 export const storefrontCartItemPatchSchema = z
   .object({
-    quantity: z.coerce.number().positive().optional(),
+    quantity: z.coerce
+      .number()
+      .positive()
+      .max(MAX_LINE_QUANTITY)
+      .optional(),
     delta: z.coerce.number().int().optional(),
     couponCode: optionalCouponCode
   })

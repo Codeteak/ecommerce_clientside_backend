@@ -524,7 +524,7 @@
               "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"delta\": 1\n}"
             },
             "url": "{{baseUrl}}/storefront/cart/items",
-            "description": "Add or merge a line. Returns **201** + full cart body (same shape as GET).\n\n**Body:** `productId` + **`quantity`** or **`delta`** (integer). Optional **`couponCode`**.\n\n**Rules:** max **99** per line; merges qty if product already in cart; `PRODUCT_UNAVAILABLE` if product is not sellable.\n\nAlternate body example: `{ \"productId\": \"…\", \"quantity\": 2, \"couponCode\": \"SAVE10\" }`."
+            "description": "Add or merge a line. Returns **201** + full cart body (same shape as GET).\n\n**Body:** `productId` + **`quantity`** or **`delta`** (integer). Optional **`couponCode`**.\n\n**Rules:** max **10** per line; merges qty if product already in cart; `PRODUCT_UNAVAILABLE` if product is not sellable.\n\nAlternate body example: `{ \"productId\": \"…\", \"quantity\": 2, \"couponCode\": \"SAVE10\" }`."
           },
           "response": []
         },
@@ -567,7 +567,7 @@
               "raw": "{\n  \"delta\": 1\n}"
             },
             "url": "{{baseUrl}}/storefront/cart/items/{{cartItemId}}",
-            "description": "Increase quantity by 1 (`delta`). Returns **200** + full cart.\n\nSet `{{cartItemId}}` from a paid line (not `…:bundle-reward`). Optional `couponCode` in body.\n\n**Errors (400):** `MINIMUM_QUANTITY` (only when `delta` is negative at qty 1), `LINE_QUANTITY_CAP` (max 99), `PRODUCT_UNAVAILABLE`."
+            "description": "Increase quantity by 1 (`delta`). Returns **200** + full cart.\n\nSet `{{cartItemId}}` from a paid line (not `…:bundle-reward`). Optional `couponCode` in body.\n\n**Errors (400):** `MINIMUM_QUANTITY` (only when `delta` is negative at qty 1), `LINE_QUANTITY_CAP` (max 10), `PRODUCT_UNAVAILABLE`."
           },
           "response": []
         },
@@ -584,7 +584,7 @@
               "raw": "{\n  \"delta\": -1\n}"
             },
             "url": "{{baseUrl}}/storefront/cart/items/{{cartItemId}}",
-            "description": "Decrease quantity by 1. At quantity **1**, returns **400** `MINIMUM_QUANTITY` — use DELETE to remove the line instead.\n\nOptional: `{ \"quantity\": 5 }` to set an exact qty (still max 99)."
+            "description": "Decrease quantity by 1. At quantity **1**, returns **400** `MINIMUM_QUANTITY` — use DELETE to remove the line instead.\n\nOptional: `{ \"quantity\": 5 }` to set an exact qty (still max 10)."
           },
           "response": []
         },
