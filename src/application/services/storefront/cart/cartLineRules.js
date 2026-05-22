@@ -2,7 +2,7 @@ import { ValidationError } from "../../../../domain/errors/ValidationError.js";
 import { AppError } from "../../../../domain/errors/AppError.js";
 
 export const BUNDLE_REWARD_ID_SUFFIX = ":bundle-reward";
-export const MAX_LINE_QUANTITY = 30;
+export const MAX_LINE_QUANTITY = 10;
 
 export function parseBillableCartQuantity(raw) {
   const n = Number(raw);

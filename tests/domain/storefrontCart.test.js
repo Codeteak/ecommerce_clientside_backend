@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { ValidationError } from "../../src/domain/errors/ValidationError.js";
 import { createStorefrontCart } from "../../src/application/services/storefront/storefrontCart.js";
+import { MAX_LINE_QUANTITY } from "../../src/application/services/storefront/cart/cartLineRules.js";
 
 const shopId = "00000000-0000-4000-8000-000000000001";
 const cartId = "11111111-1111-4111-8111-111111111111";
@@ -134,13 +135,20 @@ describe("storefront cart", () => {
     const d = deps();
     const service = createStorefrontCart(d);
     await expect(
-      service.addItem({}, shopId, { customerId: "cust-1" }, { productId, quantity: 11 })
+      service.addItem({}, shopId, { customerId: "cust-1" }, {
+        productId,
+        quantity: MAX_LINE_QUANTITY + 1
+      })
     ).rejects.toMatchObject({ code: "LINE_QUANTITY_CAP" });
   });
 
   it("rejects merge that would exceed max per line", async () => {
     const d = deps();
-    d.cartRepo.findMatchingCartItem.mockResolvedValue({ id: cartItemId, quantity: "8" });
+    const existingQty = MAX_LINE_QUANTITY - 2;
+    d.cartRepo.findMatchingCartItem.mockResolvedValue({
+      id: cartItemId,
+      quantity: String(existingQty)
+    });
     const service = createStorefrontCart(d);
     await expect(
       service.addItem({}, shopId, { customerId: "cust-1" }, { productId, quantity: 3 })
