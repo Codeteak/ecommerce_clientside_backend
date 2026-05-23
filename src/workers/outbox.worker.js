@@ -54,10 +54,13 @@ async function runOutboxWorker() {
   const handlerTimeoutMs = env.OUTBOX_HANDLER_TIMEOUT_MS;
   const shutdownController = new AbortController();
   let stopping = false;
+  let shutdownDeadline = null;
 
   const stop = (signal) => {
     if (stopping) return;
     stopping = true;
+    shutdownDeadline =
+      Date.now() + Math.max(0, Number(env.SHUTDOWN_TIMEOUT_MS) || 30_000);
     logger.info({ event: "outbox.worker.stopping", signal }, "Outbox worker shutdown requested");
     shutdownController.abort();
   };
@@ -78,11 +81,8 @@ async function runOutboxWorker() {
     "Outbox worker started"
   );
 
-  const shutdownDeadline =
-    Date.now() + Math.max(0, Number(env.SHUTDOWN_TIMEOUT_MS) || 30_000);
-
-  while (!stopping) {
-    if (Date.now() >= shutdownDeadline) {
+  while (!stopping || (shutdownDeadline && Date.now() < shutdownDeadline)) {
+    if (stopping && shutdownDeadline && Date.now() >= shutdownDeadline) {
       logger.warn(
         { event: "outbox.worker.shutdown_timeout", timeoutMs: env.SHUTDOWN_TIMEOUT_MS },
         "Outbox worker shutdown timeout reached"
