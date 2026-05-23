@@ -1,6 +1,9 @@
 version: 0.0
 os: linux
 
+# CodeDeploy runs each hook as root; stdout/stderr appear in the deployment's script logs
+# (CodePipeline deploy stage → deployment → Events). Host log: /var/log/yaadro-ecom-deploy.log
+
 files:
   - source: /
     destination: /home/deploy/yaadro/ecommerce_clientside_backend
@@ -27,5 +30,5 @@ hooks:
       runas: root
   ValidateService:
     - location: scripts/cicd/validate_service.sh
-      timeout: 180
+      timeout: 300
       runas: root

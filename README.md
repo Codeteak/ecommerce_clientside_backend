@@ -63,7 +63,7 @@ When `ENABLE_API_DOCS=true` (default in development):
 - **Swagger UI:** [http://localhost:4100/api-docs/](http://localhost:4100/api-docs/)
 - **OpenAPI JSON:** [http://localhost:4100/openapi.json](http://localhost:4100/openapi.json)
 
-In **production**, docs are off unless both `ENABLE_API_DOCS=true` and `ALLOW_API_DOCS_IN_PRODUCTION=true` are set (the CodeDeploy `application_start` script enables both on the shop API host).
+In **production**, docs are off by default. Set both `ENABLE_API_DOCS=true` and `ALLOW_API_DOCS_IN_PRODUCTION=true` in AWS Secrets Manager only if you intentionally expose Swagger on the shop API host.
 
 ## Postman
 
