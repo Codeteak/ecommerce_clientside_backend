@@ -6,8 +6,6 @@ Use this checklist before sending real customer traffic to a new API or outbox w
 
 These values must be set before production starts.
 
-**CodeDeploy / EC2:** `scripts/cicd/application_start.sh` loads JSON from AWS Secrets Manager (`AWS_SECRET_ID`, default `yaadro-ecom-prod-shop-api-runtime-env`). `METRICS_SCRAPE_TOKEN` must be a non-empty key in that secret or deploy fails before containers start.
-
 | Env var | What it is for | Rule |
 |---------|----------------|------|
 | `NODE_ENV` | App mode | Must be `production` |

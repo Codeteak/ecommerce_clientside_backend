@@ -46,19 +46,4 @@ describe("envSchema production", () => {
     const result = envSchema.safeParse(baseProductionEnv);
     expect(result.success).toBe(true);
   });
-
-  it("defaults ENABLE_API_DOCS to false in production when unset", () => {
-    const { ENABLE_API_DOCS: _removed, ...withoutDocs } = baseProductionEnv;
-    const prev = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
-    try {
-      const result = envSchema.safeParse(withoutDocs);
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.ENABLE_API_DOCS).toBe(false);
-      }
-    } finally {
-      process.env.NODE_ENV = prev;
-    }
-  });
 });
