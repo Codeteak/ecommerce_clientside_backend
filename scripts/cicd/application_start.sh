@@ -24,6 +24,9 @@ echo "[application_start] Appending runtime overrides..."
   echo "DATABASE_SSL_REJECT_UNAUTHORIZED=${DATABASE_SSL_REJECT_UNAUTHORIZED:-false}"
   echo "TRUST_PROXY=true"
   echo "JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-$(openssl rand -base64 32)}"
+  # Stripped from Secrets Manager above; schema defaults missing ENABLE_API_DOCS to true.
+  echo "ENABLE_API_DOCS=false"
+  echo "ALLOW_API_DOCS_IN_PRODUCTION=false"
 } >> .env
 
 if [[ ! -f "${IMAGE_DETAIL_FILE}" ]]; then

@@ -46,4 +46,25 @@ describe("envSchema production", () => {
     const result = envSchema.safeParse(baseProductionEnv);
     expect(result.success).toBe(true);
   });
+
+  it("accepts production when ENABLE_API_DOCS is omitted (defaults to false)", () => {
+    const { ENABLE_API_DOCS: _removed, ...withoutDocsFlag } = baseProductionEnv;
+    const result = envSchema.safeParse(withoutDocsFlag);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.ENABLE_API_DOCS).toBe(false);
+    }
+  });
+
+  it("rejects production when ENABLE_API_DOCS is true without ALLOW_API_DOCS_IN_PRODUCTION", () => {
+    const result = envSchema.safeParse({
+      ...baseProductionEnv,
+      ENABLE_API_DOCS: true,
+      ALLOW_API_DOCS_IN_PRODUCTION: false
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.ENABLE_API_DOCS).toBeDefined();
+    }
+  });
 });

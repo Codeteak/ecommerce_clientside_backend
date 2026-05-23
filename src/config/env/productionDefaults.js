@@ -14,7 +14,9 @@ export const PRODUCTION_ENV_KEYS = [
 export function getProductionDefaults() {
   return {
     JWT_ACCESS_EXPIRES_IN: "15m",
-    STOREFRONT_ENFORCE_SERVICEABILITY: "true"
+    STOREFRONT_ENFORCE_SERVICEABILITY: "true",
+    ENABLE_API_DOCS: "false",
+    ALLOW_API_DOCS_IN_PRODUCTION: "false"
   };
 }
 

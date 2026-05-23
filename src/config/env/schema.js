@@ -80,7 +80,7 @@ export const envSchema = z
       )
       .pipe(z.array(z.string().min(1)).min(1)),
     ENABLE_API_DOCS: z.preprocess((val) => {
-      if (val === undefined || val === null || val === "") return true;
+      if (val === undefined || val === null || val === "") return false;
       return boolFromEnv(val);
     }, z.boolean()),
     ALLOW_API_DOCS_IN_PRODUCTION: z.preprocess(boolFromEnv, z.boolean()).default(false),
