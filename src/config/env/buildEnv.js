@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import { envSchema } from "./schema.js";
 import { getDevLikeDefaults } from "./defaults.js";
 import { applyProductionEnvDefaults } from "./productionDefaults.js";
+import { applyUnitTestEnvOverrides } from "./unitTestEnv.js";
 
 // Unit tests on CI have no .env; avoid loading a local .env that re-injects deploy values after unset.
 const skipDotenvForUnitTests =
@@ -34,6 +35,8 @@ function rawEnv() {
       }
     }
   }
+
+  applyUnitTestEnvOverrides(src, nodeEnv, runIntegration);
 
   if (nodeEnv === "test") {
     // CodeBuild may inject deploy secrets that fail zod (e.g. short JWT). Coerce only when invalid.

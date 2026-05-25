@@ -5,7 +5,7 @@ set -euo pipefail
 export NODE_ENV=test
 export RUN_INTEGRATION_TESTS=0
 
-# Unset secrets/URLs from the CodeBuild project so empty keys get dev/test defaults.
+# Unset deploy secrets/URLs (buildEnv also forces unit-test overrides when vitest loads).
 for key in \
   CORS_ORIGIN \
   API_PUBLIC_URL \
@@ -26,8 +26,14 @@ for key in \
   CATALOG_CACHE_INVALIDATE_TOKEN \
   SENTRY_DSN \
   GOOGLE_CLIENT_ID \
-  GOOGLE_CLIENT_SECRET; do
+  GOOGLE_CLIENT_SECRET \
+  DISABLE_RATE_LIMITING; do
   unset "$key" 2>/dev/null || true
 done
 
-exec npm test -- "$@"
+if [ "${1:-}" = "watch" ]; then
+  shift
+  exec npx vitest "$@"
+fi
+
+exec npx vitest run "$@"
