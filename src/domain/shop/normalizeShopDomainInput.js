@@ -18,5 +18,8 @@ export function normalizeShopDomainInput(raw) {
   if (colon > 0 && !d.startsWith("[")) {
     d = d.slice(0, colon);
   }
+  if (d.startsWith("www.")) {
+    d = d.slice(4);
+  }
   return d;
 }

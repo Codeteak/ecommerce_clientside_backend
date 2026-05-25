@@ -13,6 +13,7 @@ export function formatShopBranding(row) {
     shopName: row.name,
     shopImage,
     shop_name: row.name,
-    shop_image: shopImage
+    shop_image: shopImage,
+    shop_photo: shopImage
   };
 }

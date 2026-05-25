@@ -9,4 +9,8 @@ describe("normalizeShopDomainInput", () => {
   it("keeps plain hostnames", () => {
     expect(normalizeShopDomainInput("  MarketFresh.IN ")).toBe("marketfresh.in");
   });
+
+  it("strips leading www.", () => {
+    expect(normalizeShopDomainInput("www.marketfresh.in")).toBe("marketfresh.in");
+  });
 });

@@ -61,7 +61,7 @@ export function createShopResolveCache({
     findShopByDomain(domain) {
       const d = String(domain || "").trim().toLowerCase();
       if (!d) return Promise.resolve(null);
-      return cachedResolve(`domain-summary:${d}`, resolveTtl, () =>
+      return cachedResolve(`domain-summary:v2:${d}`, resolveTtl, () =>
         shopLookupRepo.findShopByDomain(d)
       );
     },

@@ -17,6 +17,7 @@ describe("formatShopResolveByDomain", () => {
     expect(out?.shop_name).toBe("Demo Shop");
     expect(out?.shopImage).toBe("https://storage.test/shops/demo/logo.png");
     expect(out?.shop_image).toBe("https://storage.test/shops/demo/logo.png");
+    expect(out?.shop_photo).toBe("https://storage.test/shops/demo/logo.png");
   });
 
   it("returns null shopImage when no storage key", () => {

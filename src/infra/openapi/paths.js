@@ -130,7 +130,7 @@ export function buildPaths() {
         tags: ["Shops"],
         summary: "Resolve shop by domain",
         description:
-          "Returns shop branding for a matching `shops.domain` or `shops.custom_domain`. Includes camelCase (`shopId`, `shopName`, `shopImage`) and snake_case (`shop_name`, `shop_image`). Pass `domain` as hostname only (e.g. `marketfresh.in`); `https://` is stripped if present.",
+          "Returns shop branding for a matching `shops.domain` or `shops.custom_domain`. Shop logo comes from `entity_images` where `entity_type = 'shop'`. Includes `shop_name`, `shop_image` / `shop_photo` (public URL), and camelCase aliases. Pass `domain` as hostname only (e.g. `marketfresh.in`); `https://` and `www.` are stripped if present.",
         parameters: [
           {
             name: "domain",
@@ -151,9 +151,22 @@ export function buildPaths() {
                     shopName: { type: "string" },
                     shopImage: { type: "string", nullable: true, format: "uri" },
                     shop_name: { type: "string" },
-                    shop_image: { type: "string", nullable: true, format: "uri" }
+                    shop_image: { type: "string", nullable: true, format: "uri" },
+                    shop_photo: {
+                      type: "string",
+                      nullable: true,
+                      format: "uri",
+                      description: "Same URL as shop_image"
+                    }
                   },
-                  required: ["shopId", "shopName", "shopImage", "shop_name", "shop_image"]
+                  required: [
+                    "shopId",
+                    "shopName",
+                    "shopImage",
+                    "shop_name",
+                    "shop_image",
+                    "shop_photo"
+                  ]
                 }
               }
             }

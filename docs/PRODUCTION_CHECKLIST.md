@@ -25,7 +25,7 @@ These values are not always required, but they should be reviewed.
 | Env var | Recommended value | Why |
 |---------|-------------------|-----|
 | `JWT_ACCESS_EXPIRES_IN` | `15m` to `60m` | Short access tokens reduce risk |
-| `JWT_REFRESH_EXPIRES_IN` | Example: `30d` | Lets users stay logged in |
+| `JWT_REFRESH_EXPIRES_IN` | Example: `40d` (no spaces; `40 d` is normalized at startup) | Refresh JWT + `auth_refresh_tokens.expires_at` TTL |
 | `STOREFRONT_ENFORCE_SERVICEABILITY` | `true` | Blocks checkout outside delivery area |
 | `CUSTOMER_SESSION_CHECK_CACHE_MS` | `0` or short TTL | Keeps logout/revoke behavior fresh |
 | `ACCESS_JTI_REDIS_REQUIRED` | `true` in production | Requires Redis token allowlist |
