@@ -1,4 +1,5 @@
 import { AppError } from "../../../domain/errors/AppError.js";
+import { normalizeShopDomainInput } from "../../../domain/shop/normalizeShopDomainInput.js";
 import { formatShopResolveByDomain } from "../../../application/services/shops/formatShopResolveByDomain.js";
 import { asyncHandler } from "../asyncHandler.js";
 
@@ -6,7 +7,7 @@ export const shopController = {
   /** `GET /api/shops/resolve-by-domain?domain=...` */
   resolveByDomain: (ctx) =>
     asyncHandler(async (req, res) => {
-      const { domain } = req.query;
+      const domain = normalizeShopDomainInput(req.query.domain);
       const row = ctx.shopResolveCache
         ? await ctx.shopResolveCache.findShopByDomain(domain)
         : await ctx.shopLookupRepo.findShopByDomain(domain);

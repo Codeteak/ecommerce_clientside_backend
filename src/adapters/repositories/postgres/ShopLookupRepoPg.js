@@ -31,6 +31,26 @@ export class ShopLookupRepoPg extends ShopLookupRepo {
     }
   }
 
+  async #loadShopBrandingRow(client, shopRow) {
+    if (!shopRow) return null;
+    await setTenantContext(client, shopRow.id);
+    const { rows: imageRows } = await client.query(
+      `SELECT ma.storage_key AS shop_image_storage_key
+         FROM entity_images ei
+         JOIN media_assets ma ON ma.id = ei.media_asset_id
+        WHERE ei.shop_id = $1
+          AND ei.entity_type = 'shop'
+        ORDER BY ei.updated_at DESC NULLS LAST, ei.created_at DESC
+        LIMIT 1`,
+      [shopRow.id]
+    );
+    return {
+      id: shopRow.id,
+      name: shopRow.name,
+      shop_image_storage_key: imageRows[0]?.shop_image_storage_key ?? null
+    };
+  }
+
   async findShopByDomain(domain) {
     const d = String(domain || "").trim().toLowerCase();
     if (!d) return null;
@@ -44,26 +64,22 @@ export class ShopLookupRepoPg extends ShopLookupRepo {
           LIMIT 1`,
         [d]
       );
-      const shop = rows[0];
-      if (!shop) return null;
+      return this.#loadShopBrandingRow(client, rows[0]);
+    } finally {
+      client.release();
+    }
+  }
 
-      await setTenantContext(client, shop.id);
-      const { rows: imageRows } = await client.query(
-        `SELECT ma.storage_key AS shop_image_storage_key
-           FROM entity_images ei
-           JOIN media_assets ma ON ma.id = ei.media_asset_id
-          WHERE ei.shop_id = $1
-            AND ei.entity_type = 'shop'
-          ORDER BY ei.updated_at DESC NULLS LAST, ei.created_at DESC
-          LIMIT 1`,
-        [shop.id]
+  async findShopBrandingById(shopId) {
+    const id = String(shopId || "").trim();
+    if (!id) return null;
+    const client = await pool.connect();
+    try {
+      const { rows } = await client.query(
+        `SELECT id, name FROM shops WHERE id = $1::uuid LIMIT 1`,
+        [id]
       );
-
-      return {
-        id: shop.id,
-        name: shop.name,
-        shop_image_storage_key: imageRows[0]?.shop_image_storage_key ?? null
-      };
+      return this.#loadShopBrandingRow(client, rows[0]);
     } finally {
       client.release();
     }

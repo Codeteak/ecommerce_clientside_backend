@@ -34,13 +34,31 @@ describe("storefrontCatalog categories", () => {
       ...storefrontCatalogTestDeps()
     });
 
-    const out = await service.listCategories(shopId, { parentId: null });
+    const shopLookupRepo = {
+      findShopBrandingById: vi.fn().mockResolvedValue({
+        id: shopId,
+        name: "Demo Shop",
+        shop_image_storage_key: "shops/demo/logo.png"
+      })
+    };
+    const serviceWithBranding = createStorefrontCatalog({
+      catalogRepo,
+      ensureShopForCatalog: vi.fn(),
+      catalogCache,
+      catalogCacheTtlSec: 60,
+      shopLookupRepo,
+      ...storefrontCatalogTestDeps()
+    });
+
+    const out = await serviceWithBranding.listCategories(shopId, { parentId: null });
     expect(catalogRepo.listCategoryIdsWithSellableProducts).toHaveBeenCalledTimes(1);
     expect(catalogRepo.listCategoriesStorefront).toHaveBeenCalledWith(shopId, {
       parentId: null,
       sellableCategoryIds: sellableIds
     });
-    expect(out).toHaveLength(1);
-    expect(out[0].slug).toBe("dairy");
+    expect(out.categories).toHaveLength(1);
+    expect(out.categories[0].slug).toBe("dairy");
+    expect(out.shop_name).toBe("Demo Shop");
+    expect(out.shop_image).toContain("shops/demo/logo.png");
   });
 });

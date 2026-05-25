@@ -33,16 +33,19 @@ export function createPrewarmStorefrontCache({ storefrontCatalog }) {
     }
 
     await runStep("categories:all", () => storefrontCatalog.listCategories(shopId, { all: true }));
-    const rootCategories = await (async () => {
+    const rootCategoryResult = await (async () => {
       try {
         return await storefrontCatalog.listCategories(shopId, {});
       } catch {
-        return [];
+        return null;
       }
     })();
+    const rootCategories = Array.isArray(rootCategoryResult?.categories)
+      ? rootCategoryResult.categories
+      : [];
 
     await runStep("categories:root", async () => {
-      if (!Array.isArray(rootCategories)) {
+      if (!rootCategories.length) {
         throw new Error("root categories unavailable");
       }
     });

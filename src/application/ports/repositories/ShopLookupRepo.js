@@ -18,4 +18,12 @@ export class ShopLookupRepo {
   async findShopByDomain(_domain) {
     throw new Error("Not implemented");
   }
+
+  /**
+   * @param {string} _shopId
+   * @returns {Promise<{ id: string, name: string, shop_image_storage_key?: string | null } | null>}
+   */
+  async findShopBrandingById(_shopId) {
+    throw new Error("Not implemented");
+  }
 }

@@ -8,8 +8,12 @@ describe("prewarmStorefrontCache", () => {
     const storefrontCatalog = {
       listCategories: vi
         .fn()
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{ id: "cat-1" }, { id: "cat-2" }]),
+        .mockResolvedValueOnce({ categories: [], shop_name: null, shop_image: null })
+        .mockResolvedValueOnce({
+          categories: [{ id: "cat-1" }, { id: "cat-2" }],
+          shop_name: "Shop",
+          shop_image: null
+        }),
       listProducts: vi.fn().mockResolvedValue({ products: [] })
     };
     const prewarm = createPrewarmStorefrontCache({ storefrontCatalog });
@@ -36,8 +40,12 @@ describe("prewarmStorefrontCache", () => {
     const storefrontCatalog = {
       listCategories: vi
         .fn()
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{ id: "bad" }, { id: "ok" }]),
+        .mockResolvedValueOnce({ categories: [], shop_name: null, shop_image: null })
+        .mockResolvedValueOnce({
+          categories: [{ id: "bad" }, { id: "ok" }],
+          shop_name: "Shop",
+          shop_image: null
+        }),
       listProducts: vi
         .fn()
         .mockResolvedValueOnce({ products: [] })

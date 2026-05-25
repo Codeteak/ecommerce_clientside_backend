@@ -31,16 +31,21 @@ function listCategoriesHandler(ctx) {
     }
     const shopId = shopIdForStorefront(req);
     const parentId = req.query.parent_id ?? undefined;
-    const categories = await ctx.storefrontCatalog.listCategories(shopId, {
+    const result = await ctx.storefrontCatalog.listCategories(shopId, {
       parentId,
       all: req.query.all === true
     });
     setCatalogHttpCache(ctx, res);
+    const categories = Array.isArray(result?.categories) ? result.categories : [];
     if (!categories.length) {
-      res.json({});
+      res.json({
+        shop_name: result?.shop_name ?? null,
+        shop_image: result?.shop_image ?? null,
+        categories: []
+      });
       return;
     }
-    res.json({ categories });
+    res.json(result);
   });
 }
 

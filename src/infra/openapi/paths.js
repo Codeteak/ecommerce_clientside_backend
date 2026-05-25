@@ -130,7 +130,7 @@ export function buildPaths() {
         tags: ["Shops"],
         summary: "Resolve shop by domain",
         description:
-          "Returns `shopId`, `shopName`, and `shopImage` (public logo URL when configured) for a matching `shops.domain` or `shops.custom_domain`.",
+          "Returns shop branding for a matching `shops.domain` or `shops.custom_domain`. Includes camelCase (`shopId`, `shopName`, `shopImage`) and snake_case (`shop_name`, `shop_image`). Pass `domain` as hostname only (e.g. `marketfresh.in`); `https://` is stripped if present.",
         parameters: [
           {
             name: "domain",
@@ -149,9 +149,11 @@ export function buildPaths() {
                   properties: {
                     shopId: { type: "string", format: "uuid" },
                     shopName: { type: "string" },
-                    shopImage: { type: "string", nullable: true, format: "uri" }
+                    shopImage: { type: "string", nullable: true, format: "uri" },
+                    shop_name: { type: "string" },
+                    shop_image: { type: "string", nullable: true, format: "uri" }
                   },
-                  required: ["shopId", "shopName", "shopImage"]
+                  required: ["shopId", "shopName", "shopImage", "shop_name", "shop_image"]
                 }
               }
             }
@@ -506,7 +508,7 @@ export function buildPaths() {
         tags: ["Storefront catalog"],
         summary: "List categories",
         description:
-          "Lists shared global categories. When `STOREFRONT_CATALOG_HTTP_CACHE_SEC` is set on the server, responses may include `Cache-Control` for CDN/browser caching. Use `all=true` to fetch the full category list in one request.",
+          "Lists shared global categories with `shop_name`, `shop_image`, and per-category promotion signals (`offers`, `bundle_rules`, `category_discount_rules`). When `STOREFRONT_CATALOG_HTTP_CACHE_SEC` is set, responses may include `Cache-Control` for CDN/browser caching. Use `all=true` to fetch the full category list in one request.",
         parameters: [
           ...shopParams,
           {

@@ -55,11 +55,19 @@ describe("storefrontCatalog category offers", () => {
       shopKeyPrefix: vi.fn().mockResolvedValue(`shop:${shopId}:g1:`)
     };
     const listingPromotions = createStorefrontListingPromotions({ promotionRepo });
+    const shopLookupRepo = {
+      findShopBrandingById: vi.fn().mockResolvedValue({
+        id: shopId,
+        name: "Market Fresh",
+        shop_image_storage_key: null
+      })
+    };
     const service = createStorefrontCatalog({
       catalogRepo,
       ensureShopForCatalog: vi.fn(),
       catalogCache,
       catalogCacheTtlSec: 60,
+      shopLookupRepo,
       ...storefrontCatalogTestDeps({ listingPromotions })
     });
 
@@ -67,13 +75,15 @@ describe("storefrontCatalog category offers", () => {
 
     expect(promotionRepo.listActiveCategoryPromotionSignals).toHaveBeenCalled();
     expect(promotionRepo.listActiveBundleRulesForShop).toHaveBeenCalled();
-    expect(out).toHaveLength(1);
-    expect(out[0].offers).toEqual({
+    expect(out.shop_name).toBe("Market Fresh");
+    expect(out.shop_image).toBeNull();
+    expect(out.categories).toHaveLength(1);
+    expect(out.categories[0].offers).toEqual({
       has_sku_promo: true,
       has_bundle: true,
       has_category_discount: true
     });
-    expect(out[0].bundle_rules).toHaveLength(1);
-    expect(out[0].category_discount_rules).toHaveLength(1);
+    expect(out.categories[0].bundle_rules).toHaveLength(1);
+    expect(out.categories[0].category_discount_rules).toHaveLength(1);
   });
 });

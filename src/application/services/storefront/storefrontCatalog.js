@@ -10,6 +10,7 @@ import {
 } from "./storefrontCatalogMappers.js";
 import { shouldCacheProductList } from "./shouldCacheProductList.js";
 import { withCategoryListingOffers } from "../promotions/mapCategoryListingPromotions.js";
+import { formatShopBranding } from "../shops/formatShopBranding.js";
 /** @param {{ promotions_paused?: boolean, products?: unknown[], categories?: unknown[], nextCursor?: string | null }} body */
 function pruneStorefrontProductListPayload(body, { layout = "grouped" } = {}) {
   const out = {};
@@ -55,6 +56,7 @@ export function createStorefrontCatalog({
   ensureShopForCatalog,
   catalogCache,
   shopPromotionCache,
+  shopLookupRepo,
   catalogCacheTtlSec = 60,
   productListCachePolicy = {},
   runWithClient,
@@ -136,6 +138,40 @@ export function createStorefrontCatalog({
     return Array.isArray(cached) ? cached : [];
   }
 
+  async function loadShopBranding(shopId) {
+    if (!shopLookupRepo || typeof shopLookupRepo.findShopBrandingById !== "function") {
+      return null;
+    }
+    const metaTtl = swrTtlSec > 0 ? Math.max(swrTtlSec, 60) : 0;
+    if (metaTtl <= 0 || typeof catalogCache.wrap !== "function") {
+      return formatShopBranding(await shopLookupRepo.findShopBrandingById(shopId));
+    }
+    const prefix = await shopPrefix(shopId);
+    const cached = await catalogCache.wrap(`${prefix}shop:branding`, metaTtl, () =>
+      shopLookupRepo.findShopBrandingById(shopId)
+    );
+    return formatShopBranding(cached);
+  }
+
+  function buildCategoriesListResponse(shopId, categories) {
+    const branding = loadShopBranding(shopId);
+    return branding.then((b) => {
+      /** @type {Record<string, unknown>} */
+      const out = { categories };
+      if (b) {
+        out.shopId = b.shopId;
+        out.shopName = b.shopName;
+        out.shopImage = b.shopImage;
+        out.shop_name = b.shop_name;
+        out.shop_image = b.shop_image;
+      } else {
+        out.shop_name = null;
+        out.shop_image = null;
+      }
+      return out;
+    });
+  }
+
   async function enrichCategoriesWithListingOffers(shopId, categories) {
     if (!categories.length || typeof listingPromotions?.loadCategoryListingContext !== "function") {
       return categories;
@@ -159,7 +195,7 @@ export function createStorefrontCatalog({
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
       const key = all ? `categories:all` : `categories:${parentId ?? "root"}`;
-      return cachedSWR(shopId, key, "categories:list", async () => {
+      const categories = await cachedSWR(shopId, key, "categories:list", async () => {
         const sellableCategoryIds = await getSellableCategoryIds(shopId);
         const rows = all
           ? await catalogRepo.listAllCategoriesStorefront(shopId, { sellableCategoryIds })
@@ -167,6 +203,7 @@ export function createStorefrontCatalog({
         const mapped = rows.map(mapCategoryRow);
         return enrichCategoriesWithListingOffers(shopId, mapped);
       });
+      return buildCategoriesListResponse(shopId, categories);
     },
 
     async listProducts(

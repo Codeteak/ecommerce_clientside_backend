@@ -142,6 +142,7 @@ export function createAppContext() {
     ensureShopForCatalog,
     catalogCache,
     shopPromotionCache,
+    shopLookupRepo,
     catalogCacheTtlSec: env.STOREFRONT_CATALOG_CACHE_TTL_SEC,
     productListCachePolicy: {
       maxLimit: env.STOREFRONT_PRODUCT_LIST_CACHE_MAX_LIMIT,
