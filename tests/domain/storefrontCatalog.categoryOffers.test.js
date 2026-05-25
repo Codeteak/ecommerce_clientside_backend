@@ -67,12 +67,13 @@ describe("storefrontCatalog category offers", () => {
 
     expect(promotionRepo.listActiveCategoryPromotionSignals).toHaveBeenCalled();
     expect(promotionRepo.listActiveBundleRulesForShop).toHaveBeenCalled();
-    expect(out.categories[0].offers).toEqual({
+    expect(out).toHaveLength(1);
+    expect(out[0].offers).toEqual({
       has_sku_promo: true,
       has_bundle: true,
       has_category_discount: true
     });
-    expect(out.categories[0].bundle_rules).toHaveLength(1);
-    expect(out.categories[0].category_discount_rules).toHaveLength(1);
+    expect(out[0].bundle_rules).toHaveLength(1);
+    expect(out[0].category_discount_rules).toHaveLength(1);
   });
 });

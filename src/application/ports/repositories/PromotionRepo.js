@@ -87,6 +87,27 @@ export class PromotionRepo {
   }
 
   /**
+   * Category-level listing signals for storefront category browse (SKU promos + category % rules).
+   * @param {import("pg").PoolClient} _client
+   * @param {string} _shopId
+   * @returns {Promise<{
+   *   skuPromoCategoryIds: string[],
+   *   categoryDiscountRules: Array<{
+   *     global_category_id: string,
+   *     promotion_id: string,
+   *     percent_bps: number,
+   *     max_discount_minor: string | number | null,
+   *     ends_at: Date | string | null
+   *   }>
+   * }>}
+   */
+  async listActiveCategoryPromotionSignals(_client, _shopId) {
+    void _client;
+    void _shopId;
+    throw new Error("Not implemented");
+  }
+
+  /**
    * Bundle rules that may apply to one SKU (same_shop_product or matching global category).
    * @param {import("pg").PoolClient} _client
    * @param {string} _shopId

@@ -41,6 +41,12 @@ export function createShopPromotionCache({ catalogCache, promotionRepo, ttlSec =
       );
     },
 
+    listActiveCategoryPromotionSignals(client, shopId) {
+      return wrapShop(shopId, "categorySignals", () =>
+        promotionRepo.listActiveCategoryPromotionSignals(client, shopId)
+      );
+    },
+
     listActivePromotionProductOverlaysForShopProducts(client, shopId, shopProductIds) {
       const ids = Array.isArray(shopProductIds) ? shopProductIds.map(String).filter(Boolean) : [];
       if (!ids.length) return Promise.resolve([]);

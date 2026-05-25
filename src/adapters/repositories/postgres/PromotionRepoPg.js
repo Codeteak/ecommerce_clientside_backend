@@ -315,6 +315,58 @@ export class PromotionRepoPg extends PromotionRepo {
     return rows;
   }
 
+  async listActiveCategoryPromotionSignals(client, shopId) {
+    await setTenantContext(client, shopId);
+    const activePromo = `p.shop_id = $1::uuid
+          AND p.is_deleted = false
+          AND p.status = 'active'
+          AND p.starts_at <= now()
+          AND p.ends_at >= now()`;
+
+    const { rows: skuRows } = await client.query(
+      `SELECT DISTINCT gp.global_category_id::text AS id
+         FROM promotion_products pp
+         JOIN promotions p
+           ON p.id = pp.promotion_id
+          AND p.shop_id = pp.shop_id
+         JOIN shop_products sp
+           ON sp.id = pp.shop_product_id
+          AND sp.shop_id = pp.shop_id
+         JOIN global_products gp ON gp.id = sp.global_product_id
+        WHERE pp.shop_id = $1::uuid
+          AND pp.is_deleted = false
+          AND sp.is_deleted = false
+          AND gp.global_category_id IS NOT NULL
+          AND ${activePromo}`,
+      [shopId]
+    );
+
+    const { rows: ruleRows } = await client.query(
+      `SELECT pr.promotion_id,
+              pr.global_category_id::text AS global_category_id,
+              pr.percent_bps,
+              pr.max_discount_minor::text AS max_discount_minor,
+              p.ends_at
+         FROM promotion_rules pr
+         JOIN promotions p
+           ON p.id = pr.promotion_id
+          AND p.shop_id = pr.shop_id
+        WHERE pr.shop_id = $1::uuid
+          AND pr.is_deleted = false
+          AND pr.rule_kind = 'category_percent_off'
+          AND pr.global_category_id IS NOT NULL
+          AND ${activePromo}
+        ORDER BY p.priority ASC, pr.updated_at DESC
+        LIMIT 500`,
+      [shopId]
+    );
+
+    return {
+      skuPromoCategoryIds: skuRows.map((r) => String(r.id)).filter(Boolean),
+      categoryDiscountRules: ruleRows
+    };
+  }
+
   async listActiveBundleRulesForShop(client, shopId) {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(

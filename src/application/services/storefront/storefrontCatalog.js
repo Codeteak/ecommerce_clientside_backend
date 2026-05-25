@@ -9,6 +9,7 @@ import {
   mapStorefrontProductRow as mapProductRow
 } from "./storefrontCatalogMappers.js";
 import { shouldCacheProductList } from "./shouldCacheProductList.js";
+import { withCategoryListingOffers } from "../promotions/mapCategoryListingPromotions.js";
 /** @param {{ promotions_paused?: boolean, products?: unknown[], categories?: unknown[], nextCursor?: string | null }} body */
 function pruneStorefrontProductListPayload(body, { layout = "grouped" } = {}) {
   const out = {};
@@ -135,6 +136,24 @@ export function createStorefrontCatalog({
     return Array.isArray(cached) ? cached : [];
   }
 
+  async function enrichCategoriesWithListingOffers(shopId, categories) {
+    if (!categories.length || typeof listingPromotions?.loadCategoryListingContext !== "function") {
+      return categories;
+    }
+    const promoCtx = await runWithClient((client) =>
+      listingPromotions.loadCategoryListingContext(client, shopId)
+    );
+    return categories.map((category) =>
+      withCategoryListingOffers({
+        category,
+        promotionsPaused: promoCtx.promotionsPaused,
+        skuPromoCategoryIds: promoCtx.skuPromoCategoryIds,
+        categoryDiscountRulesByCategory: promoCtx.categoryDiscountRulesByCategory,
+        bundleRowsRaw: promoCtx.bundleRowsRaw
+      })
+    );
+  }
+
   return {
     async listCategories(shopIdRaw, { parentId, all = false } = {}) {
       const shopId = requireShopId(shopIdRaw);
@@ -145,7 +164,8 @@ export function createStorefrontCatalog({
         const rows = all
           ? await catalogRepo.listAllCategoriesStorefront(shopId, { sellableCategoryIds })
           : await catalogRepo.listCategoriesStorefront(shopId, { parentId, sellableCategoryIds });
-        return rows.map(mapCategoryRow);
+        const mapped = rows.map(mapCategoryRow);
+        return enrichCategoriesWithListingOffers(shopId, mapped);
       });
     },
 

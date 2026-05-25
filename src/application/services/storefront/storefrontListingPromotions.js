@@ -7,6 +7,21 @@ import {
   filterBundleRuleRowsForProduct,
   mapActiveBundleRuleRow
 } from "../promotions/mapActiveBundleRulesPublic.js";
+
+/**
+ * @param {Array<{ global_category_id: string }>} rules
+ */
+function categoryDiscountRulesByCategoryMap(rules) {
+  const map = new Map();
+  for (const r of rules) {
+    const id = String(r.global_category_id);
+    if (!map.has(id)) {
+      map.set(id, []);
+    }
+    map.get(id).push(r);
+  }
+  return map;
+}
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
 
 function catalogOnlyPromotionContext(pageRows) {
@@ -166,8 +181,58 @@ export function createStorefrontListingPromotions({ promotionRepo, shopPromotion
     }
   }
 
+  async function loadCategoryListingContext(client, shopId) {
+    if (!promoReads) {
+      return {
+        promotionsPaused: false,
+        skuPromoCategoryIds: new Set(),
+        categoryDiscountRulesByCategory: new Map(),
+        bundleRowsRaw: []
+      };
+    }
+    try {
+      const rawSettings = await promoReads.getShopPromotionSettings(client, shopId);
+      const promotionsPaused = rawSettings?.promotions_paused === true;
+      if (promotionsPaused) {
+        return {
+          promotionsPaused: true,
+          skuPromoCategoryIds: new Set(),
+          categoryDiscountRulesByCategory: new Map(),
+          bundleRowsRaw: []
+        };
+      }
+      const signals =
+        typeof promoReads.listActiveCategoryPromotionSignals === "function"
+          ? await promoReads.listActiveCategoryPromotionSignals(client, shopId)
+          : { skuPromoCategoryIds: [], categoryDiscountRules: [] };
+      const bundleRowsRaw = await promoReads.listActiveBundleRulesForShop(client, shopId);
+      return {
+        promotionsPaused: false,
+        skuPromoCategoryIds: new Set(
+          (signals.skuPromoCategoryIds ?? []).map((id) => String(id))
+        ),
+        categoryDiscountRulesByCategory: categoryDiscountRulesByCategoryMap(
+          signals.categoryDiscountRules ?? []
+        ),
+        bundleRowsRaw
+      };
+    } catch (err) {
+      getRequestLogger().warn(
+        { err, shopId, event: "storefront_category_promotions_fallback" },
+        "Category promotion read failed; returning catalog-only categories"
+      );
+      return {
+        promotionsPaused: false,
+        skuPromoCategoryIds: new Set(),
+        categoryDiscountRulesByCategory: new Map(),
+        bundleRowsRaw: []
+      };
+    }
+  }
+
   return {
     loadListingContext,
+    loadCategoryListingContext,
     enrichProductDetail,
     filterBundleRuleRowsForProduct,
     mapActiveBundleRuleRow
