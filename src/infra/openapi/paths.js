@@ -130,7 +130,7 @@ export function buildPaths() {
         tags: ["Shops"],
         summary: "Resolve shop by domain",
         description:
-          "Returns shop branding for a matching `shops.domain` or `shops.custom_domain`. Shop logo comes from `entity_images` where `entity_type = 'shop'`. Includes `shop_name`, `shop_image` / `shop_photo` (public URL), and camelCase aliases. Pass `domain` as hostname only (e.g. `marketfresh.in`); `https://` and `www.` are stripped if present.",
+          "Returns `shop_id`, `shop_name`, and `shop_image` (public URL) for a matching `shops.domain` or `shops.custom_domain`. Logo from `entity_images` where `entity_type = 'shop'`. Pass `domain` as hostname only (e.g. `marketfresh.in`); `https://` and `www.` are stripped if present.",
         parameters: [
           {
             name: "domain",
@@ -147,26 +147,11 @@ export function buildPaths() {
                 schema: {
                   type: "object",
                   properties: {
-                    shopId: { type: "string", format: "uuid" },
-                    shopName: { type: "string" },
-                    shopImage: { type: "string", nullable: true, format: "uri" },
+                    shop_id: { type: "string", format: "uuid" },
                     shop_name: { type: "string" },
-                    shop_image: { type: "string", nullable: true, format: "uri" },
-                    shop_photo: {
-                      type: "string",
-                      nullable: true,
-                      format: "uri",
-                      description: "Same URL as shop_image"
-                    }
+                    shop_image: { type: "string", nullable: true, format: "uri" }
                   },
-                  required: [
-                    "shopId",
-                    "shopName",
-                    "shopImage",
-                    "shop_name",
-                    "shop_image",
-                    "shop_photo"
-                  ]
+                  required: ["shop_id", "shop_name", "shop_image"]
                 }
               }
             }

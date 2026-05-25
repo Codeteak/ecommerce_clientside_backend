@@ -90,6 +90,10 @@ export const envSchema = z
     STOREFRONT_ROOT_DOMAIN: z.string().optional().default(""),
     OBJECT_STORAGE_PUBLIC_BASE_URL: z.string().optional().default(""),
     REDIS_URL: z.string().optional().default(""),
+    CACHE_ON: z.preprocess((val) => {
+      if (val === undefined || val === null || val === "") return true;
+      return boolFromEnv(val);
+    }, z.boolean()),
     CUSTOMER_SESSION_CHECK_CACHE_MS: z.coerce.number().int().nonnegative().default(0),
     STOREFRONT_DELIVERY_FEE_MINOR: z.coerce.number().int().nonnegative().optional().default(0),
     STOREFRONT_ENFORCE_SERVICEABILITY: z.preprocess(boolFromEnv, z.boolean()),
@@ -109,6 +113,8 @@ export const envSchema = z
     OUTBOX_RETRY_BASE_MS: z.coerce.number().int().positive().default(250),
     OUTBOX_RETRY_MAX_MS: z.coerce.number().int().positive().default(30_000),
     OUTBOX_HANDLER_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+    /** When true, API process polls outbox_messages (default). Set false only if using standalone outbox.worker.js. */
+    OUTBOX_WORKER_ENABLED: z.preprocess(boolFromEnv, z.boolean()).default(true),
     RETRY_ATTEMPTS: z.coerce.number().int().positive().default(3),
     RETRY_BASE_DELAY_MS: z.coerce.number().int().positive().default(120),
     RETRY_MAX_DELAY_MS: z.coerce.number().int().positive().default(1500),

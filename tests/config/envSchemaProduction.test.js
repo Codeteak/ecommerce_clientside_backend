@@ -47,6 +47,14 @@ describe("envSchema production", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts production with CACHE_ON=false when REDIS_URL is set", () => {
+    const result = envSchema.safeParse({ ...baseProductionEnv, CACHE_ON: false });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.CACHE_ON).toBe(false);
+    }
+  });
+
   it("accepts production when ENABLE_API_DOCS is omitted (defaults to false)", () => {
     const { ENABLE_API_DOCS: _removed, ...withoutDocsFlag } = baseProductionEnv;
     const result = envSchema.safeParse(withoutDocsFlag);

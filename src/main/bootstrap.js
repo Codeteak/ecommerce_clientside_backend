@@ -1,5 +1,6 @@
 import http from "node:http";
 import { env } from "../config/env.js";
+import { buildReadCacheStartupStatus } from "../config/env/readCacheTtl.js";
 import { logger } from "../config/logger.js";
 import { pool } from "../infra/db/pool.js";
 import { disconnectSharedRedis, getSharedRedisClient } from "../infra/redis/sharedRedis.js";
@@ -10,6 +11,7 @@ import { initSentry } from "../infra/observability/sentry.js";
 import { createAppContext } from "./composition.js";
 import { createExpressApp } from "./server.js";
 import { installFatalProcessHandlers } from "../utils/installFatalProcessHandlers.js";
+import { startOutboxPoller } from "../infra/outbox/startOutboxPoller.js";
 
 /**
  * Purpose: This file starts the application server.
@@ -21,6 +23,8 @@ import { installFatalProcessHandlers } from "../utils/installFatalProcessHandler
 let server = null;
 /** @type {{ close?: () => Promise<void> } | null} */
 let realtimeServer = null;
+/** @type {ReturnType<typeof startOutboxPoller> | null} */
+let outboxPoller = null;
 
 function installGracefulShutdown() {
   const shutdown = async (signal) => {
@@ -37,6 +41,18 @@ function installGracefulShutdown() {
       );
     }
     server = null;
+    if (outboxPoller) {
+      outboxPoller.stop();
+      try {
+        await Promise.race([
+          outboxPoller.stopped,
+          new Promise((resolve) => setTimeout(resolve, env.SHUTDOWN_TIMEOUT_MS))
+        ]);
+      } catch (err) {
+        logger.warn({ err, event: "shutdown.outbox_failed" }, "Outbox poller stop during shutdown");
+      }
+      outboxPoller = null;
+    }
     if (realtimeServer?.close) {
       try {
         await realtimeServer.close();
@@ -95,11 +111,32 @@ async function main() {
 
   await new Promise((resolve, reject) => {
     server.listen(env.PORT, () => {
-      logger.info({ port: env.PORT }, "Server is running and healthy");
+      const cache = buildReadCacheStartupStatus(env);
+      logger.info(
+        {
+          port: env.PORT,
+          event: "server.started",
+          cacheOn: cache.cacheOn,
+          redisConfigured: cache.redisConfigured,
+          readCachesActive: cache.readCachesActive,
+          cacheTtlSec: cache.effectiveTtlSec
+        },
+        `Server is running on port ${env.PORT} — ${cache.summary}`
+      );
       resolve();
     });
     server.on("error", reject);
   });
+
+  if (env.OUTBOX_WORKER_ENABLED) {
+    outboxPoller = startOutboxPoller({
+      pool,
+      logger,
+      embedded: true,
+      emitOrderPlaced:
+        typeof ctx.emitOrderPlaced === "function" ? ctx.emitOrderPlaced.bind(ctx) : undefined
+    });
+  }
 }
 
 installFatalProcessHandlers(logger, { skip: env.NODE_ENV === "test" });

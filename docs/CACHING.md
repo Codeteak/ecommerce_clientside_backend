@@ -1,12 +1,31 @@
 # API caching reference
 
-Redis/Valkey backs shared caches when `REDIS_URL` is set. Catalog and promotion keys are versioned per shop via `shop:{shopId}:catalogGen` (bump with `POST /storefront/catalog/cache/invalidate`).
+Redis/Valkey backs shared caches when `REDIS_URL` is set and read caching is enabled. Catalog and promotion keys are versioned per shop via `shop:{shopId}:catalogGen` (bump with `POST /storefront/catalog/cache/invalidate`).
+
+## Global read-cache switch (`CACHE_ON`)
+
+| `CACHE_ON` | Effect |
+|------------|--------|
+| `true` (default) | Use the TTL variables below for catalog, promotions, shop resolve, service hub, and catalog HTTP `Cache-Control`. |
+| `false` | All of those TTLs are treated as **0** — every read goes to PostgreSQL. **Does not** disable Redis for rate limits, access-token `jti`, or session helpers. |
+
+```env
+# Debug or immediately see DB changes (e.g. resolve-by-domain shop name/logo)
+CACHE_ON=false
+```
+
+`REDIS_URL` must still be set in production when `CACHE_ON=false`. Do not clear `REDIS_URL` just to turn off catalog/resolve cache — that also breaks rate limiting and JWT revocation checks.
+
+Per-endpoint off without disabling everything: set the relevant TTL to `0` (e.g. `SHOP_RESOLVE_CACHE_TTL_SEC=0` only disables domain resolve cache).
+
+Implementation: `effectiveReadCacheTtlSec()` in `src/config/env/readCacheTtl.js`, wired in `src/main/composition.js`. On server start, `bootstrap.js` logs `event: server.started` with `cacheOn`, `readCachesActive`, `cacheTtlSec`, and a one-line summary (e.g. `read caches on — catalog=60s, resolve-by-domain=300s, ...`).
 
 ## Environment
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `REDIS_URL` | (empty dev) | Required in production |
+| `CACHE_ON` | `true` | Master switch for **read** caches (see above) |
 | `ACCESS_JTI_DB_FALLBACK_ENABLED` | `true` | Protected APIs use DB session validation if access `jti` is missing/unavailable in Redis |
 | `STOREFRONT_CATALOG_CACHE_TTL_SEC` | `60` | Catalog SWR + promotion query cache TTL |
 | `STOREFRONT_PROMO_CACHE_TTL_SEC` | `60` | Alias; falls back to catalog TTL |
@@ -26,8 +45,8 @@ Paths are mounted at `/storefront` and `/api/storefront` unless noted.
 |-----|------|-------|-------|
 | `GET /health`, `/health/ready` | No | No | |
 | `GET /metrics` | Token | No | `no-store` |
-| `GET /api/shops/resolve-by-domain` | No | Redis `resolve:host:*` | |
-| `shopResolver` middleware | No | Redis `resolve:slug:*`, `resolve:host:*` | |
+| `GET /api/shops/resolve-by-domain` | No | Redis `resolve:domain-summary:v3:{domain}` | Off when `CACHE_ON=false` or `SHOP_RESOLVE_CACHE_TTL_SEC=0` |
+| `shopResolver` middleware | No | Redis `resolve:slug:*`, `resolve:host:*` | Same TTL family as resolve cache |
 | `GET .../categories` | Shop | Redis SWR | Catalog |
 | `GET .../categories/:slug` | Shop | Redis SWR | |
 | `GET .../products` | Shop | Redis SWR + listing promos | Policy skips high-cardinality list shapes (see below) |
@@ -55,6 +74,7 @@ Paths are mounted at `/storefront` and `/api/storefront` unless noted.
 | Coupon catalog | `...g{N}:promo:couponCatalog:v2:{code}:{limit}` |
 | Resolve slug | `resolve:slug:{slug}` |
 | Resolve host | `resolve:host:{host}` |
+| Resolve domain (API) | `resolve:domain-summary:v3:{domain}` |
 | Shop meta | `shop:{shopId}:meta:active` |
 | Service hub | `shop:{shopId}:serviceHub` |
 

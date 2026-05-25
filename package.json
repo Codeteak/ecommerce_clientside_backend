@@ -12,6 +12,7 @@
     "db:migrate:full": "DB_MIGRATE_FULL_SCHEMA=1 node scripts/migrate.js",
     "db:build-full-schema": "node scripts/build-full-schema.js",
     "db:prune": "node scripts/prune-noncanonical-tables.js",
+    "db:seed:resolve-domain": "node scripts/seed-resolve-by-domain-sample.js",
     "test": "bash scripts/cicd/run-unit-tests.sh",
     "test:watch": "bash scripts/cicd/run-unit-tests.sh watch",
     "test:integration": "NODE_ENV=test vitest run tests/integration",

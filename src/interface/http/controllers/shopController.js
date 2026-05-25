@@ -8,10 +8,17 @@ export const shopController = {
   resolveByDomain: (ctx) =>
     asyncHandler(async (req, res) => {
       const domain = normalizeShopDomainInput(req.query.domain);
-      const row = ctx.shopResolveCache
+      let row = ctx.shopResolveCache
         ? await ctx.shopResolveCache.findShopByDomain(domain)
         : await ctx.shopLookupRepo.findShopByDomain(domain);
-      const payload = formatShopResolveByDomain(row);
+      let payload = formatShopResolveByDomain(row);
+      if (
+        payload &&
+        (!String(payload.shop_name || "").trim() || payload.shop_image == null)
+      ) {
+        const fresh = await ctx.shopLookupRepo.findShopByDomain(domain);
+        payload = formatShopResolveByDomain(fresh) ?? payload;
+      }
       if (!payload) {
         throw new AppError("No shop found for the provided domain.", {
           statusCode: 404,

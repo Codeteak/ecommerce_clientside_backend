@@ -36,5 +36,4 @@ done
 echo "[validate_service] Readiness check failed."
 compose_cmd ps || true
 compose_cmd logs --tail 100 api || true
-compose_cmd logs --tail 100 outbox-worker || true
 exit 1

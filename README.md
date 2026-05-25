@@ -43,7 +43,12 @@ JWT_AUDIENCE=clientside-ecommerce
 JWT_EXPIRES_IN=8h
 
 SERVICE_AREA_RADIUS_METERS=5000
+
+# Optional: turn off Redis read caches (catalog, resolve-by-domain, promos); rate limits still use Redis
+# CACHE_ON=false
 ```
+
+Full cache reference: [docs/CACHING.md](docs/CACHING.md).
 
 ## Run locally
 
@@ -56,6 +61,17 @@ npm run dev
 
 Default port: **4100**. Ensure a **shop** row exists before customer registration with `shopId`.
 
+**Resolve-by-domain sample** (shop `marketfresh.in` + logo):
+
+```bash
+npm run db:seed:resolve-domain
+curl -s "http://localhost:4100/api/shops/resolve-by-domain?domain=marketfresh.in" | jq
+```
+
+Requires `OBJECT_STORAGE_PUBLIC_BASE_URL` in `.env` for a non-null `shop_image` URL. SQL: [scripts/ops/seed-resolve-by-domain-sample.sql](scripts/ops/seed-resolve-by-domain-sample.sql).
+
+**Production:** Deploy the latest API (response is `shop_id`, `shop_name`, `shop_image` only — not legacy `{ shopId }`). Run the seed SQL on the production DB for `marketfresh.in`, set `OBJECT_STORAGE_PUBLIC_BASE_URL`, and ensure the logo file exists at the `storage_key` path in object storage.
+
 ## API docs (Swagger UI)
 
 When `ENABLE_API_DOCS=true` (default in development):
@@ -63,7 +79,7 @@ When `ENABLE_API_DOCS=true` (default in development):
 - **Swagger UI:** [http://localhost:4100/api-docs/](http://localhost:4100/api-docs/)
 - **OpenAPI JSON:** [http://localhost:4100/openapi.json](http://localhost:4100/openapi.json)
 
-In **production**, docs are off unless both `ENABLE_API_DOCS=true` and `ALLOW_API_DOCS_IN_PRODUCTION=true` are set. CodeDeploy `application_start` strips those keys from Secrets Manager and appends `ENABLE_API_DOCS=false` so the API and outbox worker start safely.
+In **production**, docs are off unless both `ENABLE_API_DOCS=true` and `ALLOW_API_DOCS_IN_PRODUCTION=true` are set. CodeDeploy `application_start` strips those keys from Secrets Manager and appends `ENABLE_API_DOCS=false` so the API starts safely (outbox polling runs inside the same process by default).
 
 ## Postman
 

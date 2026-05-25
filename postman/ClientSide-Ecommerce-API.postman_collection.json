@@ -76,8 +76,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/api/shops/resolve-by-domain?domain=customer.yaadro.online",
-            "description": "Resolve shop by domain/custom_domain. Returns shopId, shop_name, shop_image, shop_photo (logo URL), and camelCase fields."
+            "url": "{{baseUrl}}/api/shops/resolve-by-domain?domain=marketfresh.in",
+            "description": "Resolve shop by domain/custom_domain. Returns shop_id, shop_name, shop_image only."
           },
           "response": []
         }

@@ -7,6 +7,7 @@ import { ShopLookupRepoPg } from "../adapters/repositories/postgres/ShopLookupRe
 import { ShopServiceAreaRepoPg } from "../adapters/repositories/postgres/ShopServiceAreaRepoPg.js";
 import { PromotionRepoPg } from "../adapters/repositories/postgres/PromotionRepoPg.js";
 import { env } from "../config/env.js";
+import { effectiveReadCacheTtlSec } from "../config/env/readCacheTtl.js";
 import { createShopResolver } from "../interface/http/middleware/shopResolver.js";
 import { createRequireCustomerJwt } from "../interface/http/middleware/requireCustomerJwt.js";
 import { createLocationGuard } from "../interface/http/middleware/locationGuard.js";
@@ -62,11 +63,30 @@ export function createAppContext() {
   const shopServiceAreaRepo = new ShopServiceAreaRepoPg();
   const promotionRepo = new PromotionRepoPg();
   const redis = getSharedRedisClient();
-  const catalogCache = createCatalogCache({ redis });
-  const promoCacheTtlSec =
+  const cacheOn = env.CACHE_ON !== false;
+  const catalogCacheTtlSec = effectiveReadCacheTtlSec(
+    env.STOREFRONT_CATALOG_CACHE_TTL_SEC,
+    cacheOn
+  );
+  const promoConfiguredTtlSec =
     env.STOREFRONT_PROMO_CACHE_TTL_SEC > 0
       ? env.STOREFRONT_PROMO_CACHE_TTL_SEC
       : env.STOREFRONT_CATALOG_CACHE_TTL_SEC;
+  const promoCacheTtlSec = effectiveReadCacheTtlSec(promoConfiguredTtlSec, cacheOn);
+  const shopResolveCacheTtlSec = effectiveReadCacheTtlSec(
+    env.SHOP_RESOLVE_CACHE_TTL_SEC,
+    cacheOn
+  );
+  const shopServiceAreaCacheTtlSec = effectiveReadCacheTtlSec(
+    env.SHOP_SERVICE_AREA_CACHE_TTL_SEC,
+    cacheOn
+  );
+  const storefrontCatalogHttpCacheSec = effectiveReadCacheTtlSec(
+    env.STOREFRONT_CATALOG_HTTP_CACHE_SEC,
+    cacheOn
+  );
+
+  const catalogCache = createCatalogCache({ redis });
   const shopPromotionCache = createShopPromotionCache({
     catalogCache,
     promotionRepo,
@@ -83,9 +103,9 @@ export function createAppContext() {
         client.release();
       }
     },
-    resolveTtlSec: env.SHOP_RESOLVE_CACHE_TTL_SEC,
-    metaTtlSec: env.SHOP_RESOLVE_CACHE_TTL_SEC,
-    serviceHubTtlSec: env.SHOP_SERVICE_AREA_CACHE_TTL_SEC
+    resolveTtlSec: shopResolveCacheTtlSec,
+    metaTtlSec: shopResolveCacheTtlSec,
+    serviceHubTtlSec: shopServiceAreaCacheTtlSec
   });
   const ensureShopForCatalog = createEnsureShopForCatalog({ shopResolveCache });
   const sessionCache = createSessionCache({ redis });
@@ -143,7 +163,7 @@ export function createAppContext() {
     catalogCache,
     shopPromotionCache,
     shopLookupRepo,
-    catalogCacheTtlSec: env.STOREFRONT_CATALOG_CACHE_TTL_SEC,
+    catalogCacheTtlSec,
     productListCachePolicy: {
       maxLimit: env.STOREFRONT_PRODUCT_LIST_CACHE_MAX_LIMIT,
       maxOffset: env.STOREFRONT_PRODUCT_LIST_CACHE_MAX_OFFSET,
@@ -310,7 +330,7 @@ export function createAppContext() {
     updateStorefrontProfile,
     listApplicableCoupons,
     checkoutStorefront,
-    storefrontCatalogHttpCacheSec: env.STOREFRONT_CATALOG_HTTP_CACHE_SEC,
+    storefrontCatalogHttpCacheSec,
     invalidateShopCatalogCache: async (shopId, opts = {}) => {
       await catalogCache.invalidateShopCatalog(shopId);
       await shopResolveCache.invalidateShop(shopId);

@@ -15,7 +15,7 @@ The storefront API caches read-heavy data in **Redis/Valkey** to keep the mobile
 | Categories & product lists | ~60s (configurable) | Browse, search, home |
 | Product detail by slug/id | ~60s | Product page |
 | Promotions (bundles, coupons, SKU promos) | Same generation as catalog | Prices, badges, offers |
-| Shop domain/slug resolve & shop meta | 3–5 min | Wrong shop / “shop inactive” until cleared |
+| Shop domain/slug resolve & shop meta | 3–5 min (`SHOP_RESOLVE_CACHE_TTL_SEC`, or off with `CACHE_ON=false`) | Wrong shop / “shop inactive” until cleared |
 
 **Cart, checkout, orders, and customer profile are not cached** — only catalog and promotion **reads**.
 

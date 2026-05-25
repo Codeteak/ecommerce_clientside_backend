@@ -1,6 +1,6 @@
 # Production Checklist
 
-Use this checklist before sending real customer traffic to a new API or outbox worker deployment.
+Use this checklist before sending real customer traffic to a new API deployment.
 
 ## 1. Required Env Vars
 
@@ -49,13 +49,13 @@ These settings must stay off in production.
 
 Use this layout for production:
 
-- Run at least **two API tasks** behind a load balancer.
-- Run at least **one outbox worker** so `outbox_messages` are processed.
+- Run at least **two API tasks** behind a load balancer (optional for small deployments; one task is fine to start).
+- Each API process **polls `outbox_messages` in the background** when `OUTBOX_WORKER_ENABLED=true` (default). No separate outbox container is required.
 - Make sure every API task uses the same `DATABASE_URL`.
 - Make sure every API task uses the same `REDIS_URL`.
 - Scrape `GET /metrics` from each task using `METRICS_SCRAPE_TOKEN`.
 
-Outbox worker command:
+Optional standalone outbox process (only if you set `OUTBOX_WORKER_ENABLED=false` on the API):
 
 ```bash
 npm run start:outbox
@@ -98,6 +98,7 @@ Full cache details are in [CACHING.md](./CACHING.md).
 
 | Env var | Default | What it controls |
 |---------|---------|------------------|
+| `CACHE_ON` | `true` | `false` disables all Redis **read** caches (catalog, resolve, promos); keeps rate limits and JWT `jti` |
 | `STOREFRONT_CATALOG_CACHE_TTL_SEC` | `60` | Catalog cache TTL |
 | `STOREFRONT_PROMO_CACHE_TTL_SEC` | `0` | Promo cache TTL; `0` uses catalog TTL |
 | `SHOP_RESOLVE_CACHE_TTL_SEC` | `300` | Domain/slug to shop cache |
@@ -112,6 +113,7 @@ Cache rules:
 - Set Valkey `maxmemory-policy=allkeys-lru`.
 - Around 900 MB is usually enough for 10-30 shops with 60 second TTLs. Still monitor `used_memory`.
 - Invalidate cache after catalog, promotion, or shop domain changes.
+- For debugging stale shop name/logo on resolve-by-domain, set `CACHE_ON=false` or `SHOP_RESOLVE_CACHE_TTL_SEC=0` temporarily (see [CACHING.md](./CACHING.md)).
 - For busy shops, prewarm cache after deploy or cache flush.
 - Watch Prometheus counters like `cache_catalog_*`, `cache_promo_*`, `cache_resolve_*`, and `cache_meta_*`.
 - Cart and checkout JSON responses are not cached.
@@ -175,7 +177,7 @@ Use this only when `REALTIME_ENABLED=true`.
 - Allowed staff roles: `picker`, `owner`, `admin`, or `manager`.
 - The Socket.IO handshake must include `auth.shopId` and `auth.token`.
 - Do not use `REALTIME_CONNECT_TOKEN` in production. It is for staging only.
-- The outbox worker must run so `ORDER_PLACED_REALTIME` retries are sent.
+- The API must have `OUTBOX_WORKER_ENABLED=true` (default) so `ORDER_PLACED_REALTIME` retries are processed.
 
 ## 12. Search
 
@@ -202,8 +204,8 @@ Before going live, confirm:
 - [ ] Required env vars are set.
 - [ ] Forbidden production settings are off.
 - [ ] `/health/ready` is green on every new API task.
-- [ ] The outbox worker is running.
-- [ ] Outbox metrics show messages are processing.
+- [ ] API logs show `Outbox poller started (embedded in API)` (or outbox metrics show messages processing).
+- [ ] Outbox metrics show messages are processing when orders are placed.
 - [ ] Metrics scraping is configured.
 - [ ] The metrics token is not public.
 - [ ] Redis / Valkey memory is monitored.

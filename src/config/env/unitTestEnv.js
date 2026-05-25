@@ -5,7 +5,8 @@
 export const UNIT_TEST_ENV_OVERRIDES = {
   REDIS_URL: "",
   OBJECT_STORAGE_PUBLIC_BASE_URL: "https://storage.test",
-  DISABLE_RATE_LIMITING: "true"
+  DISABLE_RATE_LIMITING: "true",
+  OUTBOX_WORKER_ENABLED: "false"
 };
 
 /** Keys cleared in scripts/cicd/run-unit-tests.sh before vitest (optional; buildEnv also forces overrides). */
