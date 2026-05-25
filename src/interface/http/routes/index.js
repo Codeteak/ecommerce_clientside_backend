@@ -63,12 +63,14 @@ export function createRoutes(ctx) {
   };
 
   const authLimiter = createLimiter({
+    storeId: "auth",
     windowMs: 15 * 60 * 1000,
     maxTest: 10_000,
     maxProd: 60,
     message: "Too many requests. Try again later."
   });
   const otpRequestLimiter = createLimiter({
+    storeId: "otp-request",
     windowMs: 15 * 60 * 1000,
     maxTest: 10_000,
     maxProd: 8,
@@ -76,6 +78,7 @@ export function createRoutes(ctx) {
     keyGenerator: authScopeKey
   });
   const otpVerifyLimiter = createLimiter({
+    storeId: "otp-verify",
     windowMs: 15 * 60 * 1000,
     maxTest: 10_000,
     maxProd: 20,
@@ -84,6 +87,7 @@ export function createRoutes(ctx) {
   });
 
   const cartMutateLimiter = createLimiter({
+    storeId: "cart-mutate",
     windowMs: 60 * 1000,
     maxTest: 10_000,
     maxProd: 120,
@@ -91,6 +95,7 @@ export function createRoutes(ctx) {
   });
 
   const profileMutateLimiter = createLimiter({
+    storeId: "profile-mutate",
     windowMs: 15 * 60 * 1000,
     maxTest: 10_000,
     maxProd: 30,
@@ -99,6 +104,7 @@ export function createRoutes(ctx) {
   });
 
   const addressMutateLimiter = createLimiter({
+    storeId: "address-mutate",
     windowMs: 15 * 60 * 1000,
     maxTest: 10_000,
     maxProd: 25,
@@ -107,6 +113,7 @@ export function createRoutes(ctx) {
   });
 
   const couponsListLimiter = createLimiter({
+    storeId: "coupons-list",
     windowMs: 60 * 1000,
     maxTest: 10_000,
     maxProd: 120,

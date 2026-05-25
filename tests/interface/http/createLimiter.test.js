@@ -5,13 +5,15 @@ const RedisStoreMock = vi.fn(function RedisStoreMock() {
 });
 
 const mockGetSharedRedisClient = vi.fn();
+const mockEnsureSharedRedisReady = vi.fn();
 
 vi.mock("rate-limit-redis", () => ({
   RedisStore: RedisStoreMock
 }));
 
 vi.mock("../../../src/infra/redis/sharedRedis.js", () => ({
-  getSharedRedisClient: () => mockGetSharedRedisClient()
+  getSharedRedisClient: () => mockGetSharedRedisClient(),
+  ensureSharedRedisReady: () => mockEnsureSharedRedisReady()
 }));
 
 describe("createLimiter Redis store", () => {
@@ -19,29 +21,42 @@ describe("createLimiter Redis store", () => {
     vi.resetModules();
     RedisStoreMock.mockClear();
     mockGetSharedRedisClient.mockReset();
+    mockEnsureSharedRedisReady.mockReset();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it("constructs RedisStore when REDIS_URL is set", async () => {
+  it("constructs one RedisStore per storeId when REDIS_URL is set", async () => {
     vi.stubEnv("REDIS_URL", "redis://127.0.0.1:6379");
     vi.stubEnv("DISABLE_RATE_LIMITING", "false");
     vi.stubEnv("NODE_ENV", "development");
-    mockGetSharedRedisClient.mockReturnValue({ call: vi.fn() });
+    mockGetSharedRedisClient.mockReturnValue({ status: "ready", call: vi.fn() });
+    mockEnsureSharedRedisReady.mockResolvedValue({ status: "ready" });
 
-    const { getRateLimitStore, resetRateLimitStoreForTests } = await import(
-      "../../../src/interface/http/middleware/createLimiter.js"
-    );
+    const {
+      getRateLimitStore,
+      resetRateLimitStoreForTests,
+      warmupRateLimitRedis
+    } = await import("../../../src/interface/http/middleware/createLimiter.js");
     resetRateLimitStoreForTests();
+    await warmupRateLimitRedis();
 
-    const store = getRateLimitStore();
-    expect(RedisStoreMock).toHaveBeenCalledTimes(1);
+    const a = getRateLimitStore("auth");
+    const b = getRateLimitStore("otp-request");
+    const aAgain = getRateLimitStore("auth");
+
+    expect(RedisStoreMock).toHaveBeenCalledTimes(2);
     expect(RedisStoreMock.mock.calls[0][0]).toMatchObject({
+      prefix: "rl:auth:",
       sendCommand: expect.any(Function)
     });
-    expect(store).toBeDefined();
+    expect(RedisStoreMock.mock.calls[1][0]).toMatchObject({
+      prefix: "rl:otp-request:"
+    });
+    expect(a).toBe(aAgain);
+    expect(a).not.toBe(b);
   });
 
   it("returns undefined store when REDIS_URL is unset", async () => {
@@ -50,12 +65,13 @@ describe("createLimiter Redis store", () => {
     vi.stubEnv("NODE_ENV", "test");
     mockGetSharedRedisClient.mockReturnValue(null);
 
-    const { getRateLimitStore, resetRateLimitStoreForTests } = await import(
+    const { getRateLimitStore, resetRateLimitStoreForTests, warmupRateLimitRedis } = await import(
       "../../../src/interface/http/middleware/createLimiter.js"
     );
     resetRateLimitStoreForTests();
+    await warmupRateLimitRedis();
 
-    expect(getRateLimitStore()).toBeUndefined();
+    expect(getRateLimitStore("auth")).toBeUndefined();
     expect(RedisStoreMock).not.toHaveBeenCalled();
   });
 });

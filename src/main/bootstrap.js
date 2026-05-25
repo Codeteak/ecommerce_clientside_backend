@@ -12,6 +12,7 @@ import { createAppContext } from "./composition.js";
 import { createExpressApp } from "./server.js";
 import { installFatalProcessHandlers } from "../utils/installFatalProcessHandlers.js";
 import { startOutboxPoller } from "../infra/outbox/startOutboxPoller.js";
+import { warmupRateLimitRedis } from "../interface/http/middleware/createLimiter.js";
 
 /**
  * Purpose: This file starts the application server.
@@ -88,6 +89,8 @@ async function main() {
     maxDelayMs: env.SERVER_DB_RETRY_MAX_DELAY_MS,
     event: "server_start_db_retry"
   });
+
+  await warmupRateLimitRedis();
 
   const ctx = createAppContext();
   const app = createExpressApp(ctx);

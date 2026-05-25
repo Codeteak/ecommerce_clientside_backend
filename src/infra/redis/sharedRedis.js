@@ -4,6 +4,61 @@ import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 
 let client = null;
+/** @type {Promise<import("ioredis").default | null> | null} */
+let readyPromise = null;
+
+const REDIS_READY_TIMEOUT_MS = 10_000;
+
+/**
+ * Wait until the shared client is connected (rate-limit script load, etc.).
+ * @returns {Promise<import("ioredis").default | null>}
+ */
+export function ensureSharedRedisReady() {
+  if (!env.REDIS_URL) return Promise.resolve(null);
+
+  const redis = getSharedRedisClient();
+  if (!redis) return Promise.resolve(null);
+  if (redis.status === "ready") return Promise.resolve(redis);
+
+  if (readyPromise) return readyPromise;
+
+  readyPromise = new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      readyPromise = null;
+      reject(new Error(`Redis not ready within ${REDIS_READY_TIMEOUT_MS}ms`));
+    }, REDIS_READY_TIMEOUT_MS);
+
+    const onReady = () => {
+      cleanup();
+      readyPromise = null;
+      resolve(redis);
+    };
+    const onError = (err) => {
+      cleanup();
+      readyPromise = null;
+      reject(err);
+    };
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      redis.off("ready", onReady);
+      redis.off("error", onError);
+    };
+
+    if (redis.status === "ready") {
+      cleanup();
+      readyPromise = null;
+      resolve(redis);
+      return;
+    }
+
+    redis.once("ready", onReady);
+    redis.once("error", onError);
+  });
+
+  return readyPromise;
+}
 
 /**
  * @returns {import("ioredis").default | null}
@@ -54,6 +109,7 @@ export function getSharedRedisClient() {
 
 /** Close the shared client (e.g. graceful shutdown). Safe to call multiple times. */
 export async function disconnectSharedRedis() {
+  readyPromise = null;
   if (!client) return;
   const c = client;
   client = null;
