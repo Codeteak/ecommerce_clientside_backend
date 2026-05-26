@@ -7,9 +7,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODEBUILD_SRC_DIR="${CODEBUILD_SRC_DIR:-$(pwd)}"
 
 on_err() {
-  echo "docker-build-push: FAILED (exit $?) — check lines above for 'failed to solve', 'denied', '125', or invalid ECR_URI"
+  local code=$?
+  echo "docker-build-push: FAILED (exit ${code})"
+  echo "docker-build-push: common causes:"
+  echo "  - CodeBuild project not ARM_CONTAINER + privilegedMode=true (x86 → binfmt exit 125)"
+  echo "  - ECR login denied or invalid ECR_URI / IMAGE_TAG"
+  echo "  - docker build OOM or Dockerfile npm ci failure (see lines above)"
   docker buildx ls 2>/dev/null || true
-  docker ps -a 2>/dev/null | head -20 || true
+  docker images 2>/dev/null | head -15 || true
+  exit "${code}"
 }
 trap on_err ERR
 
@@ -38,33 +44,61 @@ fi
 echo "docker-build-push: image=${ECR_URI}:${IMAGE_TAG}"
 echo "docker-build-push: context=${CODEBUILD_SRC_DIR}"
 echo "docker-build-push: host_arch=${HOST_ARCH} platform=${TARGET_PLATFORM} native_arm=${NATIVE_ARM}"
+echo "docker-build-push: codebuild_image=${CODEBUILD_BUILD_IMAGE:-unknown}"
+
+if [[ "${NATIVE_ARM}" != "true" && "${TARGET_PLATFORM}" == "linux/arm64" ]]; then
+  echo "docker-build-push: WARNING: building linux/arm64 on non-ARM host (${HOST_ARCH})."
+  echo "docker-build-push: CodeBuild project should use:"
+  echo "  type=ARM_CONTAINER,image=aws/codebuild/amazonlinux2-aarch64-standard:3.0,privilegedMode=true"
+fi
 
 echo "docker-build-push: logging in to ECR..."
 aws ecr get-login-password --region "${AWS_REGION}" | \
   docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
-# CodeBuild ARM (amazonlinux2-aarch64-standard): avoid buildx docker-container driver (often exits 125).
-if [[ "${NATIVE_ARM}" == "true" && "${TARGET_PLATFORM}" == "linux/arm64" ]]; then
-  echo "docker-build-push: native linux/arm64 build (docker build + push)..."
-  export DOCKER_BUILDKIT=1
+native_docker_build() {
+  local use_buildkit="${1:-1}"
+  if [[ "${use_buildkit}" == "1" ]]; then
+    export DOCKER_BUILDKIT=1
+  else
+    unset DOCKER_BUILDKIT || true
+    export DOCKER_BUILDKIT=0
+  fi
   docker build \
     --progress=plain \
     -f "${DOCKERFILE}" \
     -t "${ECR_URI}:${IMAGE_TAG}" \
+    -t "${ECR_URI}:latest" \
     "${CODEBUILD_SRC_DIR}"
+}
+
+# CodeBuild ARM (amazonlinux2-aarch64-standard): avoid buildx docker-container driver (often exits 125).
+if [[ "${NATIVE_ARM}" == "true" && "${TARGET_PLATFORM}" == "linux/arm64" ]]; then
+  echo "docker-build-push: native linux/arm64 build (docker build + push)..."
+  if ! native_docker_build 1; then
+    echo "docker-build-push: BuildKit build failed; retrying with legacy builder..."
+    native_docker_build 0
+  fi
   docker push "${ECR_URI}:${IMAGE_TAG}"
+  if ! docker push "${ECR_URI}:latest" 2>/dev/null; then
+    echo "docker-build-push: latest tag push skipped (ECR tag immutability or policy)"
+  fi
 else
   echo "docker-build-push: cross-platform build via buildx..."
   if [[ "${NATIVE_ARM}" != "true" ]]; then
     echo "docker-build-push: installing QEMU binfmt handlers for cross-arch builds..."
     if ! docker run --privileged --rm tonistiigi/binfmt --install all; then
-      echo "docker-build-push: binfmt install failed — ensure CodeBuild privilegedMode=true"
+      echo "docker-build-push: ERROR: binfmt install failed."
+      echo "docker-build-push: Set CodeBuild privilegedMode=true OR switch project to ARM_CONTAINER."
       exit 125
     fi
   fi
 
   docker buildx rm "${BUILDER_NAME}" 2>/dev/null || true
-  docker buildx create --name "${BUILDER_NAME}" --driver docker-container --use
+  if ! docker buildx create --name "${BUILDER_NAME}" --driver docker-container --use; then
+    echo "docker-build-push: ERROR: buildx create failed (often exit 125 without privilegedMode)"
+    exit 125
+  fi
   docker buildx inspect --bootstrap
 
   docker buildx build \
@@ -74,8 +108,9 @@ else
     --sbom=false \
     --file "${DOCKERFILE}" \
     -t "${ECR_URI}:${IMAGE_TAG}" \
+    -t "${ECR_URI}:latest" \
     --push \
     "${CODEBUILD_SRC_DIR}"
 fi
 
-echo "docker-build-push: push succeeded"
+echo "docker-build-push: push succeeded (${ECR_URI}:${IMAGE_TAG})"
