@@ -119,6 +119,10 @@ export function createStorefrontListingPromotions({ promotionRepo, shopPromotion
       id: product.id,
       name: product.name,
       slug: product.slug,
+      description:
+        product.description != null && String(product.description).trim() !== ""
+          ? String(product.description)
+          : null,
       unit: product.base_unit,
       unit_size: product.unit_size != null ? String(product.unit_size) : "1",
       availability: product.availability,

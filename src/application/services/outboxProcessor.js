@@ -17,41 +17,44 @@ function parsePayload(payload) {
   return {};
 }
 
-let outboxSchemaPromise = null;
+/** @type {{ payloadColumn: string } | null} */
+let resolvedOutboxSchema = null;
+
+/** Clears cached schema (tests, or after running migration without restart). */
+export function resetOutboxSchemaCacheForTests() {
+  resolvedOutboxSchema = null;
+}
 
 async function resolveOutboxSchema(pool) {
-  if (!outboxSchemaPromise) {
-    outboxSchemaPromise = (async () => {
-      const { rows } = await pool.query(
-        `SELECT column_name
-         FROM information_schema.columns
-         WHERE table_schema = 'public'
-           AND table_name = 'outbox_messages'`
-      );
+  if (resolvedOutboxSchema) return resolvedOutboxSchema;
 
-      const columns = new Set(rows.map((r) => r.column_name));
-      const payloadColumn = columns.has("payload")
-        ? "payload"
-        : columns.has("payload_json")
-          ? "payload_json"
-          : null;
-      const required = ["status", "retry_count", "processed_at", "event_type", "created_at", "id"];
-      const missing = required.filter((name) => !columns.has(name));
+  const { rows } = await pool.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'outbox_messages'`
+  );
 
-      if (!payloadColumn || missing.length) {
-        throw new Error(
-          `outbox_messages is missing required worker columns: ${[
-            ...missing,
-            ...(payloadColumn ? [] : ["payload or payload_json"])
-          ].join(", ")}`
-        );
-      }
+  const columns = new Set(rows.map((r) => r.column_name));
+  const payloadColumn = columns.has("payload")
+    ? "payload"
+    : columns.has("payload_json")
+      ? "payload_json"
+      : null;
+  const required = ["status", "retry_count", "processed_at", "event_type", "created_at", "id"];
+  const missing = required.filter((name) => !columns.has(name));
 
-      return { payloadColumn };
-    })();
+  if (!payloadColumn || missing.length) {
+    throw new Error(
+      `outbox_messages is missing required worker columns: ${[
+        ...missing,
+        ...(payloadColumn ? [] : ["payload or payload_json"])
+      ].join(", ")}. Run: npm run db:migrate (applies 036_outbox_worker_columns.sql)`
+    );
   }
 
-  return outboxSchemaPromise;
+  resolvedOutboxSchema = { payloadColumn };
+  return resolvedOutboxSchema;
 }
 
 async function claimPendingBatch(client, batchSize, payloadColumn) {

@@ -75,6 +75,7 @@ export function mapStorefrontProductRow(r, options = {}) {
     id: r.id,
     name: r.name,
     slug: r.slug,
+    description: r.description != null && String(r.description).trim() !== "" ? String(r.description) : null,
     price_minor_per_unit: r.price_minor_per_unit,
     offer_price_minor_per_unit: r.offer_price_minor_per_unit,
     availability: r.availability,

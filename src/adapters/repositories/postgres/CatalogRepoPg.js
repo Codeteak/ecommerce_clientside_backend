@@ -518,6 +518,7 @@ export class CatalogRepoPg extends CatalogRepo {
       const { rows: prodRows } = await client.query(
         `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id,
                 gp.name, gp.slug, gp.base_unit, gp.unit_size::text AS unit_size,
+                gp.description,
                 sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
@@ -582,6 +583,7 @@ export class CatalogRepoPg extends CatalogRepo {
       const { rows: prodRows } = await client.query(
         `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id,
                 gp.name, gp.slug, gp.base_unit, gp.unit_size::text AS unit_size,
+                gp.description,
                 sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
