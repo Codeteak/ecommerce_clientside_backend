@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS global_products (
   name TEXT NOT NULL,
   slug TEXT NOT NULL,
   base_unit TEXT NOT NULL,
+  unit_size NUMERIC(18, 4) NOT NULL DEFAULT 1,
   description TEXT,
   category_path TEXT,
   upc TEXT,

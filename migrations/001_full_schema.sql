@@ -344,6 +344,7 @@ CREATE TABLE IF NOT EXISTS cart_items (
   product_id UUID,
   title_snapshot TEXT NOT NULL,
   quantity NUMERIC(18, 4) NOT NULL,
+  unit_size_snapshot NUMERIC(18, 4) NOT NULL DEFAULT 1,
   unit_label TEXT NOT NULL,
   unit_price_minor BIGINT NOT NULL,
   is_custom BOOLEAN NOT NULL DEFAULT false,
@@ -386,6 +387,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   product_name_snapshot TEXT NOT NULL,
   unit_label_snapshot TEXT NOT NULL,
   quantity NUMERIC(18, 4) NOT NULL,
+  unit_size_snapshot NUMERIC(18, 4) NOT NULL DEFAULT 1,
   unit_price_minor_snapshot BIGINT NOT NULL,
   line_total_minor BIGINT NOT NULL,
   is_custom BOOLEAN NOT NULL DEFAULT false,
@@ -490,6 +492,7 @@ CREATE TABLE IF NOT EXISTS global_products (
   name TEXT NOT NULL,
   slug TEXT NOT NULL,
   base_unit TEXT NOT NULL,
+  unit_size NUMERIC(18, 4) NOT NULL DEFAULT 1,
   description TEXT,
   category_path TEXT,
   upc TEXT,
@@ -2030,3 +2033,31 @@ CREATE INDEX IF NOT EXISTS idx_global_products_name_trgm
 
 CREATE INDEX IF NOT EXISTS idx_global_products_slug_trgm
   ON global_products USING gin (slug gin_trgm_ops);
+
+-- 040_unit_size_columns.sql
+ALTER TABLE global_products
+  ADD COLUMN IF NOT EXISTS unit_size NUMERIC(18, 4) NOT NULL DEFAULT 1;
+
+ALTER TABLE global_products
+  DROP CONSTRAINT IF EXISTS global_products_unit_size_chk;
+
+ALTER TABLE global_products
+  ADD CONSTRAINT global_products_unit_size_chk CHECK (unit_size > 0);
+
+ALTER TABLE cart_items
+  ADD COLUMN IF NOT EXISTS unit_size_snapshot NUMERIC(18, 4) NOT NULL DEFAULT 1;
+
+ALTER TABLE cart_items
+  DROP CONSTRAINT IF EXISTS cart_items_unit_size_snapshot_chk;
+
+ALTER TABLE cart_items
+  ADD CONSTRAINT cart_items_unit_size_snapshot_chk CHECK (unit_size_snapshot > 0);
+
+ALTER TABLE order_items
+  ADD COLUMN IF NOT EXISTS unit_size_snapshot NUMERIC(18, 4) NOT NULL DEFAULT 1;
+
+ALTER TABLE order_items
+  DROP CONSTRAINT IF EXISTS order_items_unit_size_snapshot_chk;
+
+ALTER TABLE order_items
+  ADD CONSTRAINT order_items_unit_size_snapshot_chk CHECK (unit_size_snapshot > 0);

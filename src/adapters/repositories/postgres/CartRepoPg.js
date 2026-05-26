@@ -74,6 +74,7 @@ export class CartRepoPg extends CartRepo {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
       `SELECT ci.id, ci.cart_id, ci.product_id, ci.title_snapshot, ci.quantity::text AS quantity,
+              ci.unit_size_snapshot::text AS unit_size_snapshot,
               ci.unit_label, ci.unit_price_minor, ci.is_custom, ci.custom_note,
               sp.price_minor_per_unit::text AS list_price_minor_per_unit,
               sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
@@ -122,6 +123,7 @@ export class CartRepoPg extends CartRepo {
       titleSnapshot,
       quantity,
       unitLabel,
+      unitSizeSnapshot,
       unitPriceMinor,
       isCustom,
       customNote
@@ -129,11 +131,17 @@ export class CartRepoPg extends CartRepo {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
       `WITH ins AS (
-         INSERT INTO cart_items (cart_id, shop_id, product_id, title_snapshot, quantity, unit_label, unit_price_minor, is_custom, custom_note)
-         VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9)
-         RETURNING id, cart_id, shop_id, product_id, title_snapshot, quantity::text AS quantity, unit_label, unit_price_minor, is_custom, custom_note
+         INSERT INTO cart_items (
+           cart_id, shop_id, product_id, title_snapshot, quantity,
+           unit_size_snapshot, unit_label, unit_price_minor, is_custom, custom_note
+         )
+         VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING id, cart_id, shop_id, product_id, title_snapshot, quantity::text AS quantity,
+                   unit_size_snapshot::text AS unit_size_snapshot,
+                   unit_label, unit_price_minor, is_custom, custom_note
        )
-       SELECT ins.id, ins.cart_id, ins.product_id, ins.title_snapshot, ins.quantity, ins.unit_label, ins.unit_price_minor, ins.is_custom, ins.custom_note,
+       SELECT ins.id, ins.cart_id, ins.product_id, ins.title_snapshot, ins.quantity,
+              ins.unit_size_snapshot, ins.unit_label, ins.unit_price_minor, ins.is_custom, ins.custom_note,
              gp.slug AS product_slug,
              gp.image_url AS global_image_url,
              m.id AS image_media_id,
@@ -169,6 +177,7 @@ export class CartRepoPg extends CartRepo {
         productId,
         titleSnapshot,
         quantity,
+        unitSizeSnapshot ?? "1",
         unitLabel,
         unitPriceMinor,
         isCustom,
@@ -186,8 +195,9 @@ export class CartRepoPg extends CartRepo {
             SET quantity = $2,
                 unit_price_minor = $3,
                 title_snapshot = $4,
-                unit_label = $5
-          WHERE id = $1::uuid AND shop_id = $6::uuid
+                unit_label = $5,
+                unit_size_snapshot = $6
+          WHERE id = $1::uuid AND shop_id = $7::uuid
           RETURNING id, quantity::text AS quantity, shop_id, product_id
        )
       SELECT upd.id, upd.quantity, gp.slug AS product_slug,
@@ -225,6 +235,7 @@ export class CartRepoPg extends CartRepo {
         snapshot.unitPriceMinor,
         snapshot.titleSnapshot,
         snapshot.unitLabel,
+        snapshot.unitSizeSnapshot ?? "1",
         shopId
       ]
     );
@@ -294,7 +305,8 @@ export class CartRepoPg extends CartRepo {
     if (!ids.length) return [];
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
-      `SELECT sp.id, gp.name, gp.base_unit, sp.price_minor_per_unit, sp.status, sp.availability
+      `SELECT sp.id, gp.name, gp.base_unit, gp.unit_size::text AS unit_size,
+              sp.price_minor_per_unit, sp.status, sp.availability
          ${sellableShopProductJoin}
         WHERE sp.shop_id = $1::uuid
           AND sp.id = ANY($2::uuid[])
@@ -364,6 +376,7 @@ export class CartRepoPg extends CartRepo {
     await setTenantContext(client, shopId);
     const { rows: lines } = await client.query(
       `SELECT ci.id, ci.product_id, ci.quantity::text AS quantity, ci.unit_price_minor,
+              ci.unit_size_snapshot::text AS unit_size_snapshot,
               ci.title_snapshot, ci.unit_label, ci.is_custom, ci.custom_note
          FROM cart_items ci
         WHERE ci.cart_id = $1::uuid AND ci.shop_id = $2::uuid

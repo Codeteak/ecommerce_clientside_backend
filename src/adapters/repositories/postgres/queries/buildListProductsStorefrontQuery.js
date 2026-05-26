@@ -79,6 +79,7 @@ export function buildListProductsStorefrontQuery({
           gp.name,
           gp.slug,
           gp.base_unit,
+          gp.unit_size::text AS unit_size,
           sp.status,
           sp.availability,
           sp.price_minor_per_unit::text AS price_minor_per_unit,

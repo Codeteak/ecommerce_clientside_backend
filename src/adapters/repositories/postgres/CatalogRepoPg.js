@@ -17,7 +17,8 @@ export class CatalogRepoPg extends CatalogRepo {
     try {
       await setTenantContext(client, shopId);
       const { rows } = await client.query(
-        `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id, gp.name, gp.slug, gp.base_unit, sp.status,
+        `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id, gp.name, gp.slug, gp.base_unit,
+                gp.unit_size::text AS unit_size, sp.status,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.created_at, sp.updated_at,
                 gp.image_url AS global_image_url,
@@ -180,7 +181,8 @@ export class CatalogRepoPg extends CatalogRepo {
     try {
       await setTenantContext(client, shopId);
       const { rows } = await client.query(
-        `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id, gp.name, gp.slug, gp.base_unit, sp.status, sp.availability,
+        `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id, gp.name, gp.slug, gp.base_unit,
+                gp.unit_size::text AS unit_size, sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.created_at, sp.updated_at,
                 gp.image_url AS global_image_url,
@@ -515,7 +517,8 @@ export class CatalogRepoPg extends CatalogRepo {
       await setTenantContext(client, shopId);
       const { rows: prodRows } = await client.query(
         `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id,
-                gp.name, gp.slug, gp.base_unit, sp.status, sp.availability,
+                gp.name, gp.slug, gp.base_unit, gp.unit_size::text AS unit_size,
+                sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
                 sp.created_at, sp.updated_at, sp.global_product_id, gp.image_url AS global_image_url
@@ -578,7 +581,8 @@ export class CatalogRepoPg extends CatalogRepo {
       await setTenantContext(client, shopId);
       const { rows: prodRows } = await client.query(
         `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id,
-                gp.name, gp.slug, gp.base_unit, sp.status, sp.availability,
+                gp.name, gp.slug, gp.base_unit, gp.unit_size::text AS unit_size,
+                sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
                 sp.created_at, sp.updated_at, sp.global_product_id, gp.image_url AS global_image_url

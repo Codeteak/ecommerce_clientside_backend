@@ -79,6 +79,7 @@ export function mapStorefrontProductRow(r, options = {}) {
     offer_price_minor_per_unit: r.offer_price_minor_per_unit,
     availability: r.availability,
     unit: r.base_unit,
+    unit_size: r.unit_size != null ? String(r.unit_size) : "1",
     thumbnail:
       thumbnailUrl != null
         ? {

@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS cart_items (
   product_id UUID,
   title_snapshot TEXT NOT NULL,
   quantity NUMERIC(18, 4) NOT NULL,
+  unit_size_snapshot NUMERIC(18, 4) NOT NULL DEFAULT 1,
   unit_label TEXT NOT NULL,
   unit_price_minor BIGINT NOT NULL,
   is_custom BOOLEAN NOT NULL DEFAULT false,

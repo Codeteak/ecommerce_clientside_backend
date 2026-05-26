@@ -120,6 +120,7 @@ export function createStorefrontListingPromotions({ promotionRepo, shopPromotion
       name: product.name,
       slug: product.slug,
       unit: product.base_unit,
+      unit_size: product.unit_size != null ? String(product.unit_size) : "1",
       availability: product.availability,
       category_id: product.category_id,
       images

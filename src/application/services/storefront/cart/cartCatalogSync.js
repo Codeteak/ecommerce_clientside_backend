@@ -73,12 +73,17 @@ export function createCartCatalogSync({ cartRepo }) {
 
       assertLineQuantity(qty);
 
-      if (priceUpdated || String(it.title_snapshot) !== String(p.name)) {
+      const liveUnitSize = String(p.unit_size ?? "1");
+      const storedUnitSize = String(it.unit_size_snapshot ?? "1");
+      const unitSizeUpdated = storedUnitSize !== liveUnitSize;
+
+      if (priceUpdated || String(it.title_snapshot) !== String(p.name) || unitSizeUpdated) {
         await cartRepo.updateCartItemSnapshot(client, shopId, it.id, {
           quantity: qty,
           unitPriceMinor: listPrice,
           titleSnapshot: p.name,
-          unitLabel: p.base_unit
+          unitLabel: p.base_unit,
+          unitSizeSnapshot: liveUnitSize
         });
         mutated = true;
       }

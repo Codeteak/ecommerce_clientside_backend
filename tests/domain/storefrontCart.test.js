@@ -13,6 +13,7 @@ function productSnapshot(overrides = {}) {
     id: productId,
     name: "Apple",
     base_unit: "kg",
+    unit_size: "2",
     price_minor_per_unit: 100,
     status: "active",
     availability: "in_stock",
@@ -26,6 +27,7 @@ function cartLine(overrides = {}) {
     product_id: productId,
     title_snapshot: "Apple",
     unit_label: "kg",
+    unit_size_snapshot: "2",
     quantity: "2",
     unit_price_minor: 100,
     list_price_minor_per_unit: "100",
@@ -115,10 +117,29 @@ describe("storefront cart", () => {
       quantity: 3
     });
 
-    expect(d.cartRepo.updateCartItemSnapshot).toHaveBeenCalled();
+    expect(d.cartRepo.updateCartItemSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      shopId,
+      cartItemId,
+      expect.objectContaining({ unitSizeSnapshot: "2" })
+    );
     expect(out.cart_id).toBe(cartId);
     expect(out.promotions).toBeDefined();
     expect(out.summary.subtotal_minor).toBe(180);
+  });
+
+  it("snapshots unit_size when inserting a new cart line", async () => {
+    const d = deps();
+    const service = createStorefrontCart(d);
+    await service.addItem({}, shopId, { customerId: "cust-1" }, { productId, quantity: 1 });
+
+    expect(d.cartRepo.insertCartItem).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        unitSizeSnapshot: "2",
+        unitLabel: "kg"
+      })
+    );
   });
 
   it("returns promotion and coupon blocks on GET cart", async () => {

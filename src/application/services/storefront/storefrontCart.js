@@ -96,7 +96,8 @@ export function createStorefrontCart({
           quantity: mergedQty,
           unitPriceMinor: Number(p.price_minor_per_unit),
           titleSnapshot: p.name,
-          unitLabel: p.base_unit
+          unitLabel: p.base_unit,
+          unitSizeSnapshot: String(p.unit_size ?? "1")
         });
       } else {
         await cartRepo.insertCartItem(client, {
@@ -106,6 +107,7 @@ export function createStorefrontCart({
           titleSnapshot: p.name,
           quantity: q,
           unitLabel: p.base_unit,
+          unitSizeSnapshot: String(p.unit_size ?? "1"),
           unitPriceMinor: Number(p.price_minor_per_unit),
           isCustom: false,
           customNote: null
@@ -144,7 +146,8 @@ export function createStorefrontCart({
           quantity: targetQty,
           unitPriceMinor: Number(p.price_minor_per_unit),
           titleSnapshot: p.name,
-          unitLabel: p.base_unit
+          unitLabel: p.base_unit,
+          unitSizeSnapshot: String(p.unit_size ?? "1")
         });
       } else {
         await cartRepo.updateCartItemQuantity(client, shopId, itemId, targetQty);

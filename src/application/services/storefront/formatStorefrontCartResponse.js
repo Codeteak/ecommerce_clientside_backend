@@ -75,6 +75,7 @@ export function formatStorefrontCartItem(row, pricedLine) {
     slug: row.product_slug ?? null,
     title: row.title_snapshot ?? null,
     unit: row.unit_label ?? null,
+    unit_size: row.unit_size_snapshot != null ? String(row.unit_size_snapshot) : "1",
     image_url: pickImageUrl(row),
     quantity: inCartQty,
     offer_quantity: offerQty,

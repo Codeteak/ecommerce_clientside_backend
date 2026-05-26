@@ -1,5 +1,9 @@
 import { checkoutError, minorFromLine, orderLineQuantitiesFromPriced } from "./checkoutInput.js";
 
+function unitSizeSnapshotFromCartLine(it) {
+  return String(it.unit_size_snapshot ?? "1");
+}
+
 export async function loadLiveProductPricingMap(cartRepo, client, shopId, items) {
   const productIds = [
     ...new Set(items.filter((it) => !it.is_custom && it.product_id).map((it) => String(it.product_id)))
@@ -90,7 +94,8 @@ export async function buildCheckoutOrderLines({
           lineDiscountMinor: 0,
           appliedPromotionIds: [],
           isCustom: it.is_custom,
-          customNote: it.custom_note
+          customNote: it.custom_note,
+          unitSizeSnapshot: unitSizeSnapshotFromCartLine(it)
         };
       }
       const p = pricedByCartItem.get(String(it.id));
@@ -115,7 +120,8 @@ export async function buildCheckoutOrderLines({
         lineDiscountMinor,
         appliedPromotionIds: p?.applied_promotion_ids ?? [],
         isCustom: it.is_custom,
-        customNote: it.custom_note
+        customNote: it.custom_note,
+        unitSizeSnapshot: unitSizeSnapshotFromCartLine(it)
       };
     });
   } else {
@@ -136,7 +142,8 @@ export async function buildCheckoutOrderLines({
         lineDiscountMinor: 0,
         appliedPromotionIds: [],
         isCustom: it.is_custom,
-        customNote: it.custom_note
+        customNote: it.custom_note,
+        unitSizeSnapshot: unitSizeSnapshotFromCartLine(it)
       };
     });
   }

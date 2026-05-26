@@ -475,6 +475,10 @@ export const schemas = {
       slug: { type: "string", nullable: true },
       title: { type: "string", nullable: true },
       unit: { type: "string", nullable: true },
+      unit_size: {
+        type: "string",
+        description: "Pack size snapshot from catalog (decimal string, default 1). Display only; does not change line totals."
+      },
       image_url: { type: "string", nullable: true, format: "uri" },
       quantity: {
         type: "number",
@@ -535,6 +539,14 @@ export const schemas = {
       product_slug: { type: "string", nullable: true },
       product_name_snapshot: { type: "string" },
       unit_label_snapshot: { type: "string" },
+      unit_size_snapshot: {
+        type: "string",
+        description: "Catalog unit_size at checkout (decimal string)."
+      },
+      unit_size: {
+        type: "string",
+        description: "Alias of unit_size_snapshot for storefront clients."
+      },
       quantity: { type: "string", description: "Decimal quantity (Postgres numeric serialized as string)." },
       unit_price_minor_snapshot: { type: "integer", description: "Minor units (e.g. paise)." },
       line_total_minor: { type: "integer" },

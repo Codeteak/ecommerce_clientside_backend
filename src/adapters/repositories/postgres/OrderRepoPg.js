@@ -51,6 +51,10 @@ export class OrderRepoPg extends OrderRepo {
       product_slug: row.product_slug,
       product_name_snapshot: row.product_name_snapshot,
       unit_label_snapshot: row.unit_label_snapshot,
+      unit_size_snapshot:
+        row.unit_size_snapshot != null ? String(row.unit_size_snapshot) : "1",
+      unit_size:
+        row.unit_size_snapshot != null ? String(row.unit_size_snapshot) : "1",
       quantity: row.quantity,
       unit_price_minor_snapshot: row.unit_price_minor_snapshot,
       line_total_minor: row.line_total_minor,
@@ -141,11 +145,12 @@ export class OrderRepoPg extends OrderRepo {
       );
       const isCustoms = items.map((it) => Boolean(it.isCustom));
       const customNotes = items.map((it) => it.customNote ?? null);
+      const unitSizeSnapshots = items.map((it) => String(it.unitSizeSnapshot ?? "1"));
 
       await client.query(
         `INSERT INTO order_items (
            order_id, product_id, product_name_snapshot, unit_label_snapshot,
-           quantity, unit_price_minor_snapshot, line_total_minor,
+           unit_size_snapshot, quantity, unit_price_minor_snapshot, line_total_minor,
            list_price_minor, line_discount_minor, applied_promotion_ids,
            is_custom, custom_note
          )
@@ -153,6 +158,7 @@ export class OrderRepoPg extends OrderRepo {
                 u.product_id,
                 u.product_name_snapshot,
                 u.unit_label_snapshot,
+                u.unit_size_snapshot,
                 u.quantity,
                 u.unit_price_minor_snapshot,
                 u.line_total_minor,
@@ -166,17 +172,19 @@ export class OrderRepoPg extends OrderRepo {
              $3::text[],
              $4::text[],
              $5::numeric[],
-             $6::int[],
+             $6::numeric[],
              $7::int[],
              $8::int[],
              $9::int[],
-             $10::jsonb[],
-             $11::boolean[],
-             $12::text[]
+             $10::int[],
+             $11::jsonb[],
+             $12::boolean[],
+             $13::text[]
            ) AS u(
              product_id,
              product_name_snapshot,
              unit_label_snapshot,
+             unit_size_snapshot,
              quantity,
              unit_price_minor_snapshot,
              line_total_minor,
@@ -191,6 +199,7 @@ export class OrderRepoPg extends OrderRepo {
           productIds,
           names,
           unitLabels,
+          unitSizeSnapshots,
           quantities,
           unitPrices,
           lineTotals,
@@ -232,6 +241,7 @@ export class OrderRepoPg extends OrderRepo {
     const orderIds = rows.map((r) => r.id);
     const { rows: itemRows } = await client.query(
       `SELECT oi.order_id, oi.id, oi.product_id, oi.product_name_snapshot, oi.unit_label_snapshot,
+              oi.unit_size_snapshot::text AS unit_size_snapshot,
               oi.quantity::text AS quantity, oi.unit_price_minor_snapshot, oi.line_total_minor,
               oi.list_price_minor, oi.line_discount_minor, oi.applied_promotion_ids,
               oi.is_custom, oi.custom_note,
@@ -316,6 +326,7 @@ export class OrderRepoPg extends OrderRepo {
     if (!order) return null;
     const { rows: items } = await client.query(
       `SELECT oi.id, oi.product_id, oi.product_name_snapshot, oi.unit_label_snapshot,
+              oi.unit_size_snapshot::text AS unit_size_snapshot,
               quantity::text AS quantity, unit_price_minor_snapshot, line_total_minor,
               oi.list_price_minor, oi.line_discount_minor, oi.applied_promotion_ids,
               is_custom, custom_note,
