@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS shops (
   owner_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   is_blocked BOOLEAN NOT NULL DEFAULT false,
   is_deleted BOOLEAN NOT NULL DEFAULT false,
+  banner_enabled BOOLEAN NOT NULL DEFAULT true,
+  banner_media_asset_ids UUID[] NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at TIMESTAMPTZ

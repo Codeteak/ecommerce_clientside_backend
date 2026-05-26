@@ -95,5 +95,31 @@ describe("shopResolveCache", () => {
     expect(a).toEqual(summary);
     expect(b).toEqual(summary);
     expect(shopLookupRepo.findShopByDomain).toHaveBeenCalledTimes(1);
+    expect(
+      Object.keys(store).some((k) => k === "resolve:domain-summary:v4:shop.example.com")
+    ).toBe(true);
+  });
+
+  it("invalidateDomain clears v4 domain summary key", async () => {
+    const redis = mockRedis();
+    store["resolve:domain-summary:v4:shop.example.com"] = "{}";
+    store["resolve:domain-summary:v3:shop.example.com"] = "{}";
+    const shopLookupRepo = {
+      findShopIdBySlug: vi.fn(),
+      findShopIdByCustomDomain: vi.fn(),
+      findShopIdByDomain: vi.fn(),
+      findShopByDomain: vi.fn()
+    };
+    const cache = createShopResolveCache({
+      redis,
+      shopLookupRepo,
+      getShopById: vi.fn(),
+      resolveTtlSec: 300
+    });
+
+    await cache.invalidateDomain("shop.example.com");
+
+    expect(store["resolve:domain-summary:v4:shop.example.com"]).toBeUndefined();
+    expect(store["resolve:domain-summary:v3:shop.example.com"]).toBeUndefined();
   });
 });

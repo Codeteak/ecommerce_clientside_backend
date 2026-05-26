@@ -13,7 +13,13 @@ export class ShopLookupRepo {
   }
 
   /**
-   * @returns {Promise<{ id: string, name: string, shop_image_storage_key?: string | null } | null>}
+   * @returns {Promise<{
+   *   id: string,
+   *   name: string,
+   *   shop_image_storage_key?: string | null,
+   *   banner_enabled?: boolean,
+   *   banner_storage_keys?: string[]
+   * } | null>}
    */
   async findShopByDomain(_domain) {
     throw new Error("Not implemented");
@@ -21,7 +27,13 @@ export class ShopLookupRepo {
 
   /**
    * @param {string} _shopId
-   * @returns {Promise<{ id: string, name: string, shop_image_storage_key?: string | null } | null>}
+   * @returns {Promise<{
+   *   id: string,
+   *   name: string,
+   *   shop_image_storage_key?: string | null,
+   *   banner_enabled?: boolean,
+   *   banner_storage_keys?: string[]
+   * } | null>}
    */
   async findShopBrandingById(_shopId) {
     throw new Error("Not implemented");

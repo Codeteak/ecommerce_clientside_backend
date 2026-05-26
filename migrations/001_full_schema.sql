@@ -126,6 +126,8 @@ CREATE TABLE IF NOT EXISTS shops (
   owner_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   is_blocked BOOLEAN NOT NULL DEFAULT false,
   is_deleted BOOLEAN NOT NULL DEFAULT false,
+  banner_enabled BOOLEAN NOT NULL DEFAULT true,
+  banner_media_asset_ids UUID[] NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at TIMESTAMPTZ
@@ -2061,3 +2063,17 @@ ALTER TABLE order_items
 
 ALTER TABLE order_items
   ADD CONSTRAINT order_items_unit_size_snapshot_chk CHECK (unit_size_snapshot > 0);
+
+-- 041_shop_banner_columns.sql
+ALTER TABLE shops
+  ADD COLUMN IF NOT EXISTS banner_enabled BOOLEAN NOT NULL DEFAULT true;
+
+ALTER TABLE shops
+  ADD COLUMN IF NOT EXISTS banner_media_asset_ids UUID[] NOT NULL DEFAULT '{}';
+
+ALTER TABLE shops
+  DROP CONSTRAINT IF EXISTS shops_banner_media_asset_ids_max_chk;
+
+ALTER TABLE shops
+  ADD CONSTRAINT shops_banner_media_asset_ids_max_chk
+  CHECK (cardinality(banner_media_asset_ids) <= 6);

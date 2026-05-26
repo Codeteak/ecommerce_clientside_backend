@@ -77,7 +77,7 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/shops/resolve-by-domain?domain=marketfresh.in",
-            "description": "Resolve shop by domain/custom_domain. Returns shop_id, shop_name, shop_image only."
+            "description": "Resolve shop by domain/custom_domain. Returns shop_id, shop_name, shop_image, banner_enabled, and banner_images (ordered URLs)."
           },
           "response": []
         }

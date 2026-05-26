@@ -130,7 +130,7 @@ export function buildPaths() {
         tags: ["Shops"],
         summary: "Resolve shop by domain",
         description:
-          "Returns `shop_id`, `shop_name`, and `shop_image` (public URL) for a matching `shops.domain` or `shops.custom_domain`. Logo from `entity_images` where `entity_type = 'shop'`. Pass `domain` as hostname only (e.g. `marketfresh.in`); `https://` and `www.` are stripped if present.",
+          "Returns `shop_id`, `shop_name`, `shop_image` (public URL), `banner_enabled`, and `banner_images` (ordered public URLs from `shops.banner_media_asset_ids`; layout/slots are client-side). Logo from `entity_images` where `entity_type = 'shop'`. Pass `domain` as hostname only (e.g. `marketfresh.in`); `https://` and `www.` are stripped if present.",
         parameters: [
           {
             name: "domain",
@@ -149,9 +149,16 @@ export function buildPaths() {
                   properties: {
                     shop_id: { type: "string", format: "uuid" },
                     shop_name: { type: "string" },
-                    shop_image: { type: "string", nullable: true, format: "uri" }
+                    shop_image: { type: "string", nullable: true, format: "uri" },
+                    banner_enabled: { type: "boolean" },
+                    banner_images: {
+                      type: "array",
+                      items: { type: "string", format: "uri" },
+                      description:
+                        "Ordered banner image URLs (max 6). Empty when banner_enabled is false."
+                    }
                   },
-                  required: ["shop_id", "shop_name", "shop_image"]
+                  required: ["shop_id", "shop_name", "shop_image", "banner_enabled", "banner_images"]
                 }
               }
             }

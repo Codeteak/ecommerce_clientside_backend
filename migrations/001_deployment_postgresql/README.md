@@ -8,3 +8,4 @@
 - Regenerate the monolith from split files after table changes: **`npm run db:build-full-schema`** (if that script is present).
 - Phase 4 (`037`–`039`): cart index/unique, optional `pg_trgm` for search. See `docs/PHASE4_EXPLAIN_VERIFY.md`. Run `038` only after duplicate-cart audit; use `scripts/ops/dedupe-duplicate-carts.sql` if needed. Skip `039` when extensions are not allowed.
 - `040_unit_size_columns.sql`: `global_products.unit_size` and cart/order line snapshots (`unit_size_snapshot`), default `1`, must be `> 0`.
+- `041_shop_banner_columns.sql`: `shops.banner_enabled` (default `true`) and `shops.banner_media_asset_ids` (UUID array, max 6).
