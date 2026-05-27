@@ -60,14 +60,16 @@ aws ecr get-login-password --region "${AWS_REGION}" | \
 
 native_docker_build() {
   local use_buildkit="${1:-1}"
+  local progress_args=()
   if [[ "${use_buildkit}" == "1" ]]; then
     export DOCKER_BUILDKIT=1
+    progress_args=(--progress=plain)
   else
     unset DOCKER_BUILDKIT || true
     export DOCKER_BUILDKIT=0
   fi
   docker build \
-    --progress=plain \
+    "${progress_args[@]}" \
     --platform "${TARGET_PLATFORM}" \
     -f "${DOCKERFILE}" \
     -t "${ECR_URI}:${IMAGE_TAG}" \
