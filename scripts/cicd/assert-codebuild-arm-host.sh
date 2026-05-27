@@ -1,24 +1,3 @@
 #!/usr/bin/env bash
-# Fail fast when CodeBuild is not on an ARM host (linux/arm64 images require ARM_CONTAINER).
-set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/cicd/lib/arm-environment.sh
-. "${SCRIPT_DIR}/lib/arm-environment.sh"
-
-arm_print_environment_summary
-
-if arm_is_arm_build_environment; then
-  echo "assert-codebuild-arm-host: OK host_arch=$(arm_detect_host_arch) build_image=${CODEBUILD_BUILD_IMAGE:-n/a}"
-  exit 0
-fi
-
-echo "assert-codebuild-arm-host: FAILED"
-echo "  host_arch=$(arm_detect_host_arch) (expected aarch64/arm64)"
-echo "  CODEBUILD_BUILD_IMAGE=${CODEBUILD_BUILD_IMAGE:-unset}"
-echo "  CODEBUILD_PROJECT_NAME=${CODEBUILD_PROJECT_NAME:-unset}"
-echo ""
-arm_diagnose_codebuild_project
-echo ""
-arm_print_fix_instructions "${CODEBUILD_PROJECT_NAME:-}" "${AWS_REGION:-ap-south-1}"
-exit 1
+# Deprecated alias — use ensure-codebuild-arm-host.sh
+exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ensure-codebuild-arm-host.sh" "$@"

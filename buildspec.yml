@@ -25,8 +25,8 @@ phases:
   pre_build:
     commands:
       - echo "=== PRE_BUILD $(date -u +%FT%TZ) ==="
-      - chmod +x scripts/cicd/assert-codebuild-arm-host.sh scripts/cicd/docker-build-push.sh
-      - bash scripts/cicd/assert-codebuild-arm-host.sh
+      - chmod +x scripts/cicd/ensure-codebuild-arm-host.sh scripts/cicd/docker-build-push.sh
+      - bash scripts/cicd/ensure-codebuild-arm-host.sh
       - . scripts/cicd/codebuild-env.sh
       - echo "Installing dependencies..."
       - npm ci --include=dev --loglevel=info

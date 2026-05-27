@@ -126,6 +126,7 @@ Next actions (run manually once values are verified):
    - AWSCodeDeployFullAccess (or least-privileged equivalent for agent operations)
 
 6) Ensure CodeBuild service role permissions include:
+   - codebuild:UpdateProject (optional; lets ensure-codebuild-arm-host.sh auto-fix ARM on first failed build)
    - ecr:GetAuthorizationToken
    - ecr:BatchCheckLayerAvailability
    - ecr:CompleteLayerUpload
