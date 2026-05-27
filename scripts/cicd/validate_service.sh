@@ -2,7 +2,8 @@
 set -euo pipefail
 
 APP_DIR="/home/deploy/yaadro/ecommerce_clientside_backend"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:4100/health/ready}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:4100/health}"
+SECONDARY_HEALTH_URL="${SECONDARY_HEALTH_URL:-http://127.0.0.1:4100/health/ready}"
 IMAGE_DETAIL_FILE="${APP_DIR}/image-detail.json"
 
 cd "${APP_DIR}"
@@ -22,10 +23,10 @@ compose_cmd() {
   fi
 }
 
-echo "[validate_service] Checking ${HEALTH_URL}..."
+echo "[validate_service] Checking ${HEALTH_URL} (fallback: ${SECONDARY_HEALTH_URL})..."
 
 for _ in $(seq 1 20); do
-  if curl -fsS "${HEALTH_URL}" >/dev/null 2>&1; then
+  if curl -fsS "${HEALTH_URL}" >/dev/null 2>&1 || curl -fsS "${SECONDARY_HEALTH_URL}" >/dev/null 2>&1; then
     echo "[validate_service] Readiness check passed."
     compose_cmd ps || true
     exit 0

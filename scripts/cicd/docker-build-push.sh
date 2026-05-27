@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and push the API image from CodeBuild. ARM hosts use plain docker build; x86 uses buildx + QEMU.
+# Build and push the API image from CodeBuild on native ARM only.
 
 set -euo pipefail
 
@@ -35,20 +35,20 @@ if [[ ! -f "${DOCKERFILE}" ]]; then
   exit 1
 fi
 
-BUILDER_NAME="${DOCKER_BUILDX_BUILDER:-clientside-builder}"
 HOST_ARCH="$(arm_detect_host_arch)"
 TARGET_PLATFORM="${DOCKER_PLATFORM:-linux/arm64}"
-NATIVE_ARM=false
-if arm_is_arm_build_environment; then
-  NATIVE_ARM=true
-fi
 
 echo "docker-build-push: image=${ECR_URI}:${IMAGE_TAG}"
 echo "docker-build-push: context=${CODEBUILD_SRC_DIR}"
-echo "docker-build-push: host_arch=${HOST_ARCH} platform=${TARGET_PLATFORM} native_arm=${NATIVE_ARM}"
+echo "docker-build-push: host_arch=${HOST_ARCH} platform=${TARGET_PLATFORM}"
 echo "docker-build-push: codebuild_image=${CODEBUILD_BUILD_IMAGE:-unknown}"
 
-if [[ "${NATIVE_ARM}" != "true" && "${TARGET_PLATFORM}" == "linux/arm64" ]]; then
+if [[ "${TARGET_PLATFORM}" != "linux/arm64" ]]; then
+  echo "docker-build-push: ERROR: unsupported platform ${TARGET_PLATFORM} (expected linux/arm64)."
+  exit 1
+fi
+
+if ! arm_is_arm_build_environment; then
   echo "docker-build-push: ERROR: cannot build ${TARGET_PLATFORM} on host ${HOST_ARCH}."
   arm_print_fix_instructions
   exit 1
@@ -75,42 +75,14 @@ native_docker_build() {
     "${CODEBUILD_SRC_DIR}"
 }
 
-# CodeBuild ARM (amazonlinux2-aarch64-standard): avoid buildx docker-container driver (often exits 125).
-if [[ "${NATIVE_ARM}" == "true" && "${TARGET_PLATFORM}" == "linux/arm64" ]]; then
-  echo "docker-build-push: native linux/arm64 build (docker build + push)..."
-  if ! native_docker_build 1; then
-    echo "docker-build-push: BuildKit build failed; retrying with legacy builder..."
-    native_docker_build 0
-  fi
-  docker push "${ECR_URI}:${IMAGE_TAG}"
-  if ! docker push "${ECR_URI}:latest" 2>/dev/null; then
-    echo "docker-build-push: latest tag push skipped (ECR tag immutability or policy)"
-  fi
-else
-  echo "docker-build-push: cross-platform build via buildx (host=${HOST_ARCH} platform=${TARGET_PLATFORM})..."
-  echo "docker-build-push: installing QEMU binfmt handlers..."
-  if ! docker run --privileged --rm tonistiigi/binfmt --install all; then
-    echo "docker-build-push: ERROR: binfmt install failed (privilegedMode=true required on x86)."
-    exit 1
-  fi
-
-  docker buildx rm "${BUILDER_NAME}" 2>/dev/null || true
-  if ! docker buildx create --name "${BUILDER_NAME}" --driver docker-container --use; then
-    echo "docker-build-push: ERROR: buildx create failed (privilegedMode=true required)."
-    exit 1
-  fi
-  docker buildx inspect --bootstrap
-
-  docker buildx build \
-    --progress=plain \
-    --platform "${TARGET_PLATFORM}" \
-    --provenance=false \
-    --sbom=false \
-    --file "${DOCKERFILE}" \
-    -t "${ECR_URI}:${IMAGE_TAG}" \
-    -t "${ECR_URI}:latest" \
-    --push \
-    "${CODEBUILD_SRC_DIR}"
+echo "docker-build-push: native linux/arm64 build (docker build + push)..."
+if ! native_docker_build 1; then
+  echo "docker-build-push: BuildKit build failed; retrying with legacy builder..."
+  native_docker_build 0
+fi
+docker push "${ECR_URI}:${IMAGE_TAG}"
+if ! docker push "${ECR_URI}:latest" 2>/dev/null; then
+  echo "docker-build-push: latest tag push skipped (ECR tag immutability or policy)"
 fi
 
 echo "docker-build-push: push succeeded (${ECR_URI}:${IMAGE_TAG})"

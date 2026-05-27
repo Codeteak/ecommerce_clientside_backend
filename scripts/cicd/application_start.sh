@@ -23,11 +23,16 @@ echo "[application_start] Appending runtime overrides..."
   echo "PORT=4100"
   echo "DATABASE_SSL_REJECT_UNAUTHORIZED=${DATABASE_SSL_REJECT_UNAUTHORIZED:-false}"
   echo "TRUST_PROXY=true"
-  echo "JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-$(openssl rand -base64 32)}"
   # Stripped from Secrets Manager above; schema defaults missing ENABLE_API_DOCS to true.
   echo "ENABLE_API_DOCS=false"
   echo "ALLOW_API_DOCS_IN_PRODUCTION=false"
 } >> .env
+
+if ! grep -q '^JWT_REFRESH_SECRET=' .env; then
+  echo "[application_start] Missing JWT_REFRESH_SECRET in AWS secret ${SECRET_ID}."
+  echo "[application_start] Refusing to auto-generate a production refresh secret."
+  exit 1
+fi
 
 if [[ ! -f "${IMAGE_DETAIL_FILE}" ]]; then
   echo "[application_start] Missing ${IMAGE_DETAIL_FILE}. Build artifact is incomplete."
