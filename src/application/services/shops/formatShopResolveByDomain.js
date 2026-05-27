@@ -109,15 +109,10 @@ export function formatShopResolveByDomain(row) {
 
   return {
     shop_id: normalized.id,
-    shopId: normalized.id,
     shop_name: normalized.name,
-    shopName: normalized.name,
     shop_image,
-    shopImage: shop_image,
     banner_enabled: normalized.banner_enabled,
-    bannerEnabled: normalized.banner_enabled,
     banner_images,
-    bannerImages: banner_images,
     seo
   };
 }

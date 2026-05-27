@@ -9,7 +9,7 @@ describe("formatShopResolveByDomain", () => {
     expect(formatShopResolveByDomain(null)).toBeNull();
   });
 
-  it("returns shop fields, camelCase aliases, banner_images, and seo block", () => {
+  it("returns shop fields, banner_images, and seo block", () => {
     const out = formatShopResolveByDomain({
       id: "11111111-1111-4111-8111-111111111111",
       name: "Demo Shop",
@@ -21,18 +21,18 @@ describe("formatShopResolveByDomain", () => {
       banner_storage_keys: ["banners/hero.jpg", "banners/side.jpg"]
     });
     expect(out?.shop_id).toBe("11111111-1111-4111-8111-111111111111");
-    expect(out?.shopId).toBe("11111111-1111-4111-8111-111111111111");
     expect(out?.shop_name).toBe("Demo Shop");
-    expect(out?.shopName).toBe("Demo Shop");
     expect(out?.shop_image).toBe(`${base}/shops/demo/logo.png`);
-    expect(out?.shopImage).toBe(`${base}/shops/demo/logo.png`);
     expect(out?.banner_enabled).toBe(true);
-    expect(out?.bannerEnabled).toBe(true);
     expect(out?.banner_images).toEqual([
       `${base}/banners/hero.jpg`,
       `${base}/banners/side.jpg`
     ]);
-    expect(out?.bannerImages).toEqual(out?.banner_images);
+    expect(out).not.toHaveProperty("shopId");
+    expect(out).not.toHaveProperty("shopName");
+    expect(out).not.toHaveProperty("shopImage");
+    expect(out).not.toHaveProperty("bannerEnabled");
+    expect(out).not.toHaveProperty("bannerImages");
     expect(out?.seo).toMatchObject({
       title: "Demo – Groceries",
       description: "Shop online.",
@@ -51,7 +51,6 @@ describe("formatShopResolveByDomain", () => {
     });
     expect(out?.banner_enabled).toBe(false);
     expect(out?.banner_images).toEqual([]);
-    expect(out?.bannerImages).toEqual([]);
   });
 
   it("skips empty storage keys in banner_images", () => {
@@ -94,6 +93,5 @@ describe("formatShopResolveByDomain", () => {
       shop_image_storage_key: null
     });
     expect(out?.shop_image).toBeNull();
-    expect(out?.shopImage).toBeNull();
   });
 });
