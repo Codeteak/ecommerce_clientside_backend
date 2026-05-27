@@ -1,7 +1,7 @@
 ###
 # Stage 1: dependencies (cached)
 ###
-FROM node:22-alpine3.20 AS deps
+FROM public.ecr.aws/docker/library/node:22-alpine3.20 AS deps
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/root/.npm \
 ###
 # Stage 2: runtime
 ###
-FROM node:22-alpine3.20 AS runtime
+FROM public.ecr.aws/docker/library/node:22-alpine3.20 AS runtime
 
 WORKDIR /app
 
