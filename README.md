@@ -43,6 +43,11 @@ JWT_AUDIENCE=clientside-ecommerce
 JWT_EXPIRES_IN=8h
 
 SERVICE_AREA_RADIUS_METERS=5000
+SERVICEABILITY_COOKIE_SAMESITE=lax
+# In production defaults to true; keep true when SAMESITE=none.
+# SERVICEABILITY_COOKIE_SECURE=true
+# Optional. Set only when you need cookie sharing across subdomains.
+# SERVICEABILITY_COOKIE_DOMAIN=.example.com
 
 # Optional: turn off Redis read caches (catalog, resolve-by-domain, promos); rate limits still use Redis
 # CACHE_ON=false

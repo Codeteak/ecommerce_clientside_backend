@@ -19,13 +19,17 @@ function checkLocationHandler(ctx) {
       lng,
       at: new Date().toISOString()
     });
-    res.cookie(COOKIE_NAME, seal, {
+    const cookieOptions = {
       httpOnly: true,
-      sameSite: "lax",
-      secure: env.NODE_ENV === "production",
+      sameSite: env.SERVICEABILITY_COOKIE_SAMESITE,
+      secure: env.SERVICEABILITY_COOKIE_SECURE,
       path: "/",
       maxAge: 24 * 60 * 60 * 1000
-    });
+    };
+    if (env.SERVICEABILITY_COOKIE_DOMAIN) {
+      cookieOptions.domain = env.SERVICEABILITY_COOKIE_DOMAIN;
+    }
+    res.cookie(COOKIE_NAME, seal, cookieOptions);
     res.json({
       serviceable,
       distanceM: result.distanceM ?? null,

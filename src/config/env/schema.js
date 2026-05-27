@@ -67,6 +67,12 @@ export const envSchema = z
     JWT_EXPIRES_IN: z.string().min(1),
     JWT_ACCESS_EXPIRES_IN: z.string().min(1).default("15m"),
     SERVICEABILITY_COOKIE_SECRET: z.string().optional().default(""),
+    SERVICEABILITY_COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("lax"),
+    SERVICEABILITY_COOKIE_SECURE: z.preprocess((val) => {
+      if (val === undefined || val === null || val === "") return undefined;
+      return boolFromEnv(val);
+    }, z.boolean().optional()),
+    SERVICEABILITY_COOKIE_DOMAIN: z.string().optional().default(""),
     JWT_REFRESH_EXPIRES_IN: z.string().min(1).default("30d"),
     JWT_KEY_ID: z.string().min(1).default("v1"),
     JWT_ALLOWED_ALGORITHMS: z
