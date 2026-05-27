@@ -1,8 +1,5 @@
 version: 0.2
 
-# Logs: enable CloudWatch on the CodeBuild project (see scripts/cicd/setup_aws_cicd.sh).
-# ECR_URI / IMAGE_TAG are set in pre_build and exported to later phases via exported-variables.
-
 env:
   variables:
     AWS_REGION: ap-south-1
@@ -22,42 +19,27 @@ phases:
       - echo "=== INSTALL $(date -u +%FT%TZ) build=${CODEBUILD_BUILD_ID} number=${CODEBUILD_BUILD_NUMBER} ==="
       - node --version && npm --version
       - docker --version
+
   pre_build:
     commands:
       - echo "=== PRE_BUILD $(date -u +%FT%TZ) ==="
-      - chmod +x scripts/cicd/ensure-codebuild-arm-host.sh scripts/cicd/docker-build-push.sh
-      - bash scripts/cicd/ensure-codebuild-arm-host.sh
+      - chmod +x scripts/cicd/assert-codebuild-arm-host.sh scripts/cicd/docker-build-push.sh scripts/cicd/run-unit-tests.sh
+      - bash scripts/cicd/assert-codebuild-arm-host.sh
       - . scripts/cicd/codebuild-env.sh
-      - echo "Installing dependencies..."
-      - npm ci --include=dev --loglevel=info
-      - echo "Logging in to Amazon ECR..."
       - aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+      - npm ci --include=dev --loglevel=warn
+
   build:
     commands:
       - echo "=== BUILD $(date -u +%FT%TZ) ==="
-      - echo "ECR_URI=${ECR_URI} IMAGE_TAG=${IMAGE_TAG}"
-      - echo "Running unit tests (integration tests skipped in CI)..."
-      - chmod +x scripts/cicd/run-unit-tests.sh
       - bash scripts/cicd/run-unit-tests.sh -- --reporter=verbose
-      - echo "PWD=$(pwd) CODEBUILD_SRC_DIR=${CODEBUILD_SRC_DIR}"
-      - ls -la "${CODEBUILD_SRC_DIR}"
-      - uname -m
-      - echo "CODEBUILD_BUILD_IMAGE=${CODEBUILD_BUILD_IMAGE:-unknown}"
-      - docker version
-      - docker info 2>&1 | head -30 || true
-      - docker buildx ls || true
-      - echo "Building and pushing ARM64 image..."
-      - . scripts/cicd/codebuild-env.sh
-      - test -n "${ECR_URI}" && test -n "${IMAGE_TAG}"
-      - test -f "${CODEBUILD_SRC_DIR}/Dockerfile"
       - bash scripts/cicd/docker-build-push.sh
+
   post_build:
     commands:
       - echo "=== POST_BUILD $(date -u +%FT%TZ) ==="
-      - echo "ECR_URI=${ECR_URI} IMAGE_TAG=${IMAGE_TAG}"
       - printf '{"imageUri":"%s","imageTag":"%s","repository":"%s","builtAt":"%s"}\n' "${ECR_URI}:${IMAGE_TAG}" "${IMAGE_TAG}" "${ECR_URI}" "$(date -u +%FT%TZ)" > image-detail.json
       - cat image-detail.json
-      - echo "Build completed at $(date)"
 
 artifacts:
   files:

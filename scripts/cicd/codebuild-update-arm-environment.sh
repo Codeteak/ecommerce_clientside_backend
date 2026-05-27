@@ -1,46 +1,36 @@
 #!/usr/bin/env bash
-# Configure CodeBuild for this repo: native ARM + CloudWatch Logs. Run from laptop with AWS CLI.
+# One-shot helper: configure CodeBuild for ARM + CloudWatch logs.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/cicd/lib/arm-environment.sh
 . "${SCRIPT_DIR}/lib/arm-environment.sh"
-# shellcheck source=scripts/cicd/lib/codebuild-project-config.shh
-. "${SCRIPT_DIR}/lib/codebuild-project-config.sh"
 
 AWS_REGION="${AWS_REGION:-ap-south-1}"
-CODEBUILD_PROJECT="$(codebuild_resolve_project_name)"
+PROJECT_NAME="${PROJECT_NAME:-clientSideEcommerce}"
+CODEBUILD_PROJECT="${CODEBUILD_PROJECT_NAME:-${PROJECT_NAME}-build}"
 LOG_GROUP="/aws/codebuild/${CODEBUILD_PROJECT}"
+ARM_ENV="type=${CODEBUILD_ARM_ENV_TYPE},image=${CODEBUILD_ARM_IMAGE},computeType=BUILD_GENERAL1_MEDIUM,privilegedMode=true"
+LOGS_CONFIG="cloudWatchLogs={status=ENABLED,groupName=${LOG_GROUP}},s3Logs={status=DISABLED}"
 
-print_log_viewing_help() {
-  cat <<EOF
-
---- Where to see logs ---
-
-BUILD: CodePipeline → Build stage → View in CodeBuild / CloudWatch
-       Log group: ${LOG_GROUP}
-
-DEPLOY: CodeDeploy → Deployments → Events (not shown live in CodePipeline)
-
-CodeBuild service role needs: logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents
-EOF
-}
-
-echo "==> CodeBuild project configuration (${AWS_REGION})"
+echo "==> Updating CodeBuild project"
 echo "    project=${CODEBUILD_PROJECT}"
+echo "    region=${AWS_REGION}"
 
-set +e
-codebuild_apply_arm_and_logs "${AWS_REGION}"
-rc=$?
-set -e
-
-if [[ "${rc}" == "1" ]]; then
-  echo "ERROR: project not found. Set CODEBUILD_PROJECT_NAME or PROJECT_NAME."
-  exit 1
-fi
-if [[ "${rc}" == "2" ]]; then
-  echo "ERROR: aws codebuild update-project failed."
+COUNT="$(aws codebuild batch-get-projects --names "${CODEBUILD_PROJECT}" --region "${AWS_REGION}" --query 'length(projects)' --output text 2>/dev/null || echo 0)"
+if [[ "${COUNT}" != "1" ]]; then
+  echo "ERROR: Project not found: ${CODEBUILD_PROJECT}"
+  echo "Set CODEBUILD_PROJECT_NAME to the exact Build-stage project from CodePipeline."
   exit 1
 fi
 
-print_log_viewing_help
+aws codebuild update-project \
+  --name "${CODEBUILD_PROJECT}" \
+  --region "${AWS_REGION}" \
+  --environment "${ARM_ENV}" \
+  --logs-config "${LOGS_CONFIG}" >/dev/null
+
+echo "==> Done"
+echo "    ARM: ${CODEBUILD_ARM_ENV_TYPE} / ${CODEBUILD_ARM_IMAGE}"
+echo "    Logs: ENABLED (${LOG_GROUP})"
+echo "Trigger a new pipeline execution and check CodeBuild logs in CloudWatch."
