@@ -16,6 +16,9 @@ fi
 echo "assert-codebuild-arm-host: FAILED"
 echo "  host_arch=$(arm_detect_host_arch) (expected aarch64/arm64)"
 echo "  CODEBUILD_BUILD_IMAGE=${CODEBUILD_BUILD_IMAGE:-unset}"
+echo "  CODEBUILD_PROJECT_NAME=${CODEBUILD_PROJECT_NAME:-unset}"
 echo ""
-arm_print_fix_instructions
+arm_diagnose_codebuild_project
+echo ""
+arm_print_fix_instructions "${CODEBUILD_PROJECT_NAME:-}" "${AWS_REGION:-ap-south-1}"
 exit 1

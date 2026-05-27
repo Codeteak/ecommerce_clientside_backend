@@ -105,8 +105,13 @@ Next actions (run manually once values are verified):
      --logs-config "cloudWatchLogs={status=ENABLED,groupName=${LOG_GROUP}},s3Logs={status=DISABLED}" \\
      --region "${AWS_REGION}"
 
-   View logs: CodeBuild → Build projects → ${PROJECT_NAME}-build → Build history →
-   open a build → "Phase details" or "View entire log" (CloudWatch log stream).
+   View BUILD logs (CodePipeline does not show full live build output inline):
+   - CodePipeline → execution → Build stage → link to CodeBuild / CloudWatch
+   - Or CodeBuild → ${PROJECT_NAME}-build → Build history → View entire log
+   - Log group: /aws/codebuild/${PROJECT_NAME}-build
+
+   View DEPLOY logs (CodeDeploy — not in CodePipeline timeline):
+   - CodeDeploy → Deployments → Events; on EC2 see codedeploy-agent deployment-root scripts.log
 
 4) Create CodePipeline stages:
    - Source: GitHub/CodeStar connection

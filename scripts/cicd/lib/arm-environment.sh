@@ -32,6 +32,33 @@ arm_print_environment_summary() {
   echo "arm-environment: CODEBUILD_BUILD_ID=${CODEBUILD_BUILD_ID:-unset}"
 }
 
+arm_diagnose_codebuild_project() {
+  local project="${1:-${CODEBUILD_PROJECT_NAME:-}}"
+  local region="${2:-${AWS_REGION:-ap-south-1}}"
+  if [[ -z "${project}" ]]; then
+    echo "arm-diagnose: CODEBUILD_PROJECT_NAME unset (not running inside CodeBuild?)"
+    return 0
+  fi
+  if ! command -v aws >/dev/null 2>&1; then
+    echo "arm-diagnose: aws CLI not available"
+    return 0
+  fi
+  local count
+  count="$(aws codebuild batch-get-projects --names "${project}" --region "${region}" \
+    --query 'length(projects)' --output text 2>/dev/null || echo 0)"
+  if [[ "${count}" != "1" ]]; then
+    echo "arm-diagnose: could not load project ${project} in ${region}"
+    return 0
+  fi
+  echo "arm-diagnose: project=${project} region=${region}"
+  aws codebuild batch-get-projects --names "${project}" --region "${region}" \
+    --query 'projects[0].environment.{type:type,image:image,computeType:computeType,privilegedMode:privilegedMode}' \
+    --output table 2>/dev/null || true
+  aws codebuild batch-get-projects --names "${project}" --region "${region}" \
+    --query 'projects[0].logsConfig.cloudWatchLogs.{status:status,groupName:groupName}' \
+    --output table 2>/dev/null || true
+}
+
 arm_print_fix_instructions() {
   local project="${1:-${CODEBUILD_PROJECT_NAME:-${PROJECT_NAME:-clientSideEcommerce}-build}}"
   local region="${2:-${AWS_REGION:-ap-south-1}}"
