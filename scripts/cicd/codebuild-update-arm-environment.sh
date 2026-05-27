@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/cicd/lib/arm-environment.sh
 . "${SCRIPT_DIR}/lib/arm-environment.sh"
-# shellcheck source=scripts/cicd/lib/codebuild-project-config.sh
+# shellcheck source=scripts/cicd/lib/codebuild-project-config.shh
 . "${SCRIPT_DIR}/lib/codebuild-project-config.sh"
 
 AWS_REGION="${AWS_REGION:-ap-south-1}"
