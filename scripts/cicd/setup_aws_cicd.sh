@@ -95,7 +95,10 @@ Next actions (run manually once values are verified):
      --logs-config "cloudWatchLogs={status=ENABLED,groupName=${LOG_GROUP}},s3Logs={status=DISABLED}" \\
      --region "${AWS_REGION}"
 
-   If the project already exists, enable logging and use a native ARM builder (matches linux/arm64 deploy targets):
+   If the project already exists, run the idempotent helper (verifies then updates only if needed):
+   AWS_REGION=${AWS_REGION} PROJECT_NAME=${PROJECT_NAME} bash scripts/cicd/codebuild-update-arm-environment.sh
+
+   Or update manually:
    aws codebuild update-project \\
      --name "${PROJECT_NAME}-build" \\
      --environment type=ARM_CONTAINER,image=aws/codebuild/amazonlinux2-aarch64-standard:3.0,computeType=BUILD_GENERAL1_MEDIUM,privilegedMode=true \\

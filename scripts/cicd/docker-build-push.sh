@@ -5,6 +5,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODEBUILD_SRC_DIR="${CODEBUILD_SRC_DIR:-$(pwd)}"
+# shellcheck source=scripts/cicd/lib/arm-environment.sh
+. "${SCRIPT_DIR}/lib/arm-environment.sh"
 
 on_err() {
   local code=$?
@@ -34,14 +36,10 @@ if [[ ! -f "${DOCKERFILE}" ]]; then
 fi
 
 BUILDER_NAME="${DOCKER_BUILDX_BUILDER:-clientside-builder}"
-HOST_ARCH="$(uname -m)"
+HOST_ARCH="$(arm_detect_host_arch)"
 TARGET_PLATFORM="${DOCKER_PLATFORM:-linux/arm64}"
-BUILD_IMAGE="${CODEBUILD_BUILD_IMAGE:-}"
 NATIVE_ARM=false
-if [[ "${HOST_ARCH}" == "aarch64" || "${HOST_ARCH}" == "arm64" ]]; then
-  NATIVE_ARM=true
-elif [[ "${BUILD_IMAGE}" == *aarch64* || "${BUILD_IMAGE}" == *arm64* ]]; then
-  echo "docker-build-push: host uname=${HOST_ARCH} but CodeBuild image looks ARM (${BUILD_IMAGE}); using native build"
+if arm_is_arm_build_environment; then
   NATIVE_ARM=true
 fi
 
@@ -51,12 +49,8 @@ echo "docker-build-push: host_arch=${HOST_ARCH} platform=${TARGET_PLATFORM} nati
 echo "docker-build-push: codebuild_image=${CODEBUILD_BUILD_IMAGE:-unknown}"
 
 if [[ "${NATIVE_ARM}" != "true" && "${TARGET_PLATFORM}" == "linux/arm64" ]]; then
-  PROJECT="${CODEBUILD_PROJECT_NAME:-${PROJECT_NAME:-clientSideEcommerce}-build}"
   echo "docker-build-push: ERROR: cannot build ${TARGET_PLATFORM} on host ${HOST_ARCH}."
-  echo "docker-build-push: Update CodeBuild project \"${PROJECT}\" to ARM_CONTAINER:"
-  echo "  aws codebuild update-project --name \"${PROJECT}\" --region \"${AWS_REGION}\" \\"
-  echo "    --environment type=ARM_CONTAINER,image=aws/codebuild/amazonlinux2-aarch64-standard:3.0,computeType=BUILD_GENERAL1_MEDIUM,privilegedMode=true"
-  echo "docker-build-push: Or run: bash scripts/cicd/codebuild-update-arm-environment.sh"
+  arm_print_fix_instructions
   exit 1
 fi
 

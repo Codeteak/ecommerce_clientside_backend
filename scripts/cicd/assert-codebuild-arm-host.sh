@@ -2,37 +2,20 @@
 # Fail fast when CodeBuild is not on an ARM host (linux/arm64 images require ARM_CONTAINER).
 set -euo pipefail
 
-HOST_ARCH="$(uname -m)"
-BUILD_IMAGE="${CODEBUILD_BUILD_IMAGE:-}"
-PROJECT="${CODEBUILD_PROJECT_NAME:-${PROJECT_NAME:-clientSideEcommerce}-build}"
-REGION="${AWS_REGION:-ap-south-1}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/cicd/lib/arm-environment.sh
+. "${SCRIPT_DIR}/lib/arm-environment.sh"
 
-is_arm_host() {
-  case "${HOST_ARCH}" in
-    aarch64 | arm64) return 0 ;;
-    *) return 1 ;;
-  esac
-}
+arm_print_environment_summary
 
-is_arm_image() {
-  [[ "${BUILD_IMAGE}" == *aarch64* || "${BUILD_IMAGE}" == *arm64* ]]
-}
-
-if is_arm_host || is_arm_image; then
-  echo "assert-codebuild-arm-host: OK host_arch=${HOST_ARCH} build_image=${BUILD_IMAGE:-n/a}"
+if arm_is_arm_build_environment; then
+  echo "assert-codebuild-arm-host: OK host_arch=$(arm_detect_host_arch) build_image=${CODEBUILD_BUILD_IMAGE:-n/a}"
   exit 0
 fi
 
 echo "assert-codebuild-arm-host: FAILED"
-echo "  host_arch=${HOST_ARCH} (expected aarch64/arm64)"
-echo "  CODEBUILD_BUILD_IMAGE=${BUILD_IMAGE:-unset}"
+echo "  host_arch=$(arm_detect_host_arch) (expected aarch64/arm64)"
+echo "  CODEBUILD_BUILD_IMAGE=${CODEBUILD_BUILD_IMAGE:-unset}"
 echo ""
-echo "This pipeline builds linux/arm64. Use a native ARM CodeBuild environment:"
-echo ""
-echo "  aws codebuild update-project \\"
-echo "    --name \"${PROJECT}\" \\"
-echo "    --region \"${REGION}\" \\"
-echo "    --environment \"type=ARM_CONTAINER,image=aws/codebuild/amazonlinux2-aarch64-standard:3.0,computeType=BUILD_GENERAL1_MEDIUM,privilegedMode=true\""
-echo ""
-echo "Then start a new build. Cross-build via QEMU (x86 host) is not supported in this repo."
+arm_print_fix_instructions
 exit 1
