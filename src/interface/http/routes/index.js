@@ -12,6 +12,7 @@ import { storefrontController } from "../controllers/storefrontController.js";
 import { storefrontOrdersController } from "../controllers/storefrontOrdersController.js";
 import { storefrontPromotionsController } from "../controllers/storefrontPromotionsController.js";
 import { shopController } from "../controllers/shopController.js";
+import { seoController } from "../controllers/seoController.js";
 import { createLimiter } from "../middleware/createLimiter.js";
 import { validate } from "../middleware/validate.js";
 import {
@@ -28,6 +29,7 @@ import {
 } from "../validations/profileSchemas.js";
 import { storefrontLocationBodySchema } from "../validations/storefrontSchemas.js";
 import { shopDomainQuerySchema } from "../validations/shopSchemas.js";
+import { seoMetadataQuerySchema } from "../validations/seoSchemas.js";
 import {
   storefrontCategoriesQuerySchema,
   storefrontProductsQuerySchema,
@@ -134,6 +136,12 @@ export function createRoutes(ctx) {
   const shopCtl = shopController;
 
   r.get("/api/shops/resolve-by-domain", validate({ query: shopDomainQuerySchema }), shopCtl.resolveByDomain(ctx));
+
+  r.get(
+    "/api/seo/metadata",
+    validate({ query: seoMetadataQuerySchema }),
+    seoController.getMetadata(ctx)
+  );
 
   mountCoreRoutes(r, {
     healthGet: healthHandlers.get,

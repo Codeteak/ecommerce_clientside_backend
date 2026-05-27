@@ -26,11 +26,22 @@ describe("storefrontCatalog getProductById", () => {
         ]
       })
     };
+    const shopLookupRepo = {
+      findShopBrandingById: vi.fn().mockResolvedValue({
+        id: "00000000-0000-4000-8000-000000000001",
+        name: "Demo Shop",
+        custom_domain: "demo.example.com",
+        shop_image_storage_key: null,
+        banner_enabled: false,
+        banner_storage_keys: []
+      })
+    };
     const storefrontCatalog = createStorefrontCatalog({
       catalogRepo,
       ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
       catalogCache: { swr: vi.fn((_k, _t, fn) => fn()) },
       catalogCacheTtlSec: 0,
+      shopLookupRepo,
       ...storefrontCatalogTestDeps()
     });
 
@@ -58,6 +69,11 @@ describe("storefrontCatalog getProductById", () => {
       bundle_rules: []
     });
     expect(out.images).toHaveLength(1);
+    expect(out.seo).toMatchObject({
+      title: expect.any(String),
+      description: expect.any(String),
+      og: { type: "product" }
+    });
   });
 
   it("falls back to global image_url and omits null image metadata", async () => {
@@ -77,11 +93,22 @@ describe("storefrontCatalog getProductById", () => {
         gallery: []
       })
     };
+    const shopLookupRepo = {
+      findShopBrandingById: vi.fn().mockResolvedValue({
+        id: "00000000-0000-4000-8000-000000000001",
+        name: "Demo Shop",
+        custom_domain: "demo.example.com",
+        shop_image_storage_key: null,
+        banner_enabled: false,
+        banner_storage_keys: []
+      })
+    };
     const storefrontCatalog = createStorefrontCatalog({
       catalogRepo,
       ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
       catalogCache: { swr: vi.fn((_k, _t, fn) => fn()) },
       catalogCacheTtlSec: 0,
+      shopLookupRepo,
       ...storefrontCatalogTestDeps()
     });
 
@@ -120,11 +147,22 @@ describe("storefrontCatalog getProductById", () => {
         ]
       })
     };
+    const shopLookupRepo = {
+      findShopBrandingById: vi.fn().mockResolvedValue({
+        id: "00000000-0000-4000-8000-000000000001",
+        name: "Demo Shop",
+        custom_domain: "demo.example.com",
+        shop_image_storage_key: null,
+        banner_enabled: false,
+        banner_storage_keys: []
+      })
+    };
     const storefrontCatalog = createStorefrontCatalog({
       catalogRepo,
       ensureShopForCatalog: vi.fn().mockResolvedValue(undefined),
       catalogCache: { swr: vi.fn((_k, _t, fn) => fn()) },
       catalogCacheTtlSec: 0,
+      shopLookupRepo,
       ...storefrontCatalogTestDeps()
     });
 

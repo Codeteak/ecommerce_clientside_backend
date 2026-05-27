@@ -510,6 +510,45 @@ export class CatalogRepoPg extends CatalogRepo {
     }
   }
 
+  async getProductSeoBySlugStorefront(shopId, slug) {
+    const norm = String(slug || "").trim().toLowerCase();
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows: prodRows } = await client.query(
+        `SELECT sp.id, sp.availability,
+                gp.name, gp.slug, gp.description,
+                gp.seo_title, gp.seo_description, gp.image_url AS global_image_url,
+                sp.price_minor_per_unit::text AS price_minor_per_unit,
+                sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit
+           FROM shop_products sp
+           JOIN global_products gp ON gp.id = sp.global_product_id
+          WHERE sp.shop_id = $1::uuid
+            AND lower(gp.slug) = $2
+            AND sp.status = 'active'
+            AND sp.availability = 'in_stock'
+          LIMIT 1`,
+        [shopId, norm]
+      );
+      const product = prodRows[0];
+      if (!product) return null;
+
+      const { rows: imgRows } = await client.query(
+        `SELECT m.storage_key
+           FROM shop_product_images spi
+           JOIN media_assets m ON m.id = spi.media_asset_id
+          WHERE spi.shop_product_id = $1::uuid
+          ORDER BY spi.sort_order ASC
+          LIMIT 1`,
+        [product.id]
+      );
+      const primary_image_storage_key = imgRows[0]?.storage_key ?? null;
+      return { product, primary_image_storage_key };
+    } finally {
+      client.release();
+    }
+  }
+
   async getProductBySlugStorefront(shopId, slug) {
     const norm = String(slug || "").trim().toLowerCase();
     const client = await pool.connect();
@@ -518,7 +557,7 @@ export class CatalogRepoPg extends CatalogRepo {
       const { rows: prodRows } = await client.query(
         `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id,
                 gp.name, gp.slug, gp.base_unit, gp.unit_size::text AS unit_size,
-                gp.description,
+                gp.description, gp.seo_title, gp.seo_description,
                 sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
@@ -583,7 +622,7 @@ export class CatalogRepoPg extends CatalogRepo {
       const { rows: prodRows } = await client.query(
         `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id,
                 gp.name, gp.slug, gp.base_unit, gp.unit_size::text AS unit_size,
-                gp.description,
+                gp.description, gp.seo_title, gp.seo_description,
                 sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,

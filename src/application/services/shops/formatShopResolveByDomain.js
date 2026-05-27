@@ -1,10 +1,22 @@
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
+import { buildShopSeoBlock } from "../seo/buildShopSeoBlock.js";
 
 /**
  * @param {unknown} row
  * @returns {{
  *   id: string,
  *   name: string,
+ *   domain?: string | null,
+ *   custom_domain?: string | null,
+ *   seo_title?: string | null,
+ *   seo_description?: string | null,
+ *   seo_keywords?: string | null,
+ *   tagline?: string | null,
+ *   locale?: string | null,
+ *   theme_color?: string | null,
+ *   og_image_storage_key?: string | null,
+ *   og_image_alt?: string | null,
+ *   twitter_card?: string | null,
  *   shop_image_storage_key?: string | null,
  *   banner_enabled: boolean,
  *   banner_storage_keys: string[]
@@ -36,6 +48,18 @@ function normalizeResolveRow(row) {
   return {
     id: String(id),
     name: String(name),
+    domain: r.domain != null ? String(r.domain) : null,
+    custom_domain: r.custom_domain != null ? String(r.custom_domain) : null,
+    seo_title: r.seo_title != null ? String(r.seo_title) : null,
+    seo_description: r.seo_description != null ? String(r.seo_description) : null,
+    seo_keywords: r.seo_keywords != null ? String(r.seo_keywords) : null,
+    tagline: r.tagline != null ? String(r.tagline) : null,
+    locale: r.locale != null ? String(r.locale) : null,
+    theme_color: r.theme_color != null ? String(r.theme_color) : null,
+    og_image_storage_key:
+      r.og_image_storage_key != null ? String(r.og_image_storage_key) : null,
+    og_image_alt: r.og_image_alt != null ? String(r.og_image_alt) : null,
+    twitter_card: r.twitter_card != null ? String(r.twitter_card) : null,
     shop_image_storage_key:
       shop_image_storage_key != null ? String(shop_image_storage_key) : null,
     banner_enabled,
@@ -73,11 +97,27 @@ export function formatShopResolveByDomain(row) {
       ? String(normalized.shop_image_storage_key).trim()
       : "";
   const shop_image = key.length > 0 ? toPublicMediaUrl(key) : null;
+  const banner_images = formatBannerImages(
+    normalized.banner_enabled,
+    normalized.banner_storage_keys
+  );
+
+  const seo = buildShopSeoBlock(normalized, {
+    shopImageUrl: shop_image,
+    bannerImageUrls: banner_images
+  });
+
   return {
     shop_id: normalized.id,
+    shopId: normalized.id,
     shop_name: normalized.name,
+    shopName: normalized.name,
     shop_image,
+    shopImage: shop_image,
     banner_enabled: normalized.banner_enabled,
-    banner_images: formatBannerImages(normalized.banner_enabled, normalized.banner_storage_keys)
+    bannerEnabled: normalized.banner_enabled,
+    banner_images,
+    bannerImages: banner_images,
+    seo
   };
 }

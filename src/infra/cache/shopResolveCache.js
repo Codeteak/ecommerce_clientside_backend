@@ -61,7 +61,7 @@ export function createShopResolveCache({
     findShopByDomain(domain) {
       const d = String(domain || "").trim().toLowerCase();
       if (!d) return Promise.resolve(null);
-      return cachedResolve(`domain-summary:v4:${d}`, resolveTtl, () =>
+      return cachedResolve(`domain-summary:v5:${d}`, resolveTtl, () =>
         shopLookupRepo.findShopByDomain(d)
       );
     },
@@ -69,6 +69,7 @@ export function createShopResolveCache({
     async invalidateDomain(domain) {
       const d = String(domain || "").trim().toLowerCase();
       if (!d) return;
+      await resolveCache.del(`domain-summary:v5:${d}`);
       await resolveCache.del(`domain-summary:v4:${d}`);
       await resolveCache.del(`domain-summary:v3:${d}`);
       await resolveCache.del(`domain-summary:v2:${d}`);

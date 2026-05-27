@@ -77,7 +77,27 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/shops/resolve-by-domain?domain=marketfresh.in",
-            "description": "Resolve shop by domain/custom_domain. Returns shop_id, shop_name, shop_image, banner_enabled, and banner_images (ordered URLs)."
+            "description": "Resolve shop by domain/custom_domain. Returns shop_id/shopId, shop_name/shopName, shop_image/shopImage, banner_enabled/bannerEnabled, banner_images/bannerImages, and seo (title, description, keywords, canonicalUrl, locale, themeColor, og, twitter)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/seo/metadata (shop)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Shop-Id", "value": "{{shopId}}" }],
+            "url": "{{baseUrl}}/api/seo/metadata?pageType=shop",
+            "description": "Shop/homepage SEO metadata for the resolved shop."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/seo/metadata (product)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Shop-Id", "value": "{{shopId}}" }],
+            "url": "{{baseUrl}}/api/seo/metadata?pageType=product&slug={{productSlug}}",
+            "description": "Product page SEO metadata (active, in-stock products only)."
           },
           "response": []
         }

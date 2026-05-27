@@ -125,12 +125,78 @@ export function buildPaths() {
         }
       }
     },
+    "/api/seo/metadata": {
+      get: {
+        tags: ["Shops"],
+        summary: "Page SEO metadata",
+        description:
+          "Returns SEO metadata for `pageType=shop` or `pageType=product` (requires `slug`). Requires shop context via `X-Shop-Id` or host resolution (same as storefront).",
+        parameters: [
+          {
+            name: "pageType",
+            in: "query",
+            required: true,
+            schema: { type: "string", enum: ["shop", "product"] }
+          },
+          {
+            name: "slug",
+            in: "query",
+            required: false,
+            schema: { type: "string", minLength: 1, maxLength: 200 },
+            description: "Required when pageType is product."
+          },
+          P.XShopId
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    pageType: { type: "string", enum: ["shop", "product"] },
+                    shopId: { type: "string", format: "uuid" },
+                    shopName: { type: "string" },
+                    productId: { type: "string", format: "uuid" },
+                    slug: { type: "string" },
+                    availability: { type: "string" },
+                    price: {
+                      type: "object",
+                      properties: {
+                        amount: { type: "number" },
+                        currency: { type: "string" }
+                      }
+                    },
+                    seo: {
+                      type: "object",
+                      properties: {
+                        title: { type: "string" },
+                        description: { type: "string" },
+                        keywords: { type: "string" },
+                        canonicalUrl: { type: "string", nullable: true, format: "uri" },
+                        locale: { type: "string" },
+                        themeColor: { type: "string", nullable: true },
+                        og: { type: "object" },
+                        twitter: { type: "object" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": jsonErr,
+          "404": jsonErr
+        }
+      }
+    },
     "/api/shops/resolve-by-domain": {
       get: {
         tags: ["Shops"],
         summary: "Resolve shop by domain",
         description:
-          "Returns `shop_id`, `shop_name`, `shop_image` (public URL), `banner_enabled`, and `banner_images` (ordered public URLs from `shops.banner_media_asset_ids`; layout/slots are client-side). Logo from `entity_images` where `entity_type = 'shop'`. Pass `domain` as hostname only (e.g. `marketfresh.in`); `https://` and `www.` are stripped if present.",
+          "Returns `shop_id`, `shop_name`, `shop_image` (public URL), `banner_enabled`, `banner_images`, camelCase aliases (`shopId`, `shopName`, etc.), and `seo` (title, description, keywords, canonicalUrl, locale, themeColor, og, twitter). Logo from `entity_images` where `entity_type = 'shop'`. Pass `domain` as hostname only (e.g. `marketfresh.in`); `https://` and `www.` are stripped if present.",
         parameters: [
           {
             name: "domain",
@@ -148,17 +214,64 @@ export function buildPaths() {
                   type: "object",
                   properties: {
                     shop_id: { type: "string", format: "uuid" },
+                    shopId: { type: "string", format: "uuid" },
                     shop_name: { type: "string" },
+                    shopName: { type: "string" },
                     shop_image: { type: "string", nullable: true, format: "uri" },
+                    shopImage: { type: "string", nullable: true, format: "uri" },
                     banner_enabled: { type: "boolean" },
+                    bannerEnabled: { type: "boolean" },
                     banner_images: {
                       type: "array",
                       items: { type: "string", format: "uri" },
                       description:
                         "Ordered banner image URLs (max 6). Empty when banner_enabled is false."
+                    },
+                    bannerImages: {
+                      type: "array",
+                      items: { type: "string", format: "uri" }
+                    },
+                    seo: {
+                      type: "object",
+                      properties: {
+                        title: { type: "string" },
+                        description: { type: "string" },
+                        keywords: { type: "string" },
+                        canonicalUrl: { type: "string", nullable: true, format: "uri" },
+                        locale: { type: "string" },
+                        themeColor: { type: "string", nullable: true },
+                        og: {
+                          type: "object",
+                          properties: {
+                            type: { type: "string" },
+                            image: { type: "string", nullable: true, format: "uri" },
+                            imageWidth: { type: "integer" },
+                            imageHeight: { type: "integer" },
+                            imageAlt: { type: "string" }
+                          }
+                        },
+                        twitter: {
+                          type: "object",
+                          properties: {
+                            card: { type: "string" }
+                          }
+                        }
+                      }
                     }
                   },
-                  required: ["shop_id", "shop_name", "shop_image", "banner_enabled", "banner_images"]
+                  required: [
+                    "shop_id",
+                    "shopId",
+                    "shop_name",
+                    "shopName",
+                    "shop_image",
+                    "shopImage",
+                    "banner_enabled",
+                    "bannerEnabled",
+                    "banner_images",
+                    "bannerImages",
+                    "seo"
+                  ]
                 }
               }
             }
@@ -672,7 +785,7 @@ export function buildPaths() {
         tags: ["Storefront catalog"],
         summary: "Product by slug",
         description:
-          "Product by slug. Only **active** + **in_stock** shop offers are returned (404 otherwise). Pricing: `actual_price_minor`, `offer_price_minor` (nullable), `promo_price_minor` (nullable), `total_price_minor`, `final_price_minor`, `offer_discount_minor`, `promo_discount_minor`, `total_discount_minor` (see list endpoint). **`bundle_rules`**: BXGY rules for this SKU or category. `promo_price_minor` is the campaign **unit** price (replacement), not a delta off list/offer.",
+          "Product by slug. Only **active** + **in_stock** shop offers are returned (404 otherwise). Pricing: `actual_price_minor`, `offer_price_minor` (nullable), `promo_price_minor` (nullable), `total_price_minor`, `final_price_minor`, `offer_discount_minor`, `promo_discount_minor`, `total_discount_minor` (see list endpoint). **`bundle_rules`**: BXGY rules for this SKU or category. `promo_price_minor` is the campaign **unit** price (replacement), not a delta off list/offer. Includes **`seo`** (title, description, canonicalUrl, og, twitter) for page meta tags.",
         parameters: [...shopParams, P.Slug],
         responses: {
           "200": {
@@ -688,7 +801,8 @@ export function buildPaths() {
       get: {
         tags: ["Storefront catalog"],
         summary: "Product by shop product ID",
-        description: "Product by `shop_products.id`. Same sellability rules, pricing, and `bundle_rules` fields as slug detail.",
+        description:
+          "Product by `shop_products.id`. Same sellability rules, pricing, `bundle_rules`, and `seo` fields as slug detail.",
         parameters: [...shopParams, P.ProductId],
         responses: {
           "200": {

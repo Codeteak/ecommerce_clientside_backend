@@ -66,11 +66,29 @@ export class ShopLookupRepoPg extends ShopLookupRepo {
     return {
       id: shopRow.id,
       name: shopRow.name,
+      domain: shopRow.domain ?? null,
+      custom_domain: shopRow.custom_domain ?? null,
+      seo_title: shopRow.seo_title ?? null,
+      seo_description: shopRow.seo_description ?? null,
+      seo_keywords: shopRow.seo_keywords ?? null,
+      tagline: shopRow.tagline ?? null,
+      locale: shopRow.locale ?? null,
+      theme_color: shopRow.theme_color ?? null,
+      og_image_storage_key: shopRow.og_image_storage_key ?? null,
+      og_image_alt: shopRow.og_image_alt ?? null,
+      twitter_card: shopRow.twitter_card ?? null,
       shop_image_storage_key: imageRows[0]?.shop_image_storage_key ?? null,
       banner_enabled: bannerEnabled,
       banner_storage_keys: bannerStorageKeys
     };
   }
+
+  static #shopBrandingSelectColumns = `
+    id, name, domain, custom_domain,
+    banner_enabled, banner_media_asset_ids,
+    seo_title, seo_description, seo_keywords, tagline, locale, theme_color,
+    og_image_storage_key, og_image_alt, twitter_card
+  `;
 
   async findShopByDomain(domain) {
     const d = String(domain || "").trim().toLowerCase();
@@ -78,7 +96,7 @@ export class ShopLookupRepoPg extends ShopLookupRepo {
     const client = await pool.connect();
     try {
       const { rows } = await client.query(
-        `SELECT id, name, banner_enabled, banner_media_asset_ids
+        `SELECT ${ShopLookupRepoPg.#shopBrandingSelectColumns}
            FROM shops
           WHERE lower(domain) = lower($1)
              OR lower(custom_domain) = lower($1)
@@ -97,7 +115,7 @@ export class ShopLookupRepoPg extends ShopLookupRepo {
     const client = await pool.connect();
     try {
       const { rows } = await client.query(
-        `SELECT id, name, banner_enabled, banner_media_asset_ids
+        `SELECT ${ShopLookupRepoPg.#shopBrandingSelectColumns}
            FROM shops
           WHERE id = $1::uuid
           LIMIT 1`,

@@ -11,6 +11,7 @@ import {
 import { shouldCacheProductList } from "./shouldCacheProductList.js";
 import { withCategoryListingOffers } from "../promotions/mapCategoryListingPromotions.js";
 import { formatShopBranding } from "../shops/formatShopBranding.js";
+import { attachProductDetailSeo } from "../seo/attachProductDetailSeo.js";
 /** @param {{ promotions_paused?: boolean, products?: unknown[], categories?: unknown[], nextCursor?: string | null }} body */
 function pruneStorefrontProductListPayload(body, { layout = "grouped" } = {}) {
   const out = {};
@@ -77,10 +78,13 @@ export function createStorefrontCatalog({
   async function enrichProductDetailCached(shopId, productId, data) {
     const enrich = () =>
       runWithClient((client) => listingPromotions.enrichProductDetail(client, shopId, data));
+    let detail;
     if (shopPromotionCache && typeof shopPromotionCache.wrapProductDetailPromo === "function") {
-      return shopPromotionCache.wrapProductDetailPromo(shopId, productId, enrich);
+      detail = await shopPromotionCache.wrapProductDetailPromo(shopId, productId, enrich);
+    } else {
+      detail = await enrich();
     }
-    return enrich();
+    return attachProductDetailSeo(shopId, data, detail, shopLookupRepo);
   }
 
   async function cachedSWR(shopId, keySuffix, label, fn, ttlOverride = null) {

@@ -9,22 +9,36 @@ describe("formatShopResolveByDomain", () => {
     expect(formatShopResolveByDomain(null)).toBeNull();
   });
 
-  it("returns shop_id, shop_name, shop_image, banner_enabled, and banner_images", () => {
+  it("returns shop fields, camelCase aliases, banner_images, and seo block", () => {
     const out = formatShopResolveByDomain({
       id: "11111111-1111-4111-8111-111111111111",
       name: "Demo Shop",
+      custom_domain: "demo.example.com",
+      seo_title: "Demo – Groceries",
+      seo_description: "Shop online.",
       shop_image_storage_key: "shops/demo/logo.png",
       banner_enabled: true,
       banner_storage_keys: ["banners/hero.jpg", "banners/side.jpg"]
     });
-    expect(out).toEqual({
-      shop_id: "11111111-1111-4111-8111-111111111111",
-      shop_name: "Demo Shop",
-      shop_image: `${base}/shops/demo/logo.png`,
-      banner_enabled: true,
-      banner_images: [`${base}/banners/hero.jpg`, `${base}/banners/side.jpg`]
+    expect(out?.shop_id).toBe("11111111-1111-4111-8111-111111111111");
+    expect(out?.shopId).toBe("11111111-1111-4111-8111-111111111111");
+    expect(out?.shop_name).toBe("Demo Shop");
+    expect(out?.shopName).toBe("Demo Shop");
+    expect(out?.shop_image).toBe(`${base}/shops/demo/logo.png`);
+    expect(out?.shopImage).toBe(`${base}/shops/demo/logo.png`);
+    expect(out?.banner_enabled).toBe(true);
+    expect(out?.bannerEnabled).toBe(true);
+    expect(out?.banner_images).toEqual([
+      `${base}/banners/hero.jpg`,
+      `${base}/banners/side.jpg`
+    ]);
+    expect(out?.bannerImages).toEqual(out?.banner_images);
+    expect(out?.seo).toMatchObject({
+      title: "Demo – Groceries",
+      description: "Shop online.",
+      canonicalUrl: "https://demo.example.com/",
+      og: { type: "website", imageWidth: 1200, imageHeight: 630 }
     });
-    expect(out).not.toHaveProperty("shopId");
     expect(out).not.toHaveProperty("shop_photo");
   });
 
@@ -37,6 +51,7 @@ describe("formatShopResolveByDomain", () => {
     });
     expect(out?.banner_enabled).toBe(false);
     expect(out?.banner_images).toEqual([]);
+    expect(out?.bannerImages).toEqual([]);
   });
 
   it("skips empty storage keys in banner_images", () => {
@@ -57,6 +72,7 @@ describe("formatShopResolveByDomain", () => {
     });
     expect(out?.banner_enabled).toBe(true);
     expect(out?.banner_images).toEqual([]);
+    expect(out?.seo?.title).toBe("Demo Shop – Online Grocery");
   });
 
   it("normalizes legacy cached shape with shopId only", () => {
@@ -68,6 +84,7 @@ describe("formatShopResolveByDomain", () => {
     expect(out?.shop_name).toBe("Market Fresh");
     expect(out?.banner_enabled).toBe(true);
     expect(out?.banner_images).toEqual([]);
+    expect(out?.seo?.title).toBe("Market Fresh – Online Grocery");
   });
 
   it("returns null shop_image when no storage key", () => {
@@ -77,5 +94,6 @@ describe("formatShopResolveByDomain", () => {
       shop_image_storage_key: null
     });
     expect(out?.shop_image).toBeNull();
+    expect(out?.shopImage).toBeNull();
   });
 });

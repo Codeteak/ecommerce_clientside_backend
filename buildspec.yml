@@ -40,6 +40,9 @@ phases:
       - echo "PWD=$(pwd) CODEBUILD_SRC_DIR=${CODEBUILD_SRC_DIR}"
       - ls -la "${CODEBUILD_SRC_DIR}"
       - uname -m
+      - echo "CODEBUILD_BUILD_IMAGE=${CODEBUILD_BUILD_IMAGE:-unknown}"
+      - chmod +x scripts/cicd/assert-codebuild-arm-host.sh
+      - bash scripts/cicd/assert-codebuild-arm-host.sh
       - docker version
       - docker info 2>&1 | head -30 || true
       - docker buildx ls || true

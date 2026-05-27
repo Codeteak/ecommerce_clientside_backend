@@ -53,6 +53,8 @@ import { SmtpOtpSender } from "../adapters/sms/smtpOtpSender.js";
 import { createSessionCache } from "../utils/sessionCache.js";
 import { createAccessTokenRegistry } from "../infra/auth/accessTokenRegistry.js";
 import { createLogoutCustomer } from "../application/services/auth/logoutCustomer.js";
+import { createGetPageMetadata } from "../application/services/seo/getPageMetadata.js";
+import { createSeoMetadataCache } from "../infra/cache/seoMetadataCache.js";
 
 export function createAppContext() {
   const catalogRepo = new CatalogRepoPg();
@@ -291,6 +293,13 @@ export function createAppContext() {
     emitOrderPlaced: (payload) => realtime.emitOrderPlaced(payload)
   });
 
+  const getPageMetadataCore = createGetPageMetadata({ shopLookupRepo, catalogRepo });
+  const seoMetadataCache = createSeoMetadataCache({
+    redis,
+    getPageMetadata: getPageMetadataCore,
+    ttlSec: catalogCacheTtlSec
+  });
+
   return {
     shopLookupRepo,
     shopResolveCache,
@@ -341,6 +350,8 @@ export function createAppContext() {
       }
     },
     prewarmStorefrontCache,
+    getPageMetadata: (shopId, pageType, slug) =>
+      seoMetadataCache.getPageMetadata(shopId, pageType, slug),
     get emitOrderPlaced() {
       return realtime.emitOrderPlaced;
     },

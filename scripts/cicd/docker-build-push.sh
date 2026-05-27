@@ -36,8 +36,12 @@ fi
 BUILDER_NAME="${DOCKER_BUILDX_BUILDER:-clientside-builder}"
 HOST_ARCH="$(uname -m)"
 TARGET_PLATFORM="${DOCKER_PLATFORM:-linux/arm64}"
+BUILD_IMAGE="${CODEBUILD_BUILD_IMAGE:-}"
 NATIVE_ARM=false
 if [[ "${HOST_ARCH}" == "aarch64" || "${HOST_ARCH}" == "arm64" ]]; then
+  NATIVE_ARM=true
+elif [[ "${BUILD_IMAGE}" == *aarch64* || "${BUILD_IMAGE}" == *arm64* ]]; then
+  echo "docker-build-push: host uname=${HOST_ARCH} but CodeBuild image looks ARM (${BUILD_IMAGE}); using native build"
   NATIVE_ARM=true
 fi
 
@@ -47,9 +51,13 @@ echo "docker-build-push: host_arch=${HOST_ARCH} platform=${TARGET_PLATFORM} nati
 echo "docker-build-push: codebuild_image=${CODEBUILD_BUILD_IMAGE:-unknown}"
 
 if [[ "${NATIVE_ARM}" != "true" && "${TARGET_PLATFORM}" == "linux/arm64" ]]; then
-  echo "docker-build-push: WARNING: building linux/arm64 on non-ARM host (${HOST_ARCH})."
-  echo "docker-build-push: CodeBuild project should use:"
-  echo "  type=ARM_CONTAINER,image=aws/codebuild/amazonlinux2-aarch64-standard:3.0,privilegedMode=true"
+  PROJECT="${CODEBUILD_PROJECT_NAME:-${PROJECT_NAME:-clientSideEcommerce}-build}"
+  echo "docker-build-push: ERROR: cannot build ${TARGET_PLATFORM} on host ${HOST_ARCH}."
+  echo "docker-build-push: Update CodeBuild project \"${PROJECT}\" to ARM_CONTAINER:"
+  echo "  aws codebuild update-project --name \"${PROJECT}\" --region \"${AWS_REGION}\" \\"
+  echo "    --environment type=ARM_CONTAINER,image=aws/codebuild/amazonlinux2-aarch64-standard:3.0,computeType=BUILD_GENERAL1_MEDIUM,privilegedMode=true"
+  echo "docker-build-push: Or run: bash scripts/cicd/codebuild-update-arm-environment.sh"
+  exit 1
 fi
 
 echo "docker-build-push: logging in to ECR..."
@@ -66,6 +74,7 @@ native_docker_build() {
   fi
   docker build \
     --progress=plain \
+    --platform "${TARGET_PLATFORM}" \
     -f "${DOCKERFILE}" \
     -t "${ECR_URI}:${IMAGE_TAG}" \
     -t "${ECR_URI}:latest" \
@@ -84,20 +93,17 @@ if [[ "${NATIVE_ARM}" == "true" && "${TARGET_PLATFORM}" == "linux/arm64" ]]; the
     echo "docker-build-push: latest tag push skipped (ECR tag immutability or policy)"
   fi
 else
-  echo "docker-build-push: cross-platform build via buildx..."
-  if [[ "${NATIVE_ARM}" != "true" ]]; then
-    echo "docker-build-push: installing QEMU binfmt handlers for cross-arch builds..."
-    if ! docker run --privileged --rm tonistiigi/binfmt --install all; then
-      echo "docker-build-push: ERROR: binfmt install failed."
-      echo "docker-build-push: Set CodeBuild privilegedMode=true OR switch project to ARM_CONTAINER."
-      exit 125
-    fi
+  echo "docker-build-push: cross-platform build via buildx (host=${HOST_ARCH} platform=${TARGET_PLATFORM})..."
+  echo "docker-build-push: installing QEMU binfmt handlers..."
+  if ! docker run --privileged --rm tonistiigi/binfmt --install all; then
+    echo "docker-build-push: ERROR: binfmt install failed (privilegedMode=true required on x86)."
+    exit 1
   fi
 
   docker buildx rm "${BUILDER_NAME}" 2>/dev/null || true
   if ! docker buildx create --name "${BUILDER_NAME}" --driver docker-container --use; then
-    echo "docker-build-push: ERROR: buildx create failed (often exit 125 without privilegedMode)"
-    exit 125
+    echo "docker-build-push: ERROR: buildx create failed (privilegedMode=true required)."
+    exit 1
   fi
   docker buildx inspect --bootstrap
 

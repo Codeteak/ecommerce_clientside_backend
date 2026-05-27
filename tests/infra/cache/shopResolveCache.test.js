@@ -96,12 +96,13 @@ describe("shopResolveCache", () => {
     expect(b).toEqual(summary);
     expect(shopLookupRepo.findShopByDomain).toHaveBeenCalledTimes(1);
     expect(
-      Object.keys(store).some((k) => k === "resolve:domain-summary:v4:shop.example.com")
+      Object.keys(store).some((k) => k === "resolve:domain-summary:v5:shop.example.com")
     ).toBe(true);
   });
 
-  it("invalidateDomain clears v4 domain summary key", async () => {
+  it("invalidateDomain clears v5 and legacy domain summary keys", async () => {
     const redis = mockRedis();
+    store["resolve:domain-summary:v5:shop.example.com"] = "{}";
     store["resolve:domain-summary:v4:shop.example.com"] = "{}";
     store["resolve:domain-summary:v3:shop.example.com"] = "{}";
     const shopLookupRepo = {
@@ -119,6 +120,7 @@ describe("shopResolveCache", () => {
 
     await cache.invalidateDomain("shop.example.com");
 
+    expect(store["resolve:domain-summary:v5:shop.example.com"]).toBeUndefined();
     expect(store["resolve:domain-summary:v4:shop.example.com"]).toBeUndefined();
     expect(store["resolve:domain-summary:v3:shop.example.com"]).toBeUndefined();
   });

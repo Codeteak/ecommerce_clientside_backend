@@ -62,6 +62,17 @@ export class CatalogRepo {
     throw new Error("Not implemented");
   }
 
+  /**
+   * @param {string} _shopId
+   * @param {string} _slug
+   * @returns {Promise<{ product: object, primary_image_storage_key?: string | null } | null>}
+   */
+  async getProductSeoBySlugStorefront(_shopId, _slug) {
+    void _shopId;
+    void _slug;
+    throw new Error("Not implemented");
+  }
+
   async getProductByIdStorefront(_shopId, _id) {
     void _shopId;
     void _id;
