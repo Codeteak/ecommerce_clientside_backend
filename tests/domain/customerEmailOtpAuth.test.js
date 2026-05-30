@@ -144,6 +144,69 @@ describe("customer email OTP auth", () => {
     );
   });
 
+  it("verifies email OTP for active shop staff and returns session", async () => {
+    const codeHash = await hashOtpCode("123456");
+    const authRepo = {
+      getShopById: vi.fn().mockResolvedValue(activeShop()),
+      findLatestEmailOtpChallenge: vi.fn().mockResolvedValue({
+        id: "eotp-staff",
+        email: "staff@example.com",
+        shop_id: shopId,
+        code_hash: codeHash,
+        attempts: 0,
+        consumed_at: null,
+        expires_at: new Date(Date.now() + 60_000).toISOString()
+      }),
+      incrementEmailOtpChallengeAttempts: vi.fn(),
+      consumeEmailOtpChallenge: vi.fn().mockResolvedValue(undefined),
+      getUserByEmail: vi.fn().mockResolvedValue({
+        id: "u-staff-1",
+        email: "staff@example.com",
+        phone: null,
+        registration_source: "google",
+        is_active: true
+      }),
+      insertUser: vi.fn(),
+      getCustomerByUserId: vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue({
+          id: "c-staff-1",
+          user_id: "u-staff-1",
+          display_name: null,
+          is_blocked: false,
+          is_deleted: false
+        }),
+      insertCustomer: vi.fn().mockResolvedValue({ id: "c-staff-1" }),
+      upsertCustomerShopMembership: vi.fn().mockResolvedValue({
+        id: "m-1",
+        shop_id: shopId,
+        customer_id: "c-staff-1",
+        is_active: true,
+        is_blocked: false,
+        is_deleted: false
+      }),
+      getUserById: vi.fn().mockResolvedValue({
+        id: "u-staff-1",
+        email: "staff@example.com",
+        phone: null,
+        registration_source: "google",
+        is_active: true
+      }),
+      listActiveShopsForCustomer: vi.fn().mockResolvedValue([listActiveShopRow()]),
+      insertRefreshToken: vi.fn().mockResolvedValue(undefined)
+    };
+
+    const run = createVerifyEmailOtpForTests(authRepo);
+    const out = await run({}, { email: "staff@example.com", shopId, code: "123456" });
+
+    expect(out.accessToken).toBeTypeOf("string");
+    expect(authRepo.insertCustomer).toHaveBeenCalledWith({}, {
+      user_id: "u-staff-1",
+      display_name: null
+    });
+  });
+
   it("blocks email OTP requests after 3 sends in the request window", async () => {
     const authRepo = {
       getShopById: vi.fn().mockResolvedValue(activeShop()),

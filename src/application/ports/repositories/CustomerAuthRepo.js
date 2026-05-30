@@ -47,6 +47,13 @@ export class CustomerAuthRepo {
     throw new Error("Not implemented");
   }
 
+  async isPhoneUsedByAnotherActiveShopStaff(_client, _phone, _excludeUserId) {
+    void _client;
+    void _phone;
+    void _excludeUserId;
+    throw new Error("Not implemented");
+  }
+
   async isPhoneUsedByAnotherActiveCustomer(_client, _phone, _excludeUserId) {
     void _client;
     void _phone;

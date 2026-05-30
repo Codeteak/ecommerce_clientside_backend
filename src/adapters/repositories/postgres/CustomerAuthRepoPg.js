@@ -133,6 +133,25 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return rows.length > 0;
   }
 
+  async isPhoneUsedByAnotherActiveShopStaff(client, phone, excludeUserId) {
+    const normalized = String(phone || "").trim();
+    if (!normalized) return false;
+    const { rows } = await client.query(
+      `SELECT 1
+         FROM users u
+         JOIN shop_staff ss ON ss.user_id = u.id
+        WHERE ${phoneMatchesStorage("u.phone", 1)}
+          AND u.id <> $2::uuid
+          AND ss.role IN ('owner', 'admin', 'manager', 'picker')
+          AND ss.is_active = true
+          AND ss.is_deleted = false
+          AND ss.is_blocked = false
+        LIMIT 1`,
+      [normalized, excludeUserId]
+    );
+    return rows.length > 0;
+  }
+
   async isPhoneUsedByAnotherActiveCustomer(client, phone, excludeUserId) {
     const normalized = String(phone || "").trim();
     if (!normalized) return false;

@@ -36,11 +36,6 @@ export function createVerifyCustomerOtp({ authRepo, buildStorefrontSession, otpM
       shopId,
       phoneMasked: maskPhone(phone)
     };
-    if (await authRepo.isPhoneUsedByActiveShopStaff(client, phone)) {
-      log.warn({ ...logBase, reason: "phone_belongs_to_active_shop_staff" }, "OTP verify rejected");
-      throw new AuthError("Invalid credentials");
-    }
-
     const shop = await authRepo.getShopById(client, shopId);
     if (!shop) {
       throw new NotFoundError("Shop not found");
@@ -96,11 +91,6 @@ export function createVerifyCustomerOtp({ authRepo, buildStorefrontSession, otpM
       await authRepo.updateUserPhone(client, user.id, phone);
       user = { ...user, phone };
     }
-    if (await authRepo.isUserActiveShopStaff(client, user.id)) {
-      log.warn({ ...logBase, reason: "user_is_active_shop_staff", userId: user.id }, "OTP verify rejected");
-      throw new AuthError("Invalid credentials");
-    }
-
     let customer = await authRepo.getCustomerByUserId(client, user.id);
     if (!customer) {
       customer = await authRepo.insertCustomer(client, {

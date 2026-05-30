@@ -27,10 +27,6 @@ export function createVerifyCustomerEmailOtp({ authRepo, buildStorefrontSession,
     const ip = input.ip ?? null;
     const userAgent = input.userAgent ?? null;
 
-    if (await authRepo.isEmailUsedByActiveShopStaff(client, email)) {
-      throw new AuthError("Invalid credentials");
-    }
-
     const shop = await authRepo.getShopById(client, shopId);
     if (!shop) {
       throw new NotFoundError("Shop not found");
@@ -65,10 +61,6 @@ export function createVerifyCustomerEmailOtp({ authRepo, buildStorefrontSession,
     } else if (!user.is_active) {
       throw new AuthError("Invalid credentials");
     }
-    if (await authRepo.isUserActiveShopStaff(client, user.id)) {
-      throw new AuthError("Invalid credentials");
-    }
-
     let customer = await authRepo.getCustomerByUserId(client, user.id);
     if (!customer) {
       customer = await authRepo.insertCustomer(client, {

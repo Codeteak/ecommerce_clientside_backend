@@ -26,19 +26,12 @@ export function provisionCustomerForOAuthShop({ authRepo }) {
       throw new ValidationError("email and shopId are required");
     }
 
-    if (await authRepo.isEmailUsedByActiveShopStaff(client, email)) {
-      throw new AuthError("Invalid credentials");
-    }
-
     const user = await authRepo.getUserByEmail(client, email);
     if (!user || !user.is_active) {
       throw new AuthError("Invalid credentials");
     }
-    if (await authRepo.isUserActiveShopStaff(client, user.id)) {
-      throw new AuthError("Invalid credentials");
-    }
 
-    const customer = await authRepo.getCustomerByUserId(client, user.id);
+    let customer = await authRepo.getCustomerByUserId(client, user.id);
     if (!customer || customer.is_blocked || customer.is_deleted) {
       throw new AuthError("Invalid credentials");
     }

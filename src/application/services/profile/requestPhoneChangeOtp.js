@@ -46,7 +46,7 @@ export function createRequestPhoneChangeOtp({
       throw new ValidationError("Shop is not available");
     }
 
-    if (await authRepo.isPhoneUsedByActiveShopStaff(client, newPhone)) {
+    if (await authRepo.isPhoneUsedByAnotherActiveShopStaff(client, newPhone, userId)) {
       throw new ValidationError("Phone number is already in use");
     }
     if (await authRepo.isPhoneUsedByAnotherActiveCustomer(client, newPhone, userId)) {

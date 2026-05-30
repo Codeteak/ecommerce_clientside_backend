@@ -378,11 +378,10 @@ describe("customer OTP auth", () => {
     });
   });
 
-  it("rejects verify when phone belongs to active shop staff", async () => {
+  it("verifies OTP for active shop staff and creates customer session", async () => {
     const codeHash = await hashOtpCode("123456");
     const authRepo = {
       getShopById: vi.fn().mockResolvedValue(activeShop()),
-      isPhoneUsedByActiveShopStaff: vi.fn().mockResolvedValue(true),
       findLatestOtpChallenge: vi.fn().mockResolvedValue({
         id: "otp-1",
         phone: "9999999999",
@@ -392,12 +391,61 @@ describe("customer OTP auth", () => {
         consumed_at: null,
         expires_at: new Date(Date.now() + 60_000).toISOString()
       }),
-      consumeOtpChallenge: vi.fn()
+      incrementOtpChallengeAttempts: vi.fn(),
+      consumeOtpChallenge: vi.fn().mockResolvedValue(undefined),
+      getUserByPhone: vi.fn().mockResolvedValue({
+        id: "staff-u-1",
+        email: null,
+        phone: "9999999999",
+        registration_source: "phone_otp",
+        is_active: true
+      }),
+      updateUserPhone: vi.fn(),
+      insertUser: vi.fn(),
+      getCustomerByUserId: vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue({
+          id: "c-staff-1",
+          user_id: "staff-u-1",
+          display_name: null,
+          is_blocked: false,
+          is_deleted: false
+        }),
+      insertCustomer: vi.fn().mockResolvedValue({ id: "c-staff-1" }),
+      getCustomerShopMembership: vi.fn().mockResolvedValue(null),
+      upsertCustomerShopMembership: vi.fn().mockResolvedValue({
+        id: "m-1",
+        shop_id: shopId,
+        customer_id: "c-staff-1",
+        is_active: true,
+        is_blocked: false,
+        is_deleted: false
+      }),
+      getUserById: vi.fn().mockResolvedValue({
+        id: "staff-u-1",
+        email: null,
+        phone: "9999999999",
+        registration_source: "phone_otp",
+        is_active: true
+      }),
+      listActiveShopsForCustomer: vi.fn().mockResolvedValue([listActiveShopRow()]),
+      insertRefreshToken: vi.fn().mockResolvedValue(undefined)
     };
+
     const run = createVerifyOtpForTests(authRepo);
-    await expect(run({}, { phone: "+919999999999", shopId, code: "123456" })).rejects.toMatchObject({
-      code: "UNAUTHORIZED"
+    const out = await run({}, { phone: "+919999999999", shopId, code: "123456" });
+
+    expect(out.accessToken).toBeTypeOf("string");
+    expect(authRepo.insertUser).not.toHaveBeenCalled();
+    expect(authRepo.insertCustomer).toHaveBeenCalledWith({}, {
+      user_id: "staff-u-1",
+      display_name: null
     });
+    expect(authRepo.upsertCustomerShopMembership).toHaveBeenCalledWith(
+      {},
+      { shop_id: shopId, customer_id: "c-staff-1" }
+    );
   });
 
   it("migrates legacy +91 stored phone to 10 digits on verify", async () => {

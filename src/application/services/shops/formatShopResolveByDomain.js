@@ -106,7 +106,7 @@ export function formatShopResolveByDomain(row) {
     shopImageUrl: shop_image,
     bannerImageUrls: banner_images
   });
-
+ 
   return {
     shop_id: normalized.id,
     shop_name: normalized.name,
@@ -116,3 +116,4 @@ export function formatShopResolveByDomain(row) {
     seo
   };
 }
+  

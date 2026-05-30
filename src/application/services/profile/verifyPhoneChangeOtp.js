@@ -24,7 +24,7 @@ export function createVerifyPhoneChangeOtp({ authRepo, buildStorefrontSession, o
       throw new NotFoundError("Profile not found");
     }
 
-    if (await authRepo.isPhoneUsedByActiveShopStaff(client, newPhone)) {
+    if (await authRepo.isPhoneUsedByAnotherActiveShopStaff(client, newPhone, userId)) {
       throw new ConflictError("Phone number is already in use");
     }
     if (await authRepo.isPhoneUsedByAnotherActiveCustomer(client, newPhone, userId)) {
