@@ -3,6 +3,11 @@ import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { shopAllowsCustomers } from "./shopPolicy.js";
 import { verifyOtpCode } from "../../../infra/security/otpHasher.js";
+import { setTenantContext } from "../../../infra/db/tenantContext.js";
+import {
+  ensureCustomerForUser,
+  resolveUserByEmailForCustomerLogin
+} from "./resolveUserForCustomerLogin.js";
 
 function normalizeEmail(raw) {
   return String(raw || "").trim().toLowerCase();
@@ -35,6 +40,8 @@ export function createVerifyCustomerEmailOtp({ authRepo, buildStorefrontSession,
       throw new ValidationError("Shop is not available");
     }
 
+    await setTenantContext(client, shopId);
+
     const challenge = await authRepo.findLatestEmailOtpChallenge(client, email, shopId);
     if (!challenge || challenge.consumed_at || new Date(challenge.expires_at) <= new Date()) {
       throw new AuthError("Invalid or expired OTP");
@@ -55,19 +62,13 @@ export function createVerifyCustomerEmailOtp({ authRepo, buildStorefrontSession,
 
     await authRepo.consumeEmailOtpChallenge(client, challenge.id);
 
-    let user = await authRepo.getUserByEmail(client, email);
-    if (!user) {
-      user = await authRepo.insertUser(client, { email, phone: null, password_hash: null });
-    } else if (!user.is_active) {
+    const user = await resolveUserByEmailForCustomerLogin(authRepo, client, email);
+    if (!user.is_active) {
       throw new AuthError("Invalid credentials");
     }
-    let customer = await authRepo.getCustomerByUserId(client, user.id);
-    if (!customer) {
-      customer = await authRepo.insertCustomer(client, {
-        user_id: user.id,
-        display_name: null
-      });
-    } else if (customer.is_blocked || customer.is_deleted) {
+
+    let customer = await ensureCustomerForUser(authRepo, client, user.id, null);
+    if (customer.is_blocked || customer.is_deleted) {
       throw new AuthError("Invalid credentials");
     }
 

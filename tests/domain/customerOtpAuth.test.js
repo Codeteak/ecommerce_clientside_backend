@@ -400,6 +400,7 @@ describe("customer OTP auth", () => {
         registration_source: "phone_otp",
         is_active: true
       }),
+      getActiveShopStaffUserByPhone: vi.fn().mockResolvedValue(null),
       updateUserPhone: vi.fn(),
       insertUser: vi.fn(),
       getCustomerByUserId: vi
@@ -430,6 +431,7 @@ describe("customer OTP auth", () => {
         is_active: true
       }),
       listActiveShopsForCustomer: vi.fn().mockResolvedValue([listActiveShopRow()]),
+      isUserActiveShopStaff: vi.fn().mockResolvedValue(true),
       insertRefreshToken: vi.fn().mockResolvedValue(undefined)
     };
 
@@ -438,6 +440,7 @@ describe("customer OTP auth", () => {
 
     expect(out.accessToken).toBeTypeOf("string");
     expect(authRepo.insertUser).not.toHaveBeenCalled();
+    expect(authRepo.isUserActiveShopStaff).toHaveBeenCalled();
     expect(authRepo.insertCustomer).toHaveBeenCalledWith({}, {
       user_id: "staff-u-1",
       display_name: null

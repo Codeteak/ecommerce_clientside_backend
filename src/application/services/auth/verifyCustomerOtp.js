@@ -5,6 +5,11 @@ import { shopAllowsCustomers } from "./shopPolicy.js";
 import { verifyOtpCode } from "../../../infra/security/otpHasher.js";
 import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normalizeCustomerPhone.js";
 import { getRequestLogger } from "../../../infra/logging/requestContext.js";
+import { setTenantContext } from "../../../infra/db/tenantContext.js";
+import {
+  ensureCustomerForUser,
+  resolveUserByPhoneForCustomerLogin
+} from "./resolveUserForCustomerLogin.js";
 
 function maskPhone(phone) {
   const raw = String(phone || "");
@@ -44,6 +49,8 @@ export function createVerifyCustomerOtp({ authRepo, buildStorefrontSession, otpM
       throw new ValidationError("Shop is not available");
     }
 
+    await setTenantContext(client, shopId);
+
     const now = new Date();
     const challengeCandidates = typeof authRepo.listRecentOtpChallenges === "function"
       ? await authRepo.listRecentOtpChallenges(client, phone, shopId, 5)
@@ -81,23 +88,22 @@ export function createVerifyCustomerOtp({ authRepo, buildStorefrontSession, otpM
 
     await authRepo.consumeOtpChallenge(client, matchedChallenge.id);
 
-    let user = await authRepo.getUserByPhone(client, phone);
-    if (!user) {
-      user = await authRepo.insertUser(client, { email: null, phone, password_hash: null });
-    } else if (!user.is_active) {
+    let user = await resolveUserByPhoneForCustomerLogin(authRepo, client, phone);
+    if (!user.is_active) {
       log.warn({ ...logBase, reason: "user_inactive", userId: user.id }, "OTP verify rejected");
       throw new AuthError("Invalid credentials");
-    } else if (user.phone !== phone) {
+    }
+    if (user.phone !== phone) {
       await authRepo.updateUserPhone(client, user.id, phone);
       user = { ...user, phone };
     }
-    let customer = await authRepo.getCustomerByUserId(client, user.id);
-    if (!customer) {
-      customer = await authRepo.insertCustomer(client, {
-        user_id: user.id,
-        display_name: null
-      });
-    } else if (customer.is_blocked || customer.is_deleted) {
+
+    const isStaffUser =
+      typeof authRepo.isUserActiveShopStaff === "function" &&
+      (await authRepo.isUserActiveShopStaff(client, user.id));
+
+    let customer = await ensureCustomerForUser(authRepo, client, user.id, null);
+    if (customer.is_blocked || customer.is_deleted) {
       log.warn(
         { ...logBase, reason: customer.is_blocked ? "customer_blocked" : "customer_deleted", userId: user.id, customerId: customer.id },
         "OTP verify rejected"
@@ -118,6 +124,13 @@ export function createVerifyCustomerOtp({ authRepo, buildStorefrontSession, otpM
     if (membership.is_blocked) {
       log.warn({ ...logBase, reason: "membership_blocked_after_upsert", userId: user.id, customerId: customer.id }, "OTP verify rejected");
       throw new AuthError("Invalid credentials");
+    }
+
+    if (isStaffUser) {
+      log.info(
+        { event: "security.otp.verify.staff_as_customer", shopId, userId: user.id, customerId: customer.id },
+        "Staff user verified as storefront customer"
+      );
     }
 
     return buildStorefrontSession(client, user.id, { ip, userAgent });

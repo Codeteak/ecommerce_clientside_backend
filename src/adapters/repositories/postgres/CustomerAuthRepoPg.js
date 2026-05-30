@@ -97,6 +97,42 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return withRegistrationSource(rows[0]);
   }
 
+  async getActiveShopStaffUserByPhone(client, phone) {
+    const normalized = String(phone || "").trim();
+    if (!normalized) return null;
+    const { rows } = await client.query(
+      `SELECT u.id, u.email, u.phone, u.password_hash, u.is_active
+         FROM users u
+         JOIN shop_staff ss ON ss.user_id = u.id
+        WHERE ${phoneMatchesStorage("u.phone", 1)}
+          AND ss.role IN ('owner', 'admin', 'manager', 'picker')
+          AND ss.is_active = true
+          AND ss.is_deleted = false
+          AND ss.is_blocked = false
+        LIMIT 1`,
+      [normalized]
+    );
+    return withRegistrationSource(rows[0]);
+  }
+
+  async getActiveShopStaffUserByEmail(client, email) {
+    const normalized = String(email || "").trim().toLowerCase();
+    if (!normalized) return null;
+    const { rows } = await client.query(
+      `SELECT u.id, u.email, u.phone, u.password_hash, u.is_active
+         FROM users u
+         JOIN shop_staff ss ON ss.user_id = u.id
+        WHERE lower(u.email) = $1
+          AND ss.role IN ('owner', 'admin', 'manager', 'picker')
+          AND ss.is_active = true
+          AND ss.is_deleted = false
+          AND ss.is_blocked = false
+        LIMIT 1`,
+      [normalized]
+    );
+    return withRegistrationSource(rows[0]);
+  }
+
   async isEmailUsedByActiveShopStaff(client, email) {
     const normalized = String(email || "").trim().toLowerCase();
     if (!normalized) return false;

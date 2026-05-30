@@ -51,13 +51,17 @@ describe("provisionCustomerForOAuthShop", () => {
         email: "picker@example.com",
         is_active: true
       }),
-      getCustomerByUserId: vi.fn().mockResolvedValue({
-        id: "c-staff-2",
-        user_id: "u-staff-2",
-        display_name: "Picker",
-        is_blocked: false,
-        is_deleted: false
-      }),
+      getCustomerByUserId: vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue({
+          id: "c-staff-2",
+          user_id: "u-staff-2",
+          display_name: "Picker",
+          is_blocked: false,
+          is_deleted: false
+        }),
+      insertCustomer: vi.fn().mockResolvedValue({ id: "c-staff-2" }),
       getShopById: vi.fn().mockResolvedValue(activeShop()),
       upsertCustomerShopMembership: vi.fn().mockResolvedValue({
         id: "m-2",
@@ -72,8 +76,11 @@ describe("provisionCustomerForOAuthShop", () => {
     const out = await run({}, { email: "picker@example.com", displayName: "Picker", shopId });
     expect(out.user.id).toBe("u-staff-2");
     expect(out.customer.id).toBe("c-staff-2");
+    expect(authRepo.insertCustomer).toHaveBeenCalledWith({}, {
+      user_id: "u-staff-2",
+      display_name: "Picker"
+    });
   });
-
   it("provisions customer when user is not staff", async () => {
     const authRepo = {
       getUserByEmail: vi.fn().mockResolvedValue({

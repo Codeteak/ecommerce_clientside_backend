@@ -35,6 +35,18 @@ export class CustomerAuthRepo {
     throw new Error("Not implemented");
   }
 
+  async getActiveShopStaffUserByPhone(_client, _phone) {
+    void _client;
+    void _phone;
+    throw new Error("Not implemented");
+  }
+
+  async getActiveShopStaffUserByEmail(_client, _email) {
+    void _client;
+    void _email;
+    throw new Error("Not implemented");
+  }
+
   async isEmailUsedByActiveShopStaff(_client, _email) {
     void _client;
     void _email;

@@ -2,6 +2,8 @@ import { AuthError } from "../../../domain/errors/AuthError.js";
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import { shopAllowsCustomers } from "./shopPolicy.js";
+import { setTenantContext } from "../../../infra/db/tenantContext.js";
+import { ensureCustomerForUser } from "./resolveUserForCustomerLogin.js";
 
 function normalizeEmail(raw) {
   return String(raw || "").trim().toLowerCase();
@@ -31,8 +33,10 @@ export function provisionCustomerForOAuthShop({ authRepo }) {
       throw new AuthError("Invalid credentials");
     }
 
-    let customer = await authRepo.getCustomerByUserId(client, user.id);
-    if (!customer || customer.is_blocked || customer.is_deleted) {
+    await setTenantContext(client, shopId);
+
+    let customer = await ensureCustomerForUser(authRepo, client, user.id, displayName);
+    if (customer.is_blocked || customer.is_deleted) {
       throw new AuthError("Invalid credentials");
     }
 
