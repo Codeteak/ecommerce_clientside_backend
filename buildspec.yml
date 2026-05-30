@@ -33,6 +33,12 @@ phases:
     commands:
       - echo "=== BUILD $(date -u +%FT%TZ) ==="
       - bash scripts/cicd/run-unit-tests.sh -- --reporter=verbose
+      - echo "=== Docker disk cleanup before image build ==="
+      - df -h
+      - docker system df || true
+      - docker system prune -af || true
+      - docker builder prune -af || true
+      - df -h
       - bash scripts/cicd/docker-build-push.sh
 
   post_build:
