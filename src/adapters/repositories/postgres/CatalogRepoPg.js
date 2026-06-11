@@ -4,6 +4,7 @@ import { setTenantContext } from "../../../infra/db/tenantContext.js";
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
 import { storefrontProductsOrderByClause } from "../../../application/services/catalog/catalogSearchOrder.js";
 import { buildListProductsStorefrontQuery } from "./queries/buildListProductsStorefrontQuery.js";
+import { categoryImageLateralJoinSql } from "./queries/categoryImageSql.js";
 
 /**
  * Purpose: This file is the PostgreSQL implementation of catalog data access.
@@ -53,14 +54,7 @@ export class CatalogRepoPg extends CatalogRepo {
            ) pimg ON true
            LEFT JOIN media_assets pm ON pm.id = pimg.media_asset_id
            LEFT JOIN global_categories c ON c.id = gp.global_category_id
-           LEFT JOIN LATERAL (
-             SELECT gci.media_asset_id
-               FROM global_category_images gci
-              WHERE gci.global_category_id = c.id
-              ORDER BY gci.sort_order ASC, gci.created_at ASC
-              LIMIT 1
-           ) cimg ON true
-           LEFT JOIN media_assets cm ON cm.id = cimg.media_asset_id
+           ${categoryImageLateralJoinSql({ lateralAlias: "cimg", mediaAlias: "cm" })}
           WHERE sp.shop_id = $1::uuid
             AND sp.status = 'active'
             AND ($2::uuid IS NULL OR gp.global_category_id = $2)
@@ -115,14 +109,7 @@ export class CatalogRepoPg extends CatalogRepo {
                 ma.storage_key AS image_storage_key,
                 ma.content_type AS image_content_type
            FROM global_categories c
-           LEFT JOIN LATERAL (
-             SELECT gci.media_asset_id
-               FROM global_category_images gci
-              WHERE gci.global_category_id = c.id
-              ORDER BY gci.sort_order ASC, gci.created_at ASC
-              LIMIT 1
-           ) img ON true
-           LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
+           ${categoryImageLateralJoinSql()}
           WHERE c.is_active = true
             AND (
               c.scope = 'shared'
@@ -217,14 +204,7 @@ export class CatalogRepoPg extends CatalogRepo {
            ) pimg ON true
            LEFT JOIN media_assets pm ON pm.id = pimg.media_asset_id
            LEFT JOIN global_categories c ON c.id = gp.global_category_id
-           LEFT JOIN LATERAL (
-             SELECT gci.media_asset_id
-               FROM global_category_images gci
-              WHERE gci.global_category_id = c.id
-              ORDER BY gci.sort_order ASC, gci.created_at ASC
-              LIMIT 1
-           ) cimg ON true
-           LEFT JOIN media_assets cm ON cm.id = cimg.media_asset_id
+           ${categoryImageLateralJoinSql({ lateralAlias: "cimg", mediaAlias: "cm" })}
           WHERE sp.shop_id = $1::uuid
             AND sp.status = 'active'
             AND ($2::uuid IS NULL OR gp.global_category_id = $2)
@@ -296,14 +276,7 @@ export class CatalogRepoPg extends CatalogRepo {
                 ma.storage_key AS image_storage_key,
                 ma.content_type AS image_content_type
            FROM global_categories c
-           LEFT JOIN LATERAL (
-             SELECT gci.media_asset_id
-               FROM global_category_images gci
-              WHERE gci.global_category_id = c.id
-              ORDER BY gci.sort_order ASC, gci.created_at ASC
-              LIMIT 1
-           ) img ON true
-           LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
+           ${categoryImageLateralJoinSql()}
           WHERE c.is_active = true
             AND (
               c.scope = 'shared'
@@ -395,14 +368,7 @@ export class CatalogRepoPg extends CatalogRepo {
                 ma.storage_key AS image_storage_key,
                 ma.content_type AS image_content_type
            FROM global_categories c
-           LEFT JOIN LATERAL (
-             SELECT gci.media_asset_id
-               FROM global_category_images gci
-              WHERE gci.global_category_id = c.id
-              ORDER BY gci.sort_order ASC, gci.created_at ASC
-              LIMIT 1
-           ) img ON true
-           LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
+           ${categoryImageLateralJoinSql()}
           WHERE c.is_active = true
             AND (
               c.scope = 'shared'
@@ -445,14 +411,7 @@ export class CatalogRepoPg extends CatalogRepo {
                 ma.storage_key AS image_storage_key,
                 ma.content_type AS image_content_type
            FROM global_categories c
-           LEFT JOIN LATERAL (
-             SELECT gci.media_asset_id
-               FROM global_category_images gci
-              WHERE gci.global_category_id = c.id
-              ORDER BY gci.sort_order ASC, gci.created_at ASC
-              LIMIT 1
-           ) img ON true
-           LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
+           ${categoryImageLateralJoinSql()}
           WHERE c.is_active = true
             AND (
               c.scope = 'shared'
@@ -682,14 +641,7 @@ export class CatalogRepoPg extends CatalogRepo {
                 ma.storage_key AS image_storage_key,
                 ma.content_type AS image_content_type
            FROM global_categories c
-           LEFT JOIN LATERAL (
-             SELECT gci.media_asset_id
-               FROM global_category_images gci
-              WHERE gci.global_category_id = c.id
-              ORDER BY gci.sort_order ASC, gci.created_at ASC
-              LIMIT 1
-           ) img ON true
-           LEFT JOIN media_assets ma ON ma.id = img.media_asset_id
+           ${categoryImageLateralJoinSql()}
           WHERE c.is_active = true
             AND (
               c.scope = 'shared'

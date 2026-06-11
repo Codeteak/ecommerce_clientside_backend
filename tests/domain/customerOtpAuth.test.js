@@ -451,7 +451,7 @@ describe("customer OTP auth", () => {
     );
   });
 
-  it("migrates legacy +91 stored phone to 10 digits on verify", async () => {
+  it("does not rewrite phone when legacy +91 format is equivalent to 10 digits", async () => {
     const codeHash = await hashOtpCode("123456");
     const authRepo = {
       getShopById: vi.fn().mockResolvedValue(activeShop()),
@@ -498,6 +498,6 @@ describe("customer OTP auth", () => {
     };
     const run = createVerifyOtpForTests(authRepo);
     await run({}, { phone: "+919999999999", shopId, code: "123456" });
-    expect(authRepo.updateUserPhone).toHaveBeenCalledWith({}, "u-1", "9999999999");
+    expect(authRepo.updateUserPhone).not.toHaveBeenCalled();
   });
 });

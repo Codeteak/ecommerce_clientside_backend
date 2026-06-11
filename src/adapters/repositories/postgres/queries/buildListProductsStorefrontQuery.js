@@ -3,6 +3,7 @@ This file builds SQL for storefront product listing with cursor and offset pagin
 */
 
 import { SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL } from "../../../../application/services/catalog/catalogBaselineUnitSql.js";
+import { categoryImageLateralJoinSql } from "./categoryImageSql.js";
 
 /** @param {'in_stock' | 'out_of_stock' | 'unknown' | null} availability */
 function availabilityPredicate(alias, availability) {
@@ -157,14 +158,7 @@ export function buildListProductsStorefrontQuery({
        JOIN media_assets ma ON ma.id = ci.media_asset_id
      ) pgal ON true
      LEFT JOIN global_categories c ON c.id = gp.global_category_id
-     LEFT JOIN LATERAL (
-       SELECT gci.media_asset_id
-         FROM global_category_images gci
-        WHERE gci.global_category_id = c.id
-        ORDER BY gci.sort_order ASC, gci.created_at ASC
-        LIMIT 1
-     ) cimg ON true
-     LEFT JOIN media_assets cma ON cma.id = cimg.media_asset_id
+     ${categoryImageLateralJoinSql({ lateralAlias: "cimg", mediaAlias: "cma" })}
     WHERE sp.shop_id = $1::uuid
       AND sp.status = 'active'
       AND (

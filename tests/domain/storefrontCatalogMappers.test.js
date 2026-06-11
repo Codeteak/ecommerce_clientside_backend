@@ -18,6 +18,25 @@ describe("storefrontCatalogMappers", () => {
     expect(out.slug).toBe("dairy");
   });
 
+  it("maps category row with shop_category_images fallback storage key", () => {
+    const out = mapStorefrontCategoryRow({
+      id: "c1",
+      name: "Dairy",
+      slug: "dairy",
+      parent_id: null,
+      sort_order: 0,
+      image_media_id: "media-1",
+      image_storage_key: "shared/blobs/category/dairy.jpg",
+      image_content_type: "image/jpeg"
+    });
+    expect(out.image).toEqual({
+      url: expect.stringContaining("shared/blobs/category/dairy.jpg"),
+      mediaAssetId: "media-1",
+      storageKey: "shared/blobs/category/dairy.jpg",
+      contentType: "image/jpeg"
+    });
+  });
+
   it("maps product row images and category fields", () => {
     const out = mapStorefrontProductRow({
       id: "p1",

@@ -335,7 +335,7 @@ export class PromotionRepoPg extends PromotionRepo {
          JOIN global_products gp ON gp.id = sp.global_product_id
         WHERE pp.shop_id = $1::uuid
           AND pp.is_deleted = false
-          AND sp.is_deleted = false
+          AND sp.status = 'active'
           AND gp.global_category_id IS NOT NULL
           AND ${activePromo}`,
       [shopId]

@@ -8,7 +8,8 @@ import { getRequestLogger } from "../../../infra/logging/requestContext.js";
 import { setTenantContext } from "../../../infra/db/tenantContext.js";
 import {
   ensureCustomerForUser,
-  resolveUserByPhoneForCustomerLogin
+  resolveUserByPhoneForCustomerLogin,
+  syncUserPhoneForCustomerLogin
 } from "./resolveUserForCustomerLogin.js";
 
 function maskPhone(phone) {
@@ -93,10 +94,7 @@ export function createVerifyCustomerOtp({ authRepo, buildStorefrontSession, otpM
       log.warn({ ...logBase, reason: "user_inactive", userId: user.id }, "OTP verify rejected");
       throw new AuthError("Invalid credentials");
     }
-    if (user.phone !== phone) {
-      await authRepo.updateUserPhone(client, user.id, phone);
-      user = { ...user, phone };
-    }
+    user = await syncUserPhoneForCustomerLogin(authRepo, client, user, phone);
 
     const isStaffUser =
       typeof authRepo.isUserActiveShopStaff === "function" &&

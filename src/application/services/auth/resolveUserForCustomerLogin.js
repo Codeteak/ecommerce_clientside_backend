@@ -1,3 +1,43 @@
+import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normalizeCustomerPhone.js";
+
+function phonesEquivalent(stored, normalizedPhone) {
+  if (!stored) return false;
+  try {
+    return normalizeCustomerPhoneForStorage(stored) === normalizedPhone;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Align legacy stored phone formats without violating users_phone_key.
+ * @param {import("../../ports/repositories/CustomerAuthRepo.js").CustomerAuthRepo} authRepo
+ * @param {import("pg").PoolClient} client
+ * @param {{ id: string, phone?: string | null }} user
+ * @param {string} phone normalized 10-digit phone
+ */
+export async function syncUserPhoneForCustomerLogin(authRepo, client, user, phone) {
+  if (phonesEquivalent(user.phone, phone)) {
+    return user.phone === phone ? user : { ...user, phone };
+  }
+
+  const existing = await authRepo.getUserByPhone(client, phone);
+  if (existing && existing.id !== user.id) {
+    return existing;
+  }
+
+  try {
+    await authRepo.updateUserPhone(client, user.id, phone);
+    return { ...user, phone };
+  } catch (err) {
+    if (err?.code === "23505" && err?.constraint === "users_phone_key") {
+      const owner = await authRepo.getUserByPhone(client, phone);
+      if (owner) return owner;
+    }
+    throw err;
+  }
+}
+
 /**
  * Resolve or create a users row for storefront customer login (including active shop staff).
  * @param {import("../../ports/repositories/CustomerAuthRepo.js").CustomerAuthRepo} authRepo
