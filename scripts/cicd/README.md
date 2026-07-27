@@ -8,7 +8,7 @@ This project uses a simple ARM-native AWS pipeline:
 
 The Docker target is `linux/arm64`, so CodeBuild must run on ARM.
 
-## File layout
+## File layout..
 
 - `buildspec.yml` - build/test/push pipeline definition
 - `scripts/cicd/assert-codebuild-arm-host.sh` - fails fast if builder is not ARM
