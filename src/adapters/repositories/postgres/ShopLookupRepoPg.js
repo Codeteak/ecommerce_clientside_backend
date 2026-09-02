@@ -85,9 +85,7 @@ export class ShopLookupRepoPg extends ShopLookupRepo {
 
   static #shopBrandingSelectColumns = `
     id, name, domain, custom_domain,
-    banner_enabled, banner_media_asset_ids,
-    seo_title, seo_description, seo_keywords, tagline, locale, theme_color,
-    og_image_storage_key, og_image_alt, twitter_card
+    banner_enabled, banner_media_asset_ids
   `;
 
   async findShopByDomain(domain) {

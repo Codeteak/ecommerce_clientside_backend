@@ -9,9 +9,6 @@ export class ShopServiceAreaRepoPg extends ShopServiceAreaRepo {
       const { rows } = await client.query(
         `SELECT s.id,
                 s.status,
-                s.is_active,
-                s.is_blocked,
-                s.is_deleted,
                 s.service_area_radius_meters,
                 a.lat AS hub_lat,
                 a.lng AS hub_lng

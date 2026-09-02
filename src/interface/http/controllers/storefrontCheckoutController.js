@@ -20,6 +20,7 @@ function postHandler(ctx) {
         userId,
         notes: req.body?.notes ?? null,
         couponCode: req.body?.couponCode ?? null,
+        items: req.body?.items ?? null,
         idempotencyKey,
         requestMeta: {
           requestId: req.id,

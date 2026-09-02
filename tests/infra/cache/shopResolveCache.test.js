@@ -55,7 +55,7 @@ describe("shopResolveCache", () => {
       findShopIdByDomain: vi.fn(),
       findShopByDomain: vi.fn()
     };
-    const getShopById = vi.fn().mockResolvedValue({ id: "s1", is_active: true });
+    const getShopById = vi.fn().mockResolvedValue({ id: "s1", status: "active" });
     const cache = createShopResolveCache({
       redis,
       shopLookupRepo,

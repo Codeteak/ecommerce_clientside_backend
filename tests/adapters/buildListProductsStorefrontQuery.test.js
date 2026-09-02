@@ -21,7 +21,7 @@ describe("buildListProductsStorefrontQuery", () => {
 
     expect(out.text).toContain("AND (sp.created_at, sp.id) < ($9::timestamptz, $10::uuid)");
     expect(out.text).toContain("FROM shop_products sp");
-    expect(out.text).toContain("JOIN global_products gp");
+    expect(out.text).toContain("LEFT JOIN global_products gp");
     expect(out.text).toContain(
       "CASE WHEN sp.offer_price_minor_per_unit IS NOT NULL AND sp.offer_price_minor_per_unit < sp.price_minor_per_unit"
     );

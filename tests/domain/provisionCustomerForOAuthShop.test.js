@@ -6,10 +6,7 @@ const shopId = "c0000001-0000-4000-8000-000000000001";
 function activeShop() {
   return {
     id: shopId,
-    status: "active",
-    is_active: true,
-    is_blocked: false,
-    is_deleted: false
+    status: "active"
   };
 }
 
@@ -78,7 +75,8 @@ describe("provisionCustomerForOAuthShop", () => {
     expect(out.customer.id).toBe("c-staff-2");
     expect(authRepo.insertCustomer).toHaveBeenCalledWith({}, {
       user_id: "u-staff-2",
-      display_name: "Picker"
+      display_name: "Picker",
+      shop_id: shopId
     });
   });
   it("provisions customer when user is not staff", async () => {

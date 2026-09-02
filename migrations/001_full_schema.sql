@@ -118,14 +118,11 @@ CREATE TABLE IF NOT EXISTS shops (
   domain TEXT UNIQUE,
   service_area_radius_meters INTEGER NOT NULL DEFAULT 5000,
   custom_domain TEXT UNIQUE,
-  is_active BOOLEAN NOT NULL DEFAULT true,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'blocked', 'deleted')),
   phone TEXT,
   email TEXT,
   address_id UUID REFERENCES addresses(id) ON DELETE SET NULL,
   owner_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  is_blocked BOOLEAN NOT NULL DEFAULT false,
-  is_deleted BOOLEAN NOT NULL DEFAULT false,
   banner_enabled BOOLEAN NOT NULL DEFAULT true,
   banner_media_asset_ids UUID[] NOT NULL DEFAULT '{}',
   seo_title TEXT,
@@ -1052,14 +1049,8 @@ AS $$
   FROM shop_staff s
   JOIN users u ON u.id = s.user_id
   JOIN shops sh ON sh.id = s.shop_id
-    AND sh.is_active = true
-    AND sh.is_blocked = false
-    AND sh.is_deleted = false
     AND sh.status = 'active'
-  WHERE s.is_active = true
-    AND s.is_blocked = false
-    AND s.is_deleted = false
-    AND s.status = 'active'
+  WHERE s.status = 'active'
     AND u.is_active = true
     AND u.staff_login_code = p_code
     AND s.role <> 'picker';
@@ -1512,14 +1503,8 @@ AS $$
   FROM shop_staff s
   JOIN users u ON u.id = s.user_id
   JOIN shops sh ON sh.id = s.shop_id
-    AND sh.is_active = true
-    AND sh.is_blocked = false
-    AND sh.is_deleted = false
     AND sh.status = 'active'
-  WHERE s.is_active = true
-    AND s.is_blocked = false
-    AND s.is_deleted = false
-    AND s.status = 'active'
+  WHERE s.status = 'active'
     AND u.is_active = true
     AND u.staff_login_code = p_code
     AND s.role <> 'picker';

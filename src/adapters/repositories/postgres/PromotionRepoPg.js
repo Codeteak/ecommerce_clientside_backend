@@ -324,7 +324,7 @@ export class PromotionRepoPg extends PromotionRepo {
           AND p.ends_at >= now()`;
 
     const { rows: skuRows } = await client.query(
-      `SELECT DISTINCT gp.global_category_id::text AS id
+      `SELECT DISTINCT COALESCE(sp.global_category_id, gp.global_category_id)::text AS id
          FROM promotion_products pp
          JOIN promotions p
            ON p.id = pp.promotion_id
@@ -332,11 +332,11 @@ export class PromotionRepoPg extends PromotionRepo {
          JOIN shop_products sp
            ON sp.id = pp.shop_product_id
           AND sp.shop_id = pp.shop_id
-         JOIN global_products gp ON gp.id = sp.global_product_id
+         LEFT JOIN global_products gp ON gp.id = sp.global_product_id
         WHERE pp.shop_id = $1::uuid
           AND pp.is_deleted = false
           AND sp.status = 'active'
-          AND gp.global_category_id IS NOT NULL
+          AND COALESCE(sp.global_category_id, gp.global_category_id) IS NOT NULL
           AND ${activePromo}`,
       [shopId]
     );

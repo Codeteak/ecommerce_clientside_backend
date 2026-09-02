@@ -20,7 +20,8 @@ const options = {
       "req.body.email",
       "phone",
       "email",
-      "otp"
+      "otp",
+      "DATABASE_URL"
     ],
     remove: true
   }
@@ -33,11 +34,13 @@ if (isDevelopment) {
       colorize: true,
       colorizeObjects: true,
       levelFirst: true,
-      customColors: "debug:blue,info:green,warn:yellow,error:red,fatal:bgRed,trace:gray",
+      customColors:
+        "trace:gray,debug:cyan,info:green,warn:yellow,error:red,fatal:bgRed,bold",
       translateTime: "yyyy-mm-dd HH:MM:ss",
       ignore: "pid,hostname",
+      singleLine: false,
       messageFormat:
-        "{msg} | event={event} reqId={requestId} method={method} route={route} status={statusCode} durationMs={durationMs}"
+        "{if event}\x1b[90m[{event}]\x1b[0m {end}{msg}"
     }
   };
 }

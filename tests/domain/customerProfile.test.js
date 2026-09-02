@@ -10,7 +10,6 @@ describe("buildProfileFromShops", () => {
         id: "s1",
         name: "Demo",
         slug: "demo",
-        is_active: true,
         status: "active",
         shop_image_storage_key: null
       }
@@ -35,7 +34,6 @@ describe("buildProfileFromShops", () => {
         id: "s1",
         name: "Demo",
         slug: "demo",
-        is_active: false,
         status: "blocked",
         shop_image_storage_key: "shops/demo/logo.png"
       }

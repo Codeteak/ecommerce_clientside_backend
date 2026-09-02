@@ -101,15 +101,20 @@ export async function resolveUserByEmailForCustomerLogin(authRepo, client, email
  * @param {string} userId
  * @param {string | null | undefined} displayName
  */
-export async function ensureCustomerForUser(authRepo, client, userId, displayName = null) {
-  let customer = await authRepo.getCustomerByUserId(client, userId);
+export async function ensureCustomerForUser(authRepo, client, userId, displayName = null, shopId = null) {
+  let customer = await authRepo.getCustomerByUserId(client, userId, shopId);
   if (customer) return customer;
+
+  if (!shopId) {
+    throw new Error("shopId is required to create a customer profile");
+  }
 
   await authRepo.insertCustomer(client, {
     user_id: userId,
-    display_name: displayName
+    display_name: displayName,
+    shop_id: shopId
   });
-  customer = await authRepo.getCustomerByUserId(client, userId);
+  customer = await authRepo.getCustomerByUserId(client, userId, shopId);
   if (!customer) {
     throw new Error("Failed to create customer profile");
   }

@@ -67,7 +67,7 @@ export function createVerifyCustomerEmailOtp({ authRepo, buildStorefrontSession,
       throw new AuthError("Invalid credentials");
     }
 
-    let customer = await ensureCustomerForUser(authRepo, client, user.id, null);
+    let customer = await ensureCustomerForUser(authRepo, client, user.id, null, shopId);
     if (customer.is_blocked || customer.is_deleted) {
       throw new AuthError("Invalid credentials");
     }
@@ -80,6 +80,6 @@ export function createVerifyCustomerEmailOtp({ authRepo, buildStorefrontSession,
       throw new AuthError("Invalid credentials");
     }
 
-    return buildStorefrontSession(client, user.id, { ip, userAgent });
+    return buildStorefrontSession(client, user.id, { ip, userAgent, shopId });
   };
 }

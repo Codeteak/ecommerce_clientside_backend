@@ -6,9 +6,6 @@ function buildRepo(overrides = {}) {
     getShopHubForServiceCheck: vi.fn().mockResolvedValue({
       id: "00000000-0000-4000-8000-000000000001",
       status: "active",
-      is_active: true,
-      is_blocked: false,
-      is_deleted: false,
       service_area_radius_meters: 1000,
       hub_lat: 12.9716,
       hub_lng: 77.5946,
@@ -71,5 +68,22 @@ describe("checkShopServiceArea", () => {
     expect(result.inServiceArea).toBe(false);
     expect(result.shopLocation).toEqual({ lat: 12.9716, lng: 77.5946 });
     expect(result.code).toBe("OUT_OF_AREA");
+  });
+
+  it("returns shop unavailable when status is not active", async () => {
+    const repo = buildRepo({ status: "blocked" });
+    const check = createCheckShopServiceArea({
+      shopServiceAreaRepo: repo,
+      defaultMaxRadiusM: 5000
+    });
+
+    const result = await check({
+      shopId: "00000000-0000-4000-8000-000000000001",
+      lat: 12.9716,
+      lng: 77.5946
+    });
+
+    expect(result.inServiceArea).toBe(false);
+    expect(result.code).toBe("SHOP_UNAVAILABLE");
   });
 });

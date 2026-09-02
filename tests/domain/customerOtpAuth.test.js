@@ -19,7 +19,6 @@ function listActiveShopRow(overrides = {}) {
     id: shopId,
     name: "Demo",
     slug: "demo",
-    is_active: true,
     status: "active",
     shop_image_storage_key: null,
     ...overrides
@@ -30,10 +29,7 @@ function activeShop() {
   return {
     id: shopId,
     name: mockShopDisplayName,
-    status: "active",
-    is_active: true,
-    is_blocked: false,
-    is_deleted: false
+    status: "active"
   };
 }
 
@@ -57,6 +53,20 @@ describe("customer OTP auth", () => {
     expect(smsArg.to).toBe("919999999999");
     expect(String(smsArg.code)).toMatch(/^\d{6}$/);
     expect(smsArg.shopName).toBe(mockShopDisplayName);
+  });
+
+  it("rejects OTP request when shop status is not active", async () => {
+    const authRepo = {
+      getShopById: vi.fn().mockResolvedValue({ id: shopId, status: "blocked" }),
+      findLatestOtpChallenge: vi.fn(),
+      insertOtpChallenge: vi.fn()
+    };
+    const run = createRequestCustomerOtp({ authRepo, smsSender: { sendOtp: vi.fn() } });
+
+    await expect(run({}, { phone: "+919999999999", shopId })).rejects.toMatchObject({
+      code: "VALIDATION_ERROR"
+    });
+    expect(authRepo.insertOtpChallenge).not.toHaveBeenCalled();
   });
 
   it("consumes OTP challenge when SMS send fails", async () => {
@@ -443,7 +453,8 @@ describe("customer OTP auth", () => {
     expect(authRepo.isUserActiveShopStaff).toHaveBeenCalled();
     expect(authRepo.insertCustomer).toHaveBeenCalledWith({}, {
       user_id: "staff-u-1",
-      display_name: null
+      display_name: null,
+      shop_id: shopId
     });
     expect(authRepo.upsertCustomerShopMembership).toHaveBeenCalledWith(
       {},

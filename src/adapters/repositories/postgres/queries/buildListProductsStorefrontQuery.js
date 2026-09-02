@@ -4,6 +4,17 @@ This file builds SQL for storefront product listing with cursor and offset pagin
 
 import { SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL } from "../../../../application/services/catalog/catalogBaselineUnitSql.js";
 import { categoryImageLateralJoinSql } from "./categoryImageSql.js";
+import {
+  shopProductBaseUnitSql,
+  shopProductBrandIdSql,
+  shopProductCategoryIdSql,
+  shopProductDescriptionSql,
+  shopProductImageUrlSql,
+  shopProductLeftJoinGlobal,
+  shopProductNameSql,
+  shopProductSlugSql,
+  shopProductUnitSizeSql
+} from "./shopProductCatalogSql.js";
 
 /** @param {'in_stock' | 'out_of_stock' | 'unknown' | null} availability */
 function availabilityPredicate(alias, availability) {
@@ -57,11 +68,11 @@ export function buildListProductsStorefrontQuery({
       SELECT EXISTS (
         SELECT 1
           FROM shop_products sp2
-          JOIN global_products gp2 ON gp2.id = sp2.global_product_id
+          LEFT JOIN global_products gp2 ON gp2.id = sp2.global_product_id
          WHERE sp2.shop_id = $1::uuid
            AND sp2.status = 'active'
            ${categoryAvailabilitySql}
-           AND gp2.global_category_id = $2::uuid
+           AND COALESCE(sp2.global_category_id, gp2.global_category_id) = $2::uuid
       ) AS has_direct
     ),
     effective_categories AS (
@@ -76,19 +87,19 @@ export function buildListProductsStorefrontQuery({
          AND cd.id <> $2::uuid
     )
     SELECT sp.id,
-          gp.global_category_id AS category_id,
-          gp.name,
-          gp.slug,
-          gp.base_unit,
-          gp.unit_size::text AS unit_size,
-          gp.description,
+          ${shopProductCategoryIdSql} AS category_id,
+          ${shopProductNameSql} AS name,
+          ${shopProductSlugSql} AS slug,
+          ${shopProductBaseUnitSql} AS base_unit,
+          ${shopProductUnitSizeSql}::text AS unit_size,
+          ${shopProductDescriptionSql} AS description,
           sp.status,
           sp.availability,
           sp.price_minor_per_unit::text AS price_minor_per_unit,
           sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
           sp.created_at,
           sp.updated_at,
-          gp.image_url AS global_image_url,
+          ${shopProductImageUrlSql} AS global_image_url,
           thumb.media_asset_id AS thumb_media_id,
           thumb.storage_key AS thumb_storage_key,
           thumb.content_type AS thumb_content_type,
@@ -100,7 +111,7 @@ export function buildListProductsStorefrontQuery({
           cma.storage_key AS category_image_storage_key,
           cma.content_type AS category_image_content_type
      FROM shop_products sp
-     JOIN global_products gp ON gp.id = sp.global_product_id
+     ${shopProductLeftJoinGlobal}
      LEFT JOIN LATERAL (
        WITH chosen_images AS (
          SELECT spi.media_asset_id, spi.sort_order
@@ -157,16 +168,16 @@ export function buildListProductsStorefrontQuery({
        ) ci
        JOIN media_assets ma ON ma.id = ci.media_asset_id
      ) pgal ON true
-     LEFT JOIN global_categories c ON c.id = gp.global_category_id
+     LEFT JOIN global_categories c ON c.id = ${shopProductCategoryIdSql}
      ${categoryImageLateralJoinSql({ lateralAlias: "cimg", mediaAlias: "cma" })}
     WHERE sp.shop_id = $1::uuid
       AND sp.status = 'active'
       AND (
         $2::uuid IS NULL
-        OR gp.global_category_id IN (SELECT id FROM effective_categories)
+        OR ${shopProductCategoryIdSql} IN (SELECT id FROM effective_categories)
       )
-      AND ($3::uuid IS NULL OR gp.global_brand_id = $3)
-      AND ($4::text IS NULL OR gp.name ILIKE $4 ESCAPE '\\' OR gp.slug ILIKE $4 ESCAPE '\\')
+      AND ($3::uuid IS NULL OR ${shopProductBrandIdSql} = $3)
+      AND ($4::text IS NULL OR ${shopProductNameSql} ILIKE $4 ESCAPE '\\' OR ${shopProductSlugSql} ILIKE $4 ESCAPE '\\')
       AND ($5::text IS NULL OR sp.availability = $5)
       AND ($6::bigint IS NULL OR (${SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL}) >= $6)
       AND ($7::bigint IS NULL OR (${SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL}) <= $7)

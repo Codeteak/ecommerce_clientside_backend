@@ -2,12 +2,22 @@ import http from "node:http";
 import { env } from "../config/env.js";
 import { buildReadCacheStartupStatus } from "../config/env/readCacheTtl.js";
 import { logger } from "../config/logger.js";
+import {
+  logStartupBanner,
+  logStartupFailure,
+  logStartupReady,
+  logStartupSkip,
+  logStartupStep,
+  logStartupSuccess,
+  maskDatabaseHost
+} from "../config/startupLog.js";
 import { pool } from "../infra/db/pool.js";
 import { disconnectSharedRedis, getSharedRedisClient } from "../infra/redis/sharedRedis.js";
 import { createRealtimeServer } from "../infra/realtime/createRealtimeServer.js";
 import { withRetry } from "../utils/withRetry.js";
+import { formatError } from "../utils/formatError.js";
 import { closeServerWithTimeout } from "../utils/gracefulShutdown.js";
-import { initSentry } from "../infra/observability/sentry.js";
+import { initSentry, isSentryEnabled } from "../infra/observability/sentry.js";
 import { createAppContext } from "./composition.js";
 import { createExpressApp } from "./server.js";
 import { installFatalProcessHandlers } from "../utils/installFatalProcessHandlers.js";
@@ -29,7 +39,10 @@ let outboxPoller = null;
 
 function installGracefulShutdown() {
   const shutdown = async (signal) => {
-    logger.info({ signal, event: "shutdown.started" }, "Shutdown signal received; draining HTTP connections");
+    logger.info(
+      { signal, event: "shutdown.started" },
+      `[shutdown.started] Received ${signal}; draining HTTP connections`
+    );
     if (!server) {
       process.exit(0);
       return;
@@ -38,7 +51,7 @@ function installGracefulShutdown() {
     if (result === "timeout") {
       logger.warn(
         { event: "shutdown.forced", timeoutMs: env.SHUTDOWN_TIMEOUT_MS },
-        "HTTP drain timed out; continuing shutdown"
+        `[shutdown.forced] HTTP drain timed out after ${env.SHUTDOWN_TIMEOUT_MS}ms`
       );
     }
     server = null;
@@ -50,7 +63,10 @@ function installGracefulShutdown() {
           new Promise((resolve) => setTimeout(resolve, env.SHUTDOWN_TIMEOUT_MS))
         ]);
       } catch (err) {
-        logger.warn({ err, event: "shutdown.outbox_failed" }, "Outbox poller stop during shutdown");
+        logger.warn(
+          { err, event: "shutdown.outbox_failed" },
+          "[shutdown.outbox_failed] Outbox poller stop failed"
+        );
       }
       outboxPoller = null;
     }
@@ -58,21 +74,30 @@ function installGracefulShutdown() {
       try {
         await realtimeServer.close();
       } catch (err) {
-        logger.warn({ err, event: "shutdown.realtime_failed" }, "Realtime close during shutdown");
+        logger.warn(
+          { err, event: "shutdown.realtime_failed" },
+          "[shutdown.realtime_failed] Realtime close failed"
+        );
       }
       realtimeServer = null;
     }
     try {
       await disconnectSharedRedis();
     } catch (err) {
-      logger.warn({ err, event: "shutdown.redis_failed" }, "Cache disconnect during shutdown");
+      logger.warn(
+        { err, event: "shutdown.redis_failed" },
+        "[shutdown.redis_failed] Redis disconnect failed"
+      );
     }
     try {
       await pool.end();
     } catch (err) {
-      logger.warn({ err, event: "shutdown.pool_failed" }, "Pool end during shutdown");
+      logger.warn(
+        { err, event: "shutdown.pool_failed" },
+        "[shutdown.pool_failed] Database pool close failed"
+      );
     }
-    logger.info({ event: "shutdown.complete" }, "Graceful shutdown complete");
+    logger.info({ event: "shutdown.complete" }, "[shutdown.complete] Graceful shutdown finished");
     process.exit(0);
   };
 
@@ -81,55 +106,92 @@ function installGracefulShutdown() {
 }
 
 async function main() {
-  initSentry();
+  logStartupBanner();
 
+  logStartupStep("sentry", "Initializing error tracking (Sentry)…");
+  initSentry();
+  if (isSentryEnabled()) {
+    logStartupSuccess("sentry", "Sentry enabled");
+  } else {
+    logStartupSkip("sentry", "Sentry disabled (no SENTRY_DSN or test env)");
+  }
+
+  logStartupStep("database", "Connecting to PostgreSQL…", {
+    dbHost: maskDatabaseHost(env.DATABASE_URL)
+  });
   await withRetry(() => pool.query("select 1 as ok"), {
     attempts: env.SERVER_DB_RETRY_ATTEMPTS,
     baseDelayMs: env.SERVER_DB_RETRY_BASE_DELAY_MS,
     maxDelayMs: env.SERVER_DB_RETRY_MAX_DELAY_MS,
-    event: "server_start_db_retry"
+    event: "startup.database.retry"
+  });
+  logStartupSuccess("database", "PostgreSQL connected", {
+    dbHost: maskDatabaseHost(env.DATABASE_URL),
+    poolMax: env.DATABASE_POOL_MAX
   });
 
+  if (env.REDIS_URL && !env.DISABLE_RATE_LIMITING) {
+    logStartupStep("redis", "Warming up Redis for rate limits…");
+  } else {
+    logStartupSkip(
+      "redis",
+      env.DISABLE_RATE_LIMITING
+        ? "Rate limiting disabled — skipping Redis warmup"
+        : "REDIS_URL unset — rate limits use in-memory store"
+    );
+  }
   await warmupRateLimitRedis();
+  if (env.REDIS_URL && !env.DISABLE_RATE_LIMITING && getSharedRedisClient()?.status === "ready") {
+    logStartupSuccess("redis", "Redis ready for rate limits");
+  }
 
+  logStartupStep("app", "Building application context and HTTP stack…");
   const ctx = createAppContext();
   const app = createExpressApp(ctx);
   server = http.createServer(app);
+  logStartupSuccess("app", "Express application ready");
 
   if (env.REALTIME_ENABLED) {
+    logStartupStep("realtime", "Attaching Socket.IO realtime server…");
     const redis = getSharedRedisClient();
     if (!redis) {
-      logger.warn(
-        { event: "realtime.disabled_no_redis" },
-        "REALTIME_ENABLED but Redis unavailable; order.placed emits will no-op"
+      logStartupSkip(
+        "realtime",
+        "REALTIME_ENABLED but Redis unavailable — order.placed emits will no-op"
       );
     } else {
       realtimeServer = await createRealtimeServer(server, { redis, logger });
       ctx.emitOrderPlaced = realtimeServer.emitOrderPlaced;
-      logger.info({ event: "realtime.enabled" }, "Socket.IO realtime server attached");
+      logStartupSuccess("realtime", "Socket.IO realtime server attached");
     }
+  } else {
+    logStartupSkip("realtime", "Realtime disabled (REALTIME_ENABLED=false)");
   }
 
   installGracefulShutdown();
 
+  logStartupStep("http", `Binding HTTP listener on port ${env.PORT}…`);
   await new Promise((resolve, reject) => {
     server.listen(env.PORT, () => {
-      const cache = buildReadCacheStartupStatus(env);
-      logger.info(
-        {
-          port: env.PORT,
-          event: "server.started",
-          cacheOn: cache.cacheOn,
-          redisConfigured: cache.redisConfigured,
-          readCachesActive: cache.readCachesActive,
-          cacheTtlSec: cache.effectiveTtlSec
-        },
-        `Server is running on port ${env.PORT} — ${cache.summary}`
-      );
       resolve();
     });
     server.on("error", reject);
   });
+
+  const cache = buildReadCacheStartupStatus(env);
+  logStartupReady(
+    {
+      port: env.PORT,
+      nodeEnv: env.NODE_ENV,
+      cacheOn: cache.cacheOn,
+      redisConfigured: cache.redisConfigured,
+      readCachesActive: cache.readCachesActive,
+      cacheTtlSec: cache.effectiveTtlSec,
+      outboxWorker: env.OUTBOX_WORKER_ENABLED,
+      realtimeEnabled: env.REALTIME_ENABLED
+    },
+    `Server ready on http://localhost:${env.PORT} — ${cache.summary}`
+  );
 
   if (env.OUTBOX_WORKER_ENABLED) {
     outboxPoller = startOutboxPoller({
@@ -139,6 +201,9 @@ async function main() {
       emitOrderPlaced:
         typeof ctx.emitOrderPlaced === "function" ? ctx.emitOrderPlaced.bind(ctx) : undefined
     });
+    logStartupSuccess("outbox", "Embedded outbox worker started");
+  } else {
+    logStartupSkip("outbox", "Outbox worker disabled (OUTBOX_WORKER_ENABLED=false)");
   }
 }
 
@@ -149,7 +214,7 @@ async function startWithRetry() {
     attempts: env.SERVER_START_RETRY_ATTEMPTS,
     baseDelayMs: env.SERVER_START_RETRY_BASE_DELAY_MS,
     maxDelayMs: env.SERVER_START_RETRY_MAX_DELAY_MS,
-    event: "server_start_retry",
+    event: "startup.retry",
     retryIf: (err) => {
       const code = String(err?.code || err?.cause?.code || "");
       if (code === "EADDRINUSE") return false;
@@ -165,14 +230,26 @@ async function startWithRetry() {
 }
 
 startWithRetry().catch((err) => {
+  const formatted = formatError(err);
   if (err?.code === "EADDRINUSE") {
-    logger.error(
-      { port: env.PORT },
-      "Port already in use — stop the other process (e.g. lsof -i :PORT) or change PORT in .env"
+    logStartupFailure(
+      "http",
+      `Port ${env.PORT} already in use — stop the other process or change PORT in .env`,
+      err,
+      { port: env.PORT }
     );
-  } else if (err?.code === "ECONNREFUSED" || err?.cause?.code === "ECONNREFUSED") {
-    logger.error("Cannot reach PostgreSQL — ensure the server is running and DATABASE_URL in .env is correct");
+  } else if (
+    formatted.code === "ECONNREFUSED" ||
+    err?.cause?.code === "ECONNREFUSED"
+  ) {
+    logStartupFailure(
+      "database",
+      "Cannot reach PostgreSQL — check DATABASE_URL and that the database is running",
+      err,
+      { dbHost: maskDatabaseHost(env.DATABASE_URL) }
+    );
+  } else {
+    logStartupFailure("app", "Failed to start server", err);
   }
-  logger.error({ err }, "Failed to start server");
   process.exit(1);
 });

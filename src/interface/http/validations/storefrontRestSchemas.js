@@ -85,7 +85,17 @@ export const storefrontCheckoutBodySchema = z.object({
     .max(64)
     .optional()
     .nullable()
-    .transform((v) => (v == null || v === "" ? undefined : v.toUpperCase()))
+    .transform((v) => (v == null || v === "" ? undefined : v.toUpperCase())),
+  items: z
+    .array(
+      z.object({
+        productId: z.string().uuid(),
+        quantity: z.coerce.number().positive().max(MAX_LINE_QUANTITY)
+      })
+    )
+    .min(1)
+    .max(100)
+    .optional()
 });
 
 export const storefrontOrderIdParamSchema = z.object({

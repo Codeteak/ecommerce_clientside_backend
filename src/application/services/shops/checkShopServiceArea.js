@@ -44,10 +44,7 @@ export function createCheckShopServiceArea({ shopServiceAreaRepo, shopResolveCac
     }
 
     const shopRow = {
-      status: row.status,
-      is_active: row.is_active,
-      is_blocked: row.is_blocked,
-      is_deleted: row.is_deleted
+      status: row.status
     };
 
     if (!shopAllowsCustomers(shopRow)) {

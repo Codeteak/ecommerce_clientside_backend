@@ -1,4 +1,5 @@
 import { SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL } from "./catalogBaselineUnitSql.js";
+import { shopProductNameSql } from "../../../adapters/repositories/postgres/queries/shopProductCatalogSql.js";
 
 export function productsOrderByClause(sort, order) {
   const dir = order === "desc" ? "DESC" : "ASC";
@@ -32,9 +33,9 @@ export function storefrontProductsOrderByClause(sortBy, sortOrder) {
   const dir = sortOrder === "asc" ? "ASC" : "DESC";
   switch (sortBy) {
     case "price":
-      return `${SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL} ${dir}, gp.name ASC, sp.id ASC`;
+      return `${SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL} ${dir}, ${shopProductNameSql} ASC, sp.id ASC`;
     case "name":
-      return `gp.name ${dir}, sp.id ASC`;
+      return `${shopProductNameSql} ${dir}, sp.id ASC`;
     case "created_at":
     default:
       return `sp.created_at ${dir}, sp.id ${dir}`;

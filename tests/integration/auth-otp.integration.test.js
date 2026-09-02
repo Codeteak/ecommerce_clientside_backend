@@ -31,8 +31,8 @@ integrationDescribe("integration: customer OTP auth", () => {
     const client = await pool.connect();
     try {
       await client.query(
-        `INSERT INTO shops (id, public_id, slug, name, status, is_active, is_blocked, is_deleted)
-         VALUES ($1, $2, $3, $4, 'active', true, false, false)
+        `INSERT INTO shops (id, public_id, slug, name, status)
+         VALUES ($1, $2, $3, $4, 'active')
          ON CONFLICT (id) DO NOTHING`,
         [shopId, "fixture-shop", "fixture-shop", "Integration Test Shop"]
       );
