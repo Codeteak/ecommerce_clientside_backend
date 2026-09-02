@@ -50,7 +50,8 @@ export function mountStorefrontRoutes(r, deps) {
     storefrontOrders,
     storefrontPromotions,
     invalidateShopCatalogCache,
-    prewarmStorefrontCache
+    prewarmStorefrontCache,
+    getShopCatalogRevision
   } = deps;
 
   function catalogCacheOpsAuth(req, res) {
@@ -196,6 +197,24 @@ export function mountStorefrontRoutes(r, deps) {
       validate({ query: storefrontOrdersListQuerySchema }),
       storefrontOrders.list
     );
+
+    if (typeof getShopCatalogRevision === "function") {
+      r.get(`${prefix}/catalog/revision`, (req, res, next) => {
+        const shopId = String(req.get("x-shop-id") || req.query.shopId || "").trim();
+        if (!shopId) {
+          return res.status(400).json({
+            error: { code: "BAD_REQUEST", message: "x-shop-id header required" }
+          });
+        }
+        Promise.resolve(getShopCatalogRevision(shopId))
+          .then((generation) => {
+            res.setHeader("Cache-Control", "no-store");
+            return res.json({ shopId, generation });
+          })
+          .catch(next);
+      });
+    }
+
     if (env.CATALOG_CACHE_INVALIDATE_TOKEN && typeof invalidateShopCatalogCache === "function") {
       r.post(
         `${prefix}/catalog/cache/invalidate`,
@@ -206,7 +225,8 @@ export function mountStorefrontRoutes(r, deps) {
           Promise.resolve(
             invalidateShopCatalogCache(req.body.shopId, {
               prewarm: req.body.prewarm === true,
-              topCategoryLimit: req.body.topCategoryLimit
+              topCategoryLimit: req.body.topCategoryLimit,
+              productIds: req.body.productIds
             })
           )
             .then((prewarmResult) => {

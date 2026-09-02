@@ -12,7 +12,11 @@ import {
   maskDatabaseHost
 } from "../config/startupLog.js";
 import { pool } from "../infra/db/pool.js";
-import { disconnectSharedRedis, getSharedRedisClient } from "../infra/redis/sharedRedis.js";
+import {
+  disconnectSharedRedis,
+  ensureSharedRedisReady,
+  getSharedRedisClient
+} from "../infra/redis/sharedRedis.js";
 import { createRealtimeServer } from "../infra/realtime/createRealtimeServer.js";
 import { withRetry } from "../utils/withRetry.js";
 import { formatError } from "../utils/formatError.js";
@@ -153,17 +157,25 @@ async function main() {
 
   if (env.REALTIME_ENABLED) {
     logStartupStep("realtime", "Attaching Socket.IO realtime server…");
-    const redis = getSharedRedisClient();
-    if (!redis) {
-      logStartupSkip(
-        "realtime",
-        "REALTIME_ENABLED but Redis unavailable — order.placed emits will no-op"
-      );
+    /** @type {import("ioredis").default | null} */
+    let redisForAdapter = null;
+    if (env.REDIS_URL) {
+      try {
+        redisForAdapter = await ensureSharedRedisReady();
+        logStartupSuccess("realtime.redis", "Redis ready for Socket.IO adapter");
+      } catch (err) {
+        logger.warn(
+          { err, event: "startup.realtime.redis_skip" },
+          "Redis not ready — Socket.IO without Redis adapter (single instance only)"
+        );
+      }
     } else {
-      realtimeServer = await createRealtimeServer(server, { redis, logger });
-      ctx.emitOrderPlaced = realtimeServer.emitOrderPlaced;
-      logStartupSuccess("realtime", "Socket.IO realtime server attached");
+      logStartupSkip("realtime.redis", "REDIS_URL unset — Socket.IO single-instance mode");
     }
+    realtimeServer = await createRealtimeServer(server, { redis: redisForAdapter, logger });
+    ctx.emitOrderPlaced = realtimeServer.emitOrderPlaced;
+    ctx.emitCatalogInvalidated = realtimeServer.emitCatalogInvalidated;
+    logStartupSuccess("realtime", "Socket.IO realtime server attached");
   } else {
     logStartupSkip("realtime", "Realtime disabled (REALTIME_ENABLED=false)");
   }

@@ -137,6 +137,7 @@ export const envSchema = z
     ACCESS_JTI_DB_FALLBACK_ENABLED: z.preprocess(boolFromEnv, z.boolean()).default(true),
     REALTIME_ENABLED: z.preprocess(boolFromEnv, z.boolean()).default(false),
     REALTIME_CONNECT_TOKEN: z.string().optional().default(""),
+    STOREFRONT_CATALOG_REALTIME_TOKEN: z.string().optional().default(""),
     SEARCH_USE_TRGM: z.preprocess(boolFromEnv, z.boolean()).default(false)
   })
   .superRefine((val, ctx) => {

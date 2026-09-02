@@ -279,7 +279,8 @@ export function createAppContext() {
   });
 
   const realtime = {
-    emitOrderPlaced: () => {}
+    emitOrderPlaced: () => {},
+    emitCatalogInvalidated: () => {}
   };
 
   const checkoutStorefront = createCheckoutStorefront({
@@ -343,6 +344,10 @@ export function createAppContext() {
     invalidateShopCatalogCache: async (shopId, opts = {}) => {
       await catalogCache.invalidateShopCatalog(shopId);
       await shopResolveCache.invalidateShop(shopId);
+      realtime.emitCatalogInvalidated({
+        shopId,
+        productIds: Array.isArray(opts.productIds) ? opts.productIds : undefined
+      });
       if (opts.prewarm === true) {
         return prewarmStorefrontCache(shopId, {
           topCategoryLimit: opts.topCategoryLimit
@@ -350,6 +355,7 @@ export function createAppContext() {
       }
     },
     prewarmStorefrontCache,
+    getShopCatalogRevision: (shopId) => catalogCache.getCatalogGeneration(shopId),
     getPageMetadata: (shopId, pageType, slug) =>
       seoMetadataCache.getPageMetadata(shopId, pageType, slug),
     get emitOrderPlaced() {
@@ -357,6 +363,12 @@ export function createAppContext() {
     },
     set emitOrderPlaced(fn) {
       realtime.emitOrderPlaced = fn;
+    },
+    get emitCatalogInvalidated() {
+      return realtime.emitCatalogInvalidated;
+    },
+    set emitCatalogInvalidated(fn) {
+      realtime.emitCatalogInvalidated = fn;
     }
   };
 }
