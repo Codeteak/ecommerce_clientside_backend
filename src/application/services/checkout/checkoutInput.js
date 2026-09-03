@@ -38,7 +38,9 @@ export function customerAddressSnapshot(addr) {
   const parts = [addr.line1, addr.line2, addr.landmark, addr.city, addr.state, addr.postalCode, addr.country]
     .map((x) => (x != null && String(x).trim() !== "" ? String(x).trim() : null))
     .filter(Boolean);
-  return parts.length ? parts.join(", ") : null;
+  if (parts.length) return parts.join(", ");
+  const raw = addr.raw != null ? String(addr.raw).trim() : "";
+  return raw || null;
 }
 
 export function normalizeCouponCode(code) {

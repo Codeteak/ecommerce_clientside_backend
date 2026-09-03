@@ -85,7 +85,17 @@ export const storefrontCheckoutBodySchema = z.object({
     .max(64)
     .optional()
     .nullable()
-    .transform((v) => (v == null || v === "" ? undefined : v.toUpperCase()))
+    .transform((v) => (v == null || v === "" ? undefined : v.toUpperCase())),
+  items: z
+    .array(
+      z.object({
+        productId: z.string().uuid(),
+        quantity: z.coerce.number().positive().max(MAX_LINE_QUANTITY)
+      })
+    )
+    .min(1)
+    .max(100)
+    .optional()
 });
 
 export const storefrontOrderIdParamSchema = z.object({
@@ -115,7 +125,8 @@ export const storefrontCouponsListQuerySchema = z.object({
 export const storefrontCatalogCacheInvalidateBodySchema = z.object({
   shopId: z.string().uuid(),
   prewarm: z.boolean().optional(),
-  topCategoryLimit: z.coerce.number().int().min(1).max(20).optional()
+  topCategoryLimit: z.coerce.number().int().min(1).max(20).optional(),
+  productIds: z.array(z.string().uuid()).max(50).optional()
 });
 
 export const storefrontCatalogCachePrewarmBodySchema = z.object({

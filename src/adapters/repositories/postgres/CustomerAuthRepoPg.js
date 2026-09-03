@@ -3,6 +3,7 @@ import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { pool } from "../../../infra/db/pool.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import { phoneMatchesStorage } from "./phoneMatchSql.js";
+import { encodeAddressRaw, parseAddressRow } from "./addressShape.js";
 
 /**
  * Purpose: This file is the PostgreSQL implementation of customer auth data access.
@@ -21,6 +22,16 @@ function withRegistrationSource(row) {
   return { ...row, registration_source: registrationSourceFromUserRow(row) };
 }
 
+function withCustomerFlags(row) {
+  if (!row) return null;
+  const status = row.status != null ? String(row.status).trim().toLowerCase() : "";
+  return {
+    ...row,
+    is_blocked: row.is_blocked === true || status === "blocked",
+    is_deleted: row.is_deleted === true || status === "deleted"
+  };
+}
+
 const ADDRESS_API_TO_DB = {
   line1: "line1",
   line2: "line2",
@@ -37,7 +48,7 @@ const ADDRESS_API_TO_DB = {
 export class CustomerAuthRepoPg extends CustomerAuthRepo {
   async getShopById(client, shopId) {
     const { rows } = await client.query(
-      `SELECT id, slug, name, is_active, status, is_blocked, is_deleted
+      `SELECT id, slug, name, status
          FROM shops
         WHERE id = $1`,
       [shopId]
@@ -55,8 +66,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
           WHERE u.id = $1
             AND c.id = $2
             AND u.is_active = true
-            AND c.is_blocked = false
-            AND c.is_deleted = false
+            AND c.status = 'active'
           LIMIT 1`,
         [userId, customerId]
       );
@@ -106,9 +116,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
          JOIN shop_staff ss ON ss.user_id = u.id
         WHERE ${phoneMatchesStorage("u.phone", 1)}
           AND ss.role IN ('owner', 'admin', 'manager', 'picker')
-          AND ss.is_active = true
-          AND ss.is_deleted = false
-          AND ss.is_blocked = false
+          AND ss.status = 'active'
         LIMIT 1`,
       [normalized]
     );
@@ -124,9 +132,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
          JOIN shop_staff ss ON ss.user_id = u.id
         WHERE lower(u.email) = $1
           AND ss.role IN ('owner', 'admin', 'manager', 'picker')
-          AND ss.is_active = true
-          AND ss.is_deleted = false
-          AND ss.is_blocked = false
+          AND ss.status = 'active'
         LIMIT 1`,
       [normalized]
     );
@@ -142,9 +148,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
          JOIN shop_staff ss ON ss.user_id = u.id
         WHERE lower(u.email) = $1
           AND ss.role IN ('owner', 'admin', 'manager', 'picker')
-          AND ss.is_active = true
-          AND ss.is_deleted = false
-          AND ss.is_blocked = false
+          AND ss.status = 'active'
         LIMIT 1`,
       [normalized]
     );
@@ -160,9 +164,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
          JOIN shop_staff ss ON ss.user_id = u.id
         WHERE ${phoneMatchesStorage("u.phone", 1)}
           AND ss.role IN ('owner', 'admin', 'manager', 'picker')
-          AND ss.is_active = true
-          AND ss.is_deleted = false
-          AND ss.is_blocked = false
+          AND ss.status = 'active'
         LIMIT 1`,
       [normalized]
     );
@@ -179,9 +181,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
         WHERE ${phoneMatchesStorage("u.phone", 1)}
           AND u.id <> $2::uuid
           AND ss.role IN ('owner', 'admin', 'manager', 'picker')
-          AND ss.is_active = true
-          AND ss.is_deleted = false
-          AND ss.is_blocked = false
+          AND ss.status = 'active'
         LIMIT 1`,
       [normalized, excludeUserId]
     );
@@ -198,8 +198,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
         WHERE ${phoneMatchesStorage("u.phone", 1)}
           AND u.id <> $2::uuid
           AND u.is_active = true
-          AND c.is_blocked = false
-          AND c.is_deleted = false
+          AND c.status = 'active'
         LIMIT 1`,
       [normalized, excludeUserId]
     );
@@ -212,23 +211,30 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
          FROM shop_staff ss
         WHERE ss.user_id = $1::uuid
           AND ss.role IN ('owner', 'admin', 'manager', 'picker')
-          AND ss.is_active = true
-          AND ss.is_deleted = false
-          AND ss.is_blocked = false
+          AND ss.status = 'active'
         LIMIT 1`,
       [userId]
     );
     return rows.length > 0;
   }
 
-  async getCustomerByUserId(client, userId) {
+  async getCustomerByUserId(client, userId, shopId = null) {
+    const shop = shopId != null && String(shopId).trim() !== "" ? String(shopId).trim() : null;
     const { rows } = await client.query(
-      `SELECT id, user_id, display_name, is_blocked, is_deleted
-         FROM customers
-        WHERE user_id = $1`,
-      [userId]
+      shop
+        ? `SELECT id, user_id, display_name, status, shop_id
+             FROM customers
+            WHERE user_id = $1
+              AND shop_id = $2::uuid
+            LIMIT 1`
+        : `SELECT id, user_id, display_name, status, shop_id
+             FROM customers
+            WHERE user_id = $1
+            ORDER BY created_at DESC
+            LIMIT 1`,
+      shop ? [userId, shop] : [userId]
     );
-    return rows[0] ?? null;
+    return withCustomerFlags(rows[0]);
   }
 
   async getCustomerCreatedAtById(client, customerId) {
@@ -260,10 +266,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
               s.id,
               s.slug,
               s.name,
-              s.is_active,
-              s.status,
-              s.is_blocked,
-              s.is_deleted
+              s.status
          FROM customer_shop_memberships m
          JOIN shops s ON s.id = m.shop_id
         WHERE m.customer_id = $1 AND m.shop_id = $2
@@ -282,10 +285,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
         id: row.id,
         slug: row.slug,
         name: row.name,
-        is_active: row.is_active,
-        status: row.status,
-        is_blocked: row.is_blocked,
-        is_deleted: row.is_deleted
+        status: row.status
       }
     };
   }
@@ -299,6 +299,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
           AND m.is_active = true
           AND m.is_blocked = false
           AND m.is_deleted = false
+          AND s.status = 'active'
         ORDER BY s.id ASC`,
       [customerId]
     );
@@ -310,7 +311,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
       `SELECT s.id,
               s.name,
               s.slug,
-              s.is_active,
               s.status,
               shop_img.storage_key AS shop_image_storage_key
          FROM customer_shop_memberships m
@@ -328,6 +328,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
           AND m.is_active = true
           AND m.is_blocked = false
           AND m.is_deleted = false
+          AND s.status = 'active'
         ORDER BY s.id ASC`,
       [customerId]
     );
@@ -336,10 +337,9 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
 
   async getCustomerProfileByCustomerId(client, customerId) {
     const { rows } = await client.query(
-      `SELECT c.id, c.user_id, c.display_name, c.is_blocked, c.is_deleted,
+      `SELECT c.id, c.user_id, c.display_name, c.status,
               u.phone,
-              a.id AS a_id, a.line1, a.line2, a.landmark, a.city, a.state,
-              a.postal_code, a.country, a.lat, a.lng, a.raw
+              a.id AS a_id, a.lat, a.lng, a.raw
          FROM customers c
          JOIN users u ON u.id = c.user_id
          LEFT JOIN addresses a ON a.id = c.address_id
@@ -349,36 +349,24 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     const r = rows[0];
     if (!r) return null;
 
-    const address = r.a_id
-      ? {
-          id: r.a_id,
-          line1: r.line1,
-          line2: r.line2,
-          landmark: r.landmark,
-          city: r.city,
-          state: r.state,
-          postalCode: r.postal_code,
-          country: r.country,
-          lat: r.lat,
-          lng: r.lng,
-          raw: r.raw
-        }
-      : null;
-
+    const flagged = withCustomerFlags(r);
     return {
-      id: r.id,
-      user_id: r.user_id,
-      display_name: r.display_name,
+      id: flagged.id,
+      user_id: flagged.user_id,
+      display_name: flagged.display_name,
       phone: r.phone,
-      is_blocked: r.is_blocked,
-      is_deleted: r.is_deleted,
-      address
+      is_blocked: flagged.is_blocked,
+      is_deleted: flagged.is_deleted,
+      address: parseAddressRow(
+        { lat: r.lat, lng: r.lng, raw: r.raw },
+        r.a_id
+      )
     };
   }
 
   async patchCustomerProfile(client, { customerId, userId, displayName, addressPatch }) {
     const custRes = await client.query(
-      `SELECT id, address_id, display_name, is_blocked, is_deleted
+      `SELECT id, address_id, display_name, status
          FROM customers
         WHERE id = $1 AND user_id = $2
         FOR UPDATE`,
@@ -416,7 +404,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
 
     if (addrId) {
       const ar = await client.query(
-        `SELECT line1, line2, landmark, city, state, postal_code, country, lat, lng, raw
+        `SELECT lat, lng, raw
            FROM addresses
           WHERE id = $1
           FOR UPDATE`,
@@ -424,17 +412,18 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
       );
       const a = ar.rows[0];
       if (a) {
+        const parsed = parseAddressRow(a, addrId);
         current = {
-          line1: a.line1,
-          line2: a.line2,
-          landmark: a.landmark,
-          city: a.city,
-          state: a.state,
-          postal_code: a.postal_code,
-          country: a.country,
-          lat: a.lat,
-          lng: a.lng,
-          raw: a.raw
+          line1: parsed.line1,
+          line2: parsed.line2,
+          landmark: parsed.landmark,
+          city: parsed.city,
+          state: parsed.state,
+          postal_code: parsed.postalCode,
+          country: parsed.country,
+          lat: parsed.lat,
+          lng: parsed.lng,
+          raw: parsed.raw
         };
       }
     }
@@ -455,25 +444,14 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
       throw new ValidationError("Invalid coordinates");
     }
 
+    const raw = encodeAddressRaw(merged);
+
     if (!addrId) {
       const ins = await client.query(
-        `INSERT INTO addresses (
-           line1, line2, landmark, city, state, postal_code, country, lat, lng, raw
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `INSERT INTO addresses (raw, lat, lng)
+         VALUES ($1, $2, $3)
          RETURNING id`,
-        [
-          merged.line1,
-          merged.line2,
-          merged.landmark,
-          merged.city,
-          merged.state,
-          merged.postal_code,
-          merged.country,
-          merged.lat,
-          merged.lng,
-          merged.raw
-        ]
+        [raw, merged.lat, merged.lng]
       );
       addrId = ins.rows[0].id;
       await client.query(
@@ -483,31 +461,11 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     } else {
       await client.query(
         `UPDATE addresses
-            SET line1 = $1,
-                line2 = $2,
-                landmark = $3,
-                city = $4,
-                state = $5,
-                postal_code = $6,
-                country = $7,
-                lat = $8,
-                lng = $9,
-                raw = $10,
-                updated_at = now()
-          WHERE id = $11`,
-        [
-          merged.line1,
-          merged.line2,
-          merged.landmark,
-          merged.city,
-          merged.state,
-          merged.postal_code,
-          merged.country,
-          merged.lat,
-          merged.lng,
-          merged.raw,
-          addrId
-        ]
+            SET raw = $1,
+                lat = $2,
+                lng = $3
+          WHERE id = $4`,
+        [raw, merged.lat, merged.lng, addrId]
       );
     }
   }
@@ -660,14 +618,20 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     );
   }
 
-  async insertCustomer(client, { user_id, display_name }) {
+  async insertCustomer(client, { user_id, display_name, shop_id = null }) {
+    if (!shop_id) {
+      throw new ValidationError("shop_id is required");
+    }
     const { rows } = await client.query(
-      `INSERT INTO customers (user_id, display_name)
-       VALUES ($1, $2)
-       RETURNING id`,
-      [user_id, display_name]
+      `INSERT INTO customers (user_id, shop_id, display_name, status)
+       VALUES ($1, $2, $3, 'active')
+       ON CONFLICT (shop_id, user_id) DO UPDATE SET
+         display_name = COALESCE(EXCLUDED.display_name, customers.display_name),
+         updated_at = now()
+       RETURNING id, user_id, display_name, status`,
+      [user_id, shop_id, display_name]
     );
-    return rows[0];
+    return withCustomerFlags(rows[0]);
   }
 
   async insertMembership(client, { shop_id, customer_id }) {

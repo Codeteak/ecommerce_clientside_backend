@@ -11,10 +11,7 @@ function activeShop() {
     id: shopId,
     name: "Demo Shop",
     slug: "demo",
-    status: "active",
-    is_active: true,
-    is_blocked: false,
-    is_deleted: false
+    status: "active"
   };
 }
 

@@ -61,7 +61,8 @@ export function createVerifyPhoneChangeOtp({ authRepo, buildStorefrontSession, o
 
     const session = await buildStorefrontSession(client, userId, {
       ip,
-      userAgent
+      userAgent,
+      shopId
     });
     return {
       ok: true,

@@ -79,9 +79,10 @@ export class CustomerAuthRepo {
     throw new Error("Not implemented");
   }
 
-  async getCustomerByUserId(_client, _userId) {
+  async getCustomerByUserId(_client, _userId, _shopId = null) {
     void _client;
     void _userId;
+    void _shopId;
     throw new Error("Not implemented");
   }
 

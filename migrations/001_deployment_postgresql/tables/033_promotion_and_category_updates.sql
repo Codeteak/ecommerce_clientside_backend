@@ -86,14 +86,8 @@ AS $$
   FROM shop_staff s
   JOIN users u ON u.id = s.user_id
   JOIN shops sh ON sh.id = s.shop_id
-    AND sh.is_active = true
-    AND sh.is_blocked = false
-    AND sh.is_deleted = false
     AND sh.status = 'active'
-  WHERE s.is_active = true
-    AND s.is_blocked = false
-    AND s.is_deleted = false
-    AND s.status = 'active'
+  WHERE s.status = 'active'
     AND u.is_active = true
     AND u.staff_login_code = p_code
     AND s.role <> 'picker';

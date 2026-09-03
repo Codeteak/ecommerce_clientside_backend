@@ -100,7 +100,7 @@ export function createVerifyCustomerOtp({ authRepo, buildStorefrontSession, otpM
       typeof authRepo.isUserActiveShopStaff === "function" &&
       (await authRepo.isUserActiveShopStaff(client, user.id));
 
-    let customer = await ensureCustomerForUser(authRepo, client, user.id, null);
+    let customer = await ensureCustomerForUser(authRepo, client, user.id, null, shopId);
     if (customer.is_blocked || customer.is_deleted) {
       log.warn(
         { ...logBase, reason: customer.is_blocked ? "customer_blocked" : "customer_deleted", userId: user.id, customerId: customer.id },
@@ -131,6 +131,6 @@ export function createVerifyCustomerOtp({ authRepo, buildStorefrontSession, otpM
       );
     }
 
-    return buildStorefrontSession(client, user.id, { ip, userAgent });
+    return buildStorefrontSession(client, user.id, { ip, userAgent, shopId });
   };
 }

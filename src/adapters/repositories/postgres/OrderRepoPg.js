@@ -2,6 +2,7 @@ import { OrderRepo } from "../../../application/ports/repositories/OrderRepo.js"
 import { mapStorefrontOrderRow } from "../../../application/services/storefront/formatStorefrontOrderResponse.js";
 import { setTenantContext } from "../../../infra/db/tenantContext.js";
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
+import { shopProductImageUrlSql, shopProductSlugSql } from "./queries/shopProductCatalogSql.js";
 
 /** Coupon-only discount from promotion_redemptions; `ordersAlias` must match the orders table alias in the outer query. */
 const COUPON_DISCOUNT_SELECT = (ordersAlias) => `
@@ -87,7 +88,6 @@ export class OrderRepoPg extends OrderRepo {
       promotionDiscountTotalMinor,
       couponCodeNormalized,
       appliedPromotionIds,
-      currency,
       notes,
       items,
       outboxPayload
@@ -105,8 +105,8 @@ export class OrderRepoPg extends OrderRepo {
          order_number, status, payment_method,
          subtotal_minor, delivery_fee_minor, total_minor,
          promotion_discount_total_minor, coupon_code_normalized, applied_promotion_ids,
-         currency, notes
-       ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16)
+         notes
+       ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15)
        RETURNING id, placed_at`,
       [
         shopId,
@@ -123,7 +123,6 @@ export class OrderRepoPg extends OrderRepo {
         promotionDiscountTotalMinor ?? null,
         couponCodeNormalized ?? null,
         appliedIdsJson,
-        currency,
         notes
       ]
     );
@@ -226,7 +225,7 @@ export class OrderRepoPg extends OrderRepo {
     const raw = opts?.limit ?? 50;
     const limit = Math.min(Math.max(Number(raw) || 50, 1), 100);
     const { rows } = await client.query(
-      `SELECT o.id, o.order_number, o.status, o.subtotal_minor, o.delivery_fee_minor, o.total_minor, o.currency,
+      `SELECT o.id, o.order_number, o.status, o.subtotal_minor, o.delivery_fee_minor, o.total_minor, 'INR'::text AS currency,
               o.promotion_discount_total_minor, o.coupon_code_normalized, o.applied_promotion_ids,
               ${COUPON_DISCOUNT_SELECT("o")},
               o.placed_at, o.picker_id, o.picker_name
@@ -246,8 +245,8 @@ export class OrderRepoPg extends OrderRepo {
               oi.list_price_minor, oi.line_discount_minor, oi.applied_promotion_ids,
               oi.is_custom, oi.custom_note,
               sp.id AS shop_product_id,
-              gp.slug AS product_slug,
-              gp.image_url AS global_image_url,
+              ${shopProductSlugSql} AS product_slug,
+              ${shopProductImageUrlSql} AS global_image_url,
               m.id AS image_media_id,
               m.storage_key AS image_storage_key,
               m.content_type AS image_content_type
@@ -312,7 +311,7 @@ export class OrderRepoPg extends OrderRepo {
     await setTenantContext(client, shopId);
     const { rows: o } = await client.query(
       `SELECT o.id, o.shop_id, o.customer_id, o.order_number, o.status, o.payment_method,
-              o.subtotal_minor, o.delivery_fee_minor, o.total_minor, o.currency, o.notes,
+              o.subtotal_minor, o.delivery_fee_minor, o.total_minor, 'INR'::text AS currency, o.notes,
               o.promotion_discount_total_minor, o.coupon_code_normalized, o.applied_promotion_ids,
               ${COUPON_DISCOUNT_SELECT("o")},
               o.picker_id, o.picker_name,
@@ -331,8 +330,8 @@ export class OrderRepoPg extends OrderRepo {
               oi.list_price_minor, oi.line_discount_minor, oi.applied_promotion_ids,
               is_custom, custom_note,
               sp.id AS shop_product_id,
-              gp.slug AS product_slug,
-              gp.image_url AS global_image_url,
+              ${shopProductSlugSql} AS product_slug,
+              ${shopProductImageUrlSql} AS global_image_url,
               m.id AS image_media_id,
               m.storage_key AS image_storage_key,
               m.content_type AS image_content_type
@@ -375,7 +374,7 @@ export class OrderRepoPg extends OrderRepo {
   async listOrdersQueueForShop(client, shopId) {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
-      `SELECT id, customer_id, order_number, status, total_minor, currency, placed_at
+      `SELECT id, customer_id, order_number, status, total_minor, 'INR'::text AS currency, placed_at
          FROM orders
         WHERE shop_id = $1::uuid AND status = 'pending'
         ORDER BY placed_at ASC

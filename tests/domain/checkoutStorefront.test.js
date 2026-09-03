@@ -249,6 +249,38 @@ describe("checkoutStorefront validations", () => {
     expect(d.orderRepo.insertCheckoutIdempotency).not.toHaveBeenCalled();
   });
 
+  it("checkouts from client cart items without a stored cart", async () => {
+    const d = deps();
+    d.cartRepo.validateClientLinesForCheckout = vi.fn().mockResolvedValue([
+      {
+        id: "client-line-1",
+        product_id: "11111111-1111-4111-8111-111111111111",
+        title_snapshot: "A",
+        unit_label: "kg",
+        quantity: "1",
+        unit_price_minor: 100,
+        is_custom: false,
+        custom_note: null
+      }
+    ]);
+    const run = createCheckoutStorefront(d);
+    const out = await run(
+      {},
+      {
+        shopId: "00000000-0000-4000-8000-000000000001",
+        customerId: "cust-1",
+        userId: "user-1",
+        items: [{ productId: "11111111-1111-4111-8111-111111111111", quantity: 1 }]
+      }
+    );
+    expect(out).toMatchObject({ orderId: "order-1", total_minor: 120 });
+    expect(d.cartRepo.validateClientLinesForCheckout).toHaveBeenCalledTimes(1);
+    expect(d.cartRepo.findCartByShopAndCustomerId).not.toHaveBeenCalled();
+    expect(d.cartRepo.validateCartForCheckoutCommit).not.toHaveBeenCalled();
+    expect(d.cartRepo.deleteCart).not.toHaveBeenCalled();
+    expect(d.orderRepo.insertCheckoutIdempotency).not.toHaveBeenCalled();
+  });
+
   it("records idempotency mapping when Idempotency-Key is provided", async () => {
     const d = deps();
     const run = createCheckoutStorefront(d);

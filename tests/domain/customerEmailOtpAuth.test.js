@@ -17,7 +17,6 @@ function listActiveShopRow(overrides = {}) {
     id: shopId,
     name: "Demo",
     slug: "demo",
-    is_active: true,
     status: "active",
     shop_image_storage_key: null,
     ...overrides
@@ -27,10 +26,7 @@ function listActiveShopRow(overrides = {}) {
 function activeShop() {
   return {
     id: shopId,
-    status: "active",
-    is_active: true,
-    is_blocked: false,
-    is_deleted: false
+    status: "active"
   };
 }
 
@@ -203,7 +199,8 @@ describe("customer email OTP auth", () => {
     expect(out.accessToken).toBeTypeOf("string");
     expect(authRepo.insertCustomer).toHaveBeenCalledWith({}, {
       user_id: "u-staff-1",
-      display_name: null
+      display_name: null,
+      shop_id: shopId
     });
   });
 

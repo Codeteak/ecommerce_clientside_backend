@@ -126,13 +126,24 @@ export class CartRepo {
 
   /**
    * Locks sellable shop_product rows (join global_products, active + in_stock) in one round-trip,
-   * ordered by product id for stable lock ordering, verifies live price vs each cart line.
+   * ordered by product id for stable lock ordering. Live catalog prices replace stored snapshots.
    * Call inside the checkout transaction before creating the order.
    */
   async validateCartForCheckoutCommit(_client, _shopId, _cartId) {
     void _client;
     void _shopId;
     void _cartId;
+    throw new Error("Not implemented");
+  }
+
+  /**
+   * Checkout from client lines `{ productId, quantity }[]`. Locks catalog rows and prices from Postgres.
+   * Client unit prices are ignored.
+   */
+  async validateClientLinesForCheckout(_client, _shopId, _items) {
+    void _client;
+    void _shopId;
+    void _items;
     throw new Error("Not implemented");
   }
 

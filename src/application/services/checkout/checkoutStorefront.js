@@ -112,12 +112,19 @@ export function createCheckoutStorefront({
         return replay;
       }
 
-      const cart = await cartRepo.findCartByShopAndCustomerId(client, shopId, custKey);
-      if (!cart) {
-        throw new AppError("Cart not found", { statusCode: 404, code: "CART_NOT_FOUND" });
-      }
+      const clientLines = Array.isArray(input.items) ? input.items : null;
+      let cart = null;
+      let items;
 
-      const items = await cartRepo.validateCartForCheckoutCommit(client, shopId, cart.id);
+      if (clientLines?.length) {
+        items = await cartRepo.validateClientLinesForCheckout(client, shopId, clientLines);
+      } else {
+        cart = await cartRepo.findCartByShopAndCustomerId(client, shopId, custKey);
+        if (!cart) {
+          throw new AppError("Cart not found", { statusCode: 404, code: "CART_NOT_FOUND" });
+        }
+        items = await cartRepo.validateCartForCheckoutCommit(client, shopId, cart.id);
+      }
 
       const {
         subtotal,
@@ -196,11 +203,13 @@ export function createCheckoutStorefront({
         customerIdText: custKey,
         rawIdem,
         orderId: order.id,
-        cartId: cart.id
+        cartId: cart?.id ?? null
       });
 
-      await cartRepo.deleteCartItemsForCart(client, shopId, cart.id);
-      await cartRepo.deleteCart(client, shopId, cart.id);
+      if (cart) {
+        await cartRepo.deleteCartItemsForCart(client, shopId, cart.id);
+        await cartRepo.deleteCart(client, shopId, cart.id);
+      }
 
       if (typeof emitOrderPlaced === "function") {
         const emitPayload = {

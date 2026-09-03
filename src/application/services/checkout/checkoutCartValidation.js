@@ -63,7 +63,11 @@ export function createCheckoutCartValidation({ authRepo, checkShopServiceArea })
     if (profile.user_id !== userId) {
       throw new ValidationError("Invalid customer");
     }
-    if (!profile.address || !profile.address.id || !profile.address.line1) {
+    if (!profile.address || !profile.address.id) {
+      throw checkoutError("ADDRESS_REQUIRED", "Delivery address is required");
+    }
+    const addressText = profile.address.line1 || profile.address.raw;
+    if (!addressText) {
       throw checkoutError("ADDRESS_REQUIRED", "Delivery address is required");
     }
     if (profile.address.lat == null || profile.address.lng == null) {

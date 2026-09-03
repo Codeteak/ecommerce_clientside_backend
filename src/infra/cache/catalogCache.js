@@ -23,6 +23,9 @@ export function createCatalogCache({ redis }) {
         return fn();
       },
       async invalidateShopCatalog(_shopId) {},
+      async getCatalogGeneration(_shopId) {
+        return 0;
+      },
       async shopKeyPrefix(shopId) {
         return `shop:${String(shopId || "").trim()}:g0:`;
       }

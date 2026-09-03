@@ -35,7 +35,7 @@ export function provisionCustomerForOAuthShop({ authRepo }) {
 
     await setTenantContext(client, shopId);
 
-    let customer = await ensureCustomerForUser(authRepo, client, user.id, displayName);
+    let customer = await ensureCustomerForUser(authRepo, client, user.id, displayName, shopId);
     if (customer.is_blocked || customer.is_deleted) {
       throw new AuthError("Invalid credentials");
     }

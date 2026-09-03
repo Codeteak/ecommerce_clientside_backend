@@ -21,7 +21,8 @@ export async function buildStorefrontSessionResponse(authRepo, client, userId, s
     throw new AuthError("Invalid credentials");
   }
 
-  const customer = await authRepo.getCustomerByUserId(client, user.id);
+  const shopId = sessionMeta.shopId != null ? String(sessionMeta.shopId).trim() : "";
+  const customer = await authRepo.getCustomerByUserId(client, user.id, shopId || null);
   if (!customer || customer.is_blocked || customer.is_deleted) {
     throw new AuthError("Invalid credentials");
   }

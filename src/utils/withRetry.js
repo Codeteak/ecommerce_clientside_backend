@@ -1,5 +1,6 @@
 import { logger } from "../config/logger.js";
 import { env } from "../config/env.js";
+import { formatError } from "./formatError.js";
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -55,16 +56,21 @@ export async function withRetry(fn, opts = {}) {
       const jitter = Math.floor(Math.random() * Math.max(1, Math.round(delay * 0.2)));
       const sleepMs = Math.min(maxDelayMs, delay + jitter);
 
+      const formatted = formatError(err);
       logger.warn(
         {
           event: opts.event || "retry.attempt",
           attempt: i,
           attempts,
           delayMs: sleepMs,
-          err: err instanceof Error ? err.message : String(err),
+          errCode: formatted.code || undefined,
+          errMessage: formatted.message,
+          errName: formatted.name,
           ...opts.context
         },
-        "Retrying transient failure"
+        formatted.code
+          ? `Retrying (${formatted.code}): ${formatted.message}`
+          : `Retrying: ${formatted.message}`
       );
       await wait(sleepMs);
     }

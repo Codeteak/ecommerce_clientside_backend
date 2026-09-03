@@ -42,10 +42,7 @@ describe("requireCustomerShopAccess", () => {
           is_deleted: false
         },
         shop: {
-          status: "active",
-          is_active: true,
-          is_blocked: false,
-          is_deleted: false
+          status: "active"
         }
       })
     };
@@ -58,5 +55,26 @@ describe("requireCustomerShopAccess", () => {
 
     expect(next).toHaveBeenCalledWith();
     expect(next.mock.calls[0]).toHaveLength(0);
+  });
+
+  it("returns 403 when shop status is not active", async () => {
+    const authRepo = {
+      getMembershipWithShopForCustomer: vi.fn().mockResolvedValue({
+        membership: {
+          is_active: true,
+          is_blocked: false,
+          is_deleted: false
+        },
+        shop: { status: "blocked" }
+      })
+    };
+    const middleware = createRequireCustomerShopAccess({ authRepo });
+    const req = mockReq();
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    await middleware(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(expect.any(ForbiddenError));
   });
 });

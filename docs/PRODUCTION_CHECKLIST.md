@@ -182,6 +182,17 @@ Use this only when `REALTIME_ENABLED=true`.
 - Do not use `REALTIME_CONNECT_TOKEN` in production. It is for staging only.
 - The API must have `OUTBOX_WORKER_ENABLED=true` (default) so `ORDER_PLACED_REALTIME` retries are processed.
 
+### Storefront catalog realtime (customer shop browsers)
+
+Use when the customer web app should refresh prices without a manual reload.
+
+- Set `STOREFRONT_CATALOG_REALTIME_TOKEN` to a long random secret (different from staff JWT and `REALTIME_CONNECT_TOKEN`).
+- Expose the same value to the customer frontend as `NEXT_PUBLIC_STOREFRONT_CATALOG_REALTIME_TOKEN`.
+- Set `NEXT_PUBLIC_CATALOG_REALTIME_ENABLED=true` on the customer frontend when realtime is live.
+- Storefront sockets join `shop:{shopId}:catalog` only — they do **not** receive `order.placed`.
+- Admin catalog changes already call `POST /storefront/catalog/cache/invalidate`; that bumps Redis and emits `catalog.invalidated`.
+- The load balancer / tunnel must allow WebSocket upgrade to `/socket.io` on the customer API origin.
+
 ## 12. Search
 
 - Enable `SEARCH_USE_TRGM=true` only after staging confirms the GIN trigram index is used.

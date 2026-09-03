@@ -148,7 +148,7 @@ export const schemas = {
       shopName: { type: "string" },
       shopId: { type: "string", format: "uuid" },
       shopSlug: { type: "string" },
-      isActive: { type: "boolean", description: "Shop row is_active" },
+      isActive: { type: "boolean", description: "True when shop status is active" },
       status: { type: "string", enum: ["active", "blocked", "deleted"], description: "Shop row status" },
       image: { oneOf: [{ $ref: "#/components/schemas/SessionProfileShopImage" }, { type: "null" }] }
     }
@@ -338,6 +338,21 @@ export const schemas = {
         maxLength: 64,
         nullable: true,
         description: "Optional coupon code (uppercased server-side). Apply happens at checkout only."
+      },
+      items: {
+        type: "array",
+        minItems: 1,
+        maxItems: 100,
+        description:
+          "Client cart lines (productId + quantity). Catalog locks and live prices at checkout; client prices are ignored. When omitted, the server session cart is used.",
+        items: {
+          type: "object",
+          required: ["productId", "quantity"],
+          properties: {
+            productId: { type: "string", format: "uuid" },
+            quantity: { type: "number", exclusiveMinimum: 0, maximum: 10 }
+          }
+        }
       }
     }
   },

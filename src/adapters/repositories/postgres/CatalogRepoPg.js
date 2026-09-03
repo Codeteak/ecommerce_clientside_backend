@@ -5,6 +5,18 @@ import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
 import { storefrontProductsOrderByClause } from "../../../application/services/catalog/catalogSearchOrder.js";
 import { buildListProductsStorefrontQuery } from "./queries/buildListProductsStorefrontQuery.js";
 import { categoryImageLateralJoinSql } from "./queries/categoryImageSql.js";
+import {
+  shopProductBaseUnitSql,
+  shopProductCategoryIdSql,
+  shopProductDescriptionSql,
+  shopProductImageUrlSql,
+  shopProductLeftJoinGlobal,
+  shopProductNameSql,
+  shopProductSeoDescriptionSql,
+  shopProductSeoTitleSql,
+  shopProductSlugSql,
+  shopProductUnitSizeSql
+} from "./queries/shopProductCatalogSql.js";
 
 /**
  * Purpose: This file is the PostgreSQL implementation of catalog data access.
@@ -18,11 +30,11 @@ export class CatalogRepoPg extends CatalogRepo {
     try {
       await setTenantContext(client, shopId);
       const { rows } = await client.query(
-        `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id, gp.name, gp.slug, gp.base_unit,
-                gp.unit_size::text AS unit_size, sp.status,
+        `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id, ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit,
+                ${shopProductUnitSizeSql}::text AS unit_size, sp.status,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.created_at, sp.updated_at,
-                gp.image_url AS global_image_url,
+                ${shopProductImageUrlSql} AS global_image_url,
                 pm.id AS image_media_id,
                 pm.storage_key AS image_storage_key,
                 pm.content_type AS image_content_type,
@@ -33,7 +45,7 @@ export class CatalogRepoPg extends CatalogRepo {
                 cm.storage_key AS category_image_storage_key,
                 cm.content_type AS category_image_content_type
            FROM shop_products sp
-           JOIN global_products gp ON gp.id = sp.global_product_id
+${shopProductLeftJoinGlobal}
            LEFT JOIN LATERAL (
              WITH chosen_images AS (
                SELECT spi.media_asset_id, spi.sort_order
@@ -53,12 +65,12 @@ export class CatalogRepoPg extends CatalogRepo {
               LIMIT 1
            ) pimg ON true
            LEFT JOIN media_assets pm ON pm.id = pimg.media_asset_id
-           LEFT JOIN global_categories c ON c.id = gp.global_category_id
+           LEFT JOIN global_categories c ON c.id = ${shopProductCategoryIdSql}
            ${categoryImageLateralJoinSql({ lateralAlias: "cimg", mediaAlias: "cm" })}
           WHERE sp.shop_id = $1::uuid
             AND sp.status = 'active'
-            AND ($2::uuid IS NULL OR gp.global_category_id = $2)
-          ORDER BY gp.name ASC
+            AND ($2::uuid IS NULL OR ${shopProductCategoryIdSql} = $2)
+          ORDER BY ${shopProductNameSql} ASC
           LIMIT 100`,
         [shopId, categoryId]
       );
@@ -160,19 +172,19 @@ export class CatalogRepoPg extends CatalogRepo {
     const textFilter = useTrgm && qRaw ? qRaw : qPattern;
     const textClause =
       useTrgm && qRaw
-        ? `($4::text IS NULL OR gp.name % $4 OR gp.slug % $4)`
-        : `($4::text IS NULL OR gp.name ILIKE $4 ESCAPE '\\' OR gp.slug ILIKE $4 ESCAPE '\\')`;
+        ? `($4::text IS NULL OR ${shopProductNameSql} % $4 OR ${shopProductSlugSql} % $4)`
+        : `($4::text IS NULL OR ${shopProductNameSql} ILIKE $4 ESCAPE '\\' OR ${shopProductSlugSql} ILIKE $4 ESCAPE '\\')`;
     const orderClause =
-      useTrgm && qRaw ? `similarity(gp.name, $4) DESC, ${orderBySql}` : orderBySql;
+      useTrgm && qRaw ? `similarity(${shopProductNameSql}, $4) DESC, ${orderBySql}` : orderBySql;
     const client = await pool.connect();
     try {
       await setTenantContext(client, shopId);
       const { rows } = await client.query(
-        `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id, gp.name, gp.slug, gp.base_unit,
-                gp.unit_size::text AS unit_size, sp.status, sp.availability,
+        `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id, ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit,
+                ${shopProductUnitSizeSql}::text AS unit_size, sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.created_at, sp.updated_at,
-                gp.image_url AS global_image_url,
+                ${shopProductImageUrlSql} AS global_image_url,
                 pm.id AS image_media_id,
                 pm.storage_key AS image_storage_key,
                 pm.content_type AS image_content_type,
@@ -183,7 +195,7 @@ export class CatalogRepoPg extends CatalogRepo {
                 cm.storage_key AS category_image_storage_key,
                 cm.content_type AS category_image_content_type
            FROM shop_products sp
-           JOIN global_products gp ON gp.id = sp.global_product_id
+${shopProductLeftJoinGlobal}
            LEFT JOIN LATERAL (
              WITH chosen_images AS (
                SELECT spi.media_asset_id, spi.sort_order
@@ -203,11 +215,11 @@ export class CatalogRepoPg extends CatalogRepo {
               LIMIT 1
            ) pimg ON true
            LEFT JOIN media_assets pm ON pm.id = pimg.media_asset_id
-           LEFT JOIN global_categories c ON c.id = gp.global_category_id
+           LEFT JOIN global_categories c ON c.id = ${shopProductCategoryIdSql}
            ${categoryImageLateralJoinSql({ lateralAlias: "cimg", mediaAlias: "cm" })}
           WHERE sp.shop_id = $1::uuid
             AND sp.status = 'active'
-            AND ($2::uuid IS NULL OR gp.global_category_id = $2)
+            AND ($2::uuid IS NULL OR ${shopProductCategoryIdSql} = $2)
             AND ($3::text IS NULL OR sp.availability = $3)
             AND ${textClause}
           ORDER BY ${orderClause}
@@ -320,13 +332,13 @@ export class CatalogRepoPg extends CatalogRepo {
       await setTenantContext(client, shopId);
       const { rows } = await client.query(
         `WITH RECURSIVE category_ancestors AS (
-           SELECT DISTINCT gp.global_category_id AS id
+           SELECT DISTINCT ${shopProductCategoryIdSql} AS id
              FROM shop_products sp
-             JOIN global_products gp ON gp.id = sp.global_product_id
+             ${shopProductLeftJoinGlobal}
             WHERE sp.shop_id = $1::uuid
               AND sp.status = 'active'
               AND sp.availability = 'in_stock'
-              AND gp.global_category_id IS NOT NULL
+              AND ${shopProductCategoryIdSql} IS NOT NULL
            UNION
            SELECT c.parent_id
              FROM global_categories c
@@ -476,14 +488,14 @@ export class CatalogRepoPg extends CatalogRepo {
       await setTenantContext(client, shopId);
       const { rows: prodRows } = await client.query(
         `SELECT sp.id, sp.availability,
-                gp.name, gp.slug, gp.description,
-                gp.seo_title, gp.seo_description, gp.image_url AS global_image_url,
+                ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductDescriptionSql} AS description,
+                ${shopProductSeoTitleSql} AS seo_title, ${shopProductSeoDescriptionSql} AS seo_description, ${shopProductImageUrlSql} AS global_image_url,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit
            FROM shop_products sp
-           JOIN global_products gp ON gp.id = sp.global_product_id
+           ${shopProductLeftJoinGlobal}
           WHERE sp.shop_id = $1::uuid
-            AND lower(gp.slug) = $2
+            AND lower(${shopProductSlugSql}) = $2
             AND sp.status = 'active'
             AND sp.availability = 'in_stock'
           LIMIT 1`,
@@ -514,17 +526,17 @@ export class CatalogRepoPg extends CatalogRepo {
     try {
       await setTenantContext(client, shopId);
       const { rows: prodRows } = await client.query(
-        `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id,
-                gp.name, gp.slug, gp.base_unit, gp.unit_size::text AS unit_size,
-                gp.description, gp.seo_title, gp.seo_description,
+        `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id,
+                ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit, ${shopProductUnitSizeSql}::text AS unit_size,
+                ${shopProductDescriptionSql} AS description, ${shopProductSeoTitleSql} AS seo_title, ${shopProductSeoDescriptionSql} AS seo_description,
                 sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
-                sp.created_at, sp.updated_at, sp.global_product_id, gp.image_url AS global_image_url
+                sp.created_at, sp.updated_at, sp.global_product_id, ${shopProductImageUrlSql} AS global_image_url
            FROM shop_products sp
-           JOIN global_products gp ON gp.id = sp.global_product_id
+           ${shopProductLeftJoinGlobal}
           WHERE sp.shop_id = $1::uuid
-            AND lower(gp.slug) = $2
+            AND lower(${shopProductSlugSql}) = $2
             AND sp.status = 'active'
             AND sp.availability = 'in_stock'
           LIMIT 1`,
@@ -579,15 +591,15 @@ export class CatalogRepoPg extends CatalogRepo {
     try {
       await setTenantContext(client, shopId);
       const { rows: prodRows } = await client.query(
-        `SELECT sp.id, sp.shop_id, gp.global_category_id AS category_id,
-                gp.name, gp.slug, gp.base_unit, gp.unit_size::text AS unit_size,
-                gp.description, gp.seo_title, gp.seo_description,
+        `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id,
+                ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit, ${shopProductUnitSizeSql}::text AS unit_size,
+                ${shopProductDescriptionSql} AS description, ${shopProductSeoTitleSql} AS seo_title, ${shopProductSeoDescriptionSql} AS seo_description,
                 sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
-                sp.created_at, sp.updated_at, sp.global_product_id, gp.image_url AS global_image_url
+                sp.created_at, sp.updated_at, sp.global_product_id, ${shopProductImageUrlSql} AS global_image_url
            FROM shop_products sp
-           JOIN global_products gp ON gp.id = sp.global_product_id
+${shopProductLeftJoinGlobal}
           WHERE sp.shop_id = $1::uuid
             AND sp.id = $2::uuid
             AND sp.status = 'active'
@@ -657,11 +669,11 @@ export class CatalogRepoPg extends CatalogRepo {
               )
               SELECT 1
                 FROM shop_products sp
-                JOIN global_products gp ON gp.id = sp.global_product_id
+     ${shopProductLeftJoinGlobal}
                WHERE sp.shop_id = $1::uuid
                  AND sp.status = 'active'
                  AND sp.availability = 'in_stock'
-                 AND gp.global_category_id IN (SELECT id FROM category_tree)
+                 AND ${shopProductCategoryIdSql} IN (SELECT id FROM category_tree)
             )
             AND lower(c.slug) = $2
           LIMIT 1`,
