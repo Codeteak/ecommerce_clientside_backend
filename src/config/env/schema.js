@@ -26,10 +26,23 @@ export const envSchema = z
     API_PUBLIC_URL: z.string().url(),
     GOOGLE_CLIENT_ID: z.string().optional().default(""),
     GOOGLE_CLIENT_SECRET: z.string().optional().default(""),
-    GOOGLE_OAUTH_AUTH_URL: z.string().url(),
-    GOOGLE_OAUTH_TOKEN_URL: z.string().url(),
-    GOOGLE_OAUTH_USERINFO_URL: z.string().url(),
-    GOOGLE_OAUTH_SCOPE: z.string().min(1),
+    // Public Google OAuth endpoints — not required in Secrets Manager (phone OTP can run alone).
+    GOOGLE_OAUTH_AUTH_URL: z.preprocess(
+      (v) => (v === "" || v == null ? undefined : v),
+      z.string().url().default("https://accounts.google.com/o/oauth2/v2/auth")
+    ),
+    GOOGLE_OAUTH_TOKEN_URL: z.preprocess(
+      (v) => (v === "" || v == null ? undefined : v),
+      z.string().url().default("https://oauth2.googleapis.com/token")
+    ),
+    GOOGLE_OAUTH_USERINFO_URL: z.preprocess(
+      (v) => (v === "" || v == null ? undefined : v),
+      z.string().url().default("https://www.googleapis.com/oauth2/v3/userinfo")
+    ),
+    GOOGLE_OAUTH_SCOPE: z.preprocess(
+      (v) => (v === "" || v == null ? undefined : v),
+      z.string().min(1).default("openid email profile")
+    ),
     OTP_TTL_SECONDS: z.coerce.number().int().positive().default(300),
     OTP_RESEND_SECONDS: z.coerce.number().int().positive().default(60),
     OTP_REQUEST_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
