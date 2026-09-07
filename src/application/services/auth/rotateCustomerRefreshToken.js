@@ -56,6 +56,7 @@ export function createRotateCustomerRefreshToken({ authRepo, accessTokenRegistry
     });
 
     if (accessTokenRegistry) {
+      // Drop previous access sid if still present on the refresh JWT path — new sid only.
       await accessTokenRegistry.registerAccessJti(payload.sub, access.jti, accessTokenTtlSec());
     }
 

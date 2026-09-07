@@ -35,6 +35,14 @@ export function mapStorefrontOrderRow(row) {
     coupon_discount_minor: couponDiscount,
     auto_promotion_discount_minor: autoPromotionDiscount,
     subtotal_before_coupon_minor: subtotal + couponDiscount,
-    coupon_code: couponCode
+    coupon_code: couponCode,
+    delivery_tracking_url:
+      typeof row.delivery_tracking_url === "string" && row.delivery_tracking_url.trim()
+        ? row.delivery_tracking_url.trim()
+        : row.delivery_tracking_url ?? null,
+    yadro_order_id:
+      row.yadro_order_id != null && String(row.yadro_order_id).trim() !== ""
+        ? String(row.yadro_order_id).trim()
+        : null
   };
 }

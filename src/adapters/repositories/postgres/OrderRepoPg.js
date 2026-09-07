@@ -228,7 +228,8 @@ export class OrderRepoPg extends OrderRepo {
       `SELECT o.id, o.order_number, o.status, o.subtotal_minor, o.delivery_fee_minor, o.total_minor, 'INR'::text AS currency,
               o.promotion_discount_total_minor, o.coupon_code_normalized, o.applied_promotion_ids,
               ${COUPON_DISCOUNT_SELECT("o")},
-              o.placed_at, o.picker_id, o.picker_name
+              o.placed_at, o.picker_id, o.picker_name,
+              o.delivery_tracking_url, o.yadro_order_id
          FROM orders o
         WHERE o.shop_id = $1::uuid AND o.customer_id = $2
         ORDER BY o.placed_at DESC
@@ -315,6 +316,7 @@ export class OrderRepoPg extends OrderRepo {
               o.promotion_discount_total_minor, o.coupon_code_normalized, o.applied_promotion_ids,
               ${COUPON_DISCOUNT_SELECT("o")},
               o.picker_id, o.picker_name,
+              o.delivery_tracking_url, o.yadro_order_id,
               o.placed_at, o.accepted_at, o.out_for_delivery_at, o.delivered_at, o.rejected_at
          FROM orders o
         WHERE o.id = $1::uuid AND o.shop_id = $2::uuid AND o.customer_id = $3

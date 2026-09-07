@@ -101,6 +101,7 @@ export function mountStorefrontRoutes(r, deps) {
       validate({ params: storefrontProductIdParamSchema }),
       storefrontCat.getProductById
     );
+    r.get(`${prefix}/home-sections`, storefrontCat.listHomeSections);
 
     r.post(`${prefix}/cart`, requireCustomerJwt, requireCustomerShopAccess, storefrontCart.getOrCreate);
     r.get(

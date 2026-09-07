@@ -122,12 +122,26 @@ function getCategoryBySlugHandler(ctx) {
   });
 }
 
+function listHomeSectionsHandler(ctx) {
+  return asyncHandler(async (req, res) => {
+    if (!req.shopId) {
+      res.json({ data: { sections: [] } });
+      return;
+    }
+    const shopId = shopIdForStorefront(req);
+    const result = await ctx.storefrontCatalog.listHomeSections(shopId);
+    setCatalogHttpCache(ctx, res);
+    res.json(result);
+  });
+}
+
 export const storefrontCatalogController = {
   listCategories: (ctx) => listCategoriesHandler(ctx),
   listProducts: (ctx) => listProductsHandler(ctx),
   getProductBySlug: (ctx) => getProductBySlugHandler(ctx),
   getProductById: (ctx) => getProductByIdHandler(ctx),
   getCategoryBySlug: (ctx) => getCategoryBySlugHandler(ctx),
+  listHomeSections: (ctx) => listHomeSectionsHandler(ctx),
 
   forCtx(ctx) {
     return {
@@ -135,7 +149,8 @@ export const storefrontCatalogController = {
       listProducts: listProductsHandler(ctx),
       getProductBySlug: getProductBySlugHandler(ctx),
       getProductById: getProductByIdHandler(ctx),
-      getCategoryBySlug: getCategoryBySlugHandler(ctx)
+      getCategoryBySlug: getCategoryBySlugHandler(ctx),
+      listHomeSections: listHomeSectionsHandler(ctx)
     };
   }
 };

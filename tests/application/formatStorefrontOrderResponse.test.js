@@ -32,4 +32,17 @@ describe("mapStorefrontOrderRow", () => {
     expect(out.auto_promotion_discount_minor).toBe(500);
     expect(out.coupon_code).toBeNull();
   });
+
+  it("exposes delivery_tracking_url and yadro_order_id", () => {
+    const out = mapStorefrontOrderRow({
+      subtotal_minor: 1000,
+      delivery_fee_minor: 0,
+      total_minor: 1000,
+      delivery_tracking_url: "  https://track.example/o/1  ",
+      yadro_order_id: 55
+    });
+
+    expect(out.delivery_tracking_url).toBe("https://track.example/o/1");
+    expect(out.yadro_order_id).toBe("55");
+  });
 });

@@ -29,7 +29,7 @@ Example `.env` (adjust values; do not commit secrets):
 
 ```env
 NODE_ENV=development
-PORT=4100
+CUSTOMER_PORT=4100
 
 CORS_ORIGIN=http://localhost:5173
 API_PUBLIC_URL=http://localhost:4100

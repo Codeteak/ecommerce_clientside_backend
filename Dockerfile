@@ -26,7 +26,7 @@ WORKDIR /app
 
 # environment variables
 ENV NODE_ENV=production
-ENV PORT=4100
+ENV CUSTOMER_PORT=4100
 ENV NODE_OPTIONS="--max-old-space-size=512"
 ENV UV_THREADPOOL_SIZE=16
 
@@ -49,6 +49,6 @@ EXPOSE 4100
 
 # container-level healthcheck
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-CMD node -e "const http=require('http');const port=process.env.PORT||4100;const req=http.get({host:'127.0.0.1',port,path:'/health',timeout:3000},res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.on('timeout',()=>{req.destroy();process.exit(1);});"
+CMD node -e "const http=require('http');const port=process.env.CUSTOMER_PORT||4100;const req=http.get({host:'127.0.0.1',port,path:'/health',timeout:3000},res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.on('timeout',()=>{req.destroy();process.exit(1);});"
 
 CMD ["node", "src/main/bootstrap.js"]

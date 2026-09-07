@@ -1,5 +1,5 @@
 import { requireShopId } from "../../../application/services/catalog/catalogShopId.js";
-import { shopAllowsCustomers } from "../../../application/services/auth/shopPolicy.js";
+import { assertShopAllowsCustomers } from "../../../application/services/auth/shopPolicy.js";
 import { ForbiddenError } from "../../../domain/errors/ForbiddenError.js";
 import { withClient } from "../../../infra/db/tx.js";
 
@@ -35,9 +35,7 @@ export function createRequireCustomerShopAccess({ authRepo }) {
         if (!membership.is_active || membership.is_blocked || membership.is_deleted) {
           throw new ForbiddenError("No access to this shop");
         }
-        if (!shopAllowsCustomers(shop)) {
-          throw new ForbiddenError("This shop is not available right now.");
-        }
+        assertShopAllowsCustomers(shop, { statusCode: 403 });
       });
       next();
     } catch (err) {

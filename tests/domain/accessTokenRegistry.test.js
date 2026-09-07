@@ -1,27 +1,20 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { createAccessTokenRegistry } from "../../src/infra/auth/accessTokenRegistry.js";
 
 function createMockRedis() {
   const store = new Map();
   const sets = new Map();
-  const runMulti = (ops) => {
-    for (const op of ops) op();
-  };
+
   return {
+    async eval(_script, _numKeys, setKey, sid, ttl, _max, sidKey, userId) {
+      if (!sets.has(setKey)) sets.set(setKey, new Set());
+      sets.get(setKey).add(sid);
+      store.set(sidKey, userId);
+      return [...sets.get(setKey)];
+    },
     multi() {
       const ops = [];
       const api = {
-        set(key, val) {
-          ops.push(() => store.set(key, val));
-          return api;
-        },
-        sadd(key, member) {
-          ops.push(() => {
-            if (!sets.has(key)) sets.set(key, new Set());
-            sets.get(key).add(member);
-          });
-          return api;
-        },
         del(...keys) {
           for (const key of keys) {
             ops.push(() => {
@@ -31,10 +24,15 @@ function createMockRedis() {
           }
           return api;
         },
-        expire() {
+        srem(key, member) {
+          ops.push(() => {
+            sets.get(key)?.delete(member);
+          });
           return api;
         },
-        exec: async () => runMulti(ops)
+        exec: async () => {
+          for (const op of ops) op();
+        }
       };
       return api;
     },
@@ -72,7 +70,7 @@ describe("accessTokenRegistry", () => {
   it("revokes a single jti", async () => {
     const registry = createAccessTokenRegistry({ redis });
     await registry.registerAccessJti("user-1", "jti-a", 120);
-    await registry.revokeAccessJti("jti-a");
+    await registry.revokeAccessJti("jti-a", "user-1");
     await expect(registry.isAccessJtiActive("jti-a")).resolves.toBe(false);
   });
 

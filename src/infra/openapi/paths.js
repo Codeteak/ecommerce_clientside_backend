@@ -704,6 +704,37 @@ export function buildPaths() {
         }
       }
     },
+    "/storefront/home-sections": {
+      get: {
+        tags: ["Storefront catalog"],
+        summary: "List enabled home shelves",
+        description:
+          "Public catalog read. Requires shop context (`x-shop-id`). Returns enabled sections ordered by sortOrder. Event shelves are in-date only. Products are active and in_stock. IDs are resolved to name/image/price. Buy-X-Get-Y is merchandising only (no discount math).",
+        parameters: [...shopParams],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    data: {
+                      type: "object",
+                      properties: {
+                        sections: { type: "array", items: { type: "object" } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": jsonErr,
+          "404": jsonErr
+        }
+      }
+    },
     "/storefront/products": {
       get: {
         tags: ["Storefront catalog"],

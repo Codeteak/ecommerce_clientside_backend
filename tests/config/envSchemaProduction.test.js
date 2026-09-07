@@ -3,7 +3,7 @@ import { envSchema } from "../../src/config/env/schema.js";
 
 const baseProductionEnv = {
   NODE_ENV: "production",
-  PORT: 4100,
+  CUSTOMER_PORT: 4100,
   CORS_ORIGIN: "https://example.com",
   API_PUBLIC_URL: "https://api.example.com",
   DATABASE_URL: "postgresql://localhost:5432/postgres",

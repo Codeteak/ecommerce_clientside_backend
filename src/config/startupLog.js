@@ -24,10 +24,10 @@ export function logStartupBanner() {
       event: "startup.banner",
       service: "clientside-ecommerce-api",
       nodeEnv: env.NODE_ENV,
-      port: env.PORT,
+      port: env.CUSTOMER_PORT,
       apiPublicUrl: env.API_PUBLIC_URL || null
     },
-    `Clientside API · ${env.NODE_ENV} · port ${env.PORT}`
+    `Clientside API · ${env.NODE_ENV} · port ${env.CUSTOMER_PORT}`
   );
 }
 

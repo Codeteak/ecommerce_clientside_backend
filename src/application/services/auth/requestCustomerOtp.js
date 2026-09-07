@@ -3,7 +3,7 @@ import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { logger } from "../../../config/logger.js";
 import { randomInt } from "node:crypto";
 import { hashOtpCode } from "../../../infra/security/otpHasher.js";
-import { shopAllowsCustomers } from "./shopPolicy.js";
+import { assertShopAllowsCustomers } from "./shopPolicy.js";
 import {
   formatCustomerPhoneForSms,
   normalizeCustomerPhoneForStorage
@@ -29,9 +29,7 @@ export function createRequestCustomerOtp({
     if (!shop) {
       throw new NotFoundError("Shop not found");
     }
-    if (!shopAllowsCustomers(shop)) {
-      throw new ValidationError("Shop is not available");
-    }
+    assertShopAllowsCustomers(shop, { statusCode: 400 });
 
     const now = new Date();
     const latest = await authRepo.findLatestOtpChallenge(client, phone, shopId);

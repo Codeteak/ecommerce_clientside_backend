@@ -28,8 +28,15 @@ export function createCheckoutCartValidation({ authRepo, checkShopServiceArea })
       },
       "Checkout serviceability rejected"
     );
-    if (service.code === "SHOP_UNAVAILABLE") {
-      throw checkoutError("SHOP_UNAVAILABLE", service.message || "This shop is not available for orders.");
+    if (
+      service.code === "SHOP_BLOCKED" ||
+      service.code === "SHOP_DELETED" ||
+      service.code === "SHOP_UNAVAILABLE"
+    ) {
+      throw checkoutError(
+        service.code,
+        service.message || "This shop is not available for orders."
+      );
     }
     if (service.code === "SHOP_LOCATION_MISSING") {
       throw checkoutError("SHOP_LOCATION_MISSING", service.message || "Shop delivery location is not configured.");

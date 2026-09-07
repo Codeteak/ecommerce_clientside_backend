@@ -1,6 +1,5 @@
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
-import { ValidationError } from "../../../domain/errors/ValidationError.js";
-import { shopAllowsCustomers } from "../auth/shopPolicy.js";
+import { assertShopAllowsCustomers } from "../auth/shopPolicy.js";
 
 /**
  * @param {{
@@ -27,8 +26,6 @@ export function createEnsureShopForCatalog({ shopResolveCache, authRepo, pool })
     if (!shop) {
       throw new NotFoundError("Shop not found");
     }
-    if (!shopAllowsCustomers(shop)) {
-      throw new ValidationError("Shop is not available");
-    }
+    assertShopAllowsCustomers(shop, { statusCode: 400 });
   };
 }

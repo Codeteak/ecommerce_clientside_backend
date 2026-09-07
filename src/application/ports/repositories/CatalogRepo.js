@@ -79,6 +79,23 @@ export class CatalogRepo {
     throw new Error("Not implemented");
   }
 
+  async listEnabledHomeSectionsStorefront(_shopId) {
+    void _shopId;
+    throw new Error("Not implemented");
+  }
+
+  async listSellableProductsByIdsStorefront(_shopId, _ids) {
+    void _shopId;
+    void _ids;
+    throw new Error("Not implemented");
+  }
+
+  async listActiveCategoriesByIdsStorefront(_shopId, _ids) {
+    void _shopId;
+    void _ids;
+    throw new Error("Not implemented");
+  }
+
   async getCategoryBySlugStorefront(_shopId, _slug) {
     void _shopId;
     void _slug;

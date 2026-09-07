@@ -53,7 +53,7 @@ export function createRequireCustomerJwt({
         const payload = verifyCustomerAccessToken(token);
         const userId = payload.sub;
         const customerId = payload.customerId;
-        const jti = payload.jti;
+        const jti = payload.jti || payload.sid;
         const sessionId = jti || hashToken(token);
 
         let jtiFallbackReason = null;
@@ -120,7 +120,7 @@ export function createRequireCustomerJwt({
           }
           if (!ok) {
             if (accessTokenRegistry && jti) {
-              await accessTokenRegistry.revokeAccessJti(jti);
+              await accessTokenRegistry.revokeAccessJti(jti, userId);
             }
             logApiWarn("api.auth.rejected", req, {
               code: "UNAUTHORIZED",

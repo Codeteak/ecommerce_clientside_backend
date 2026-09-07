@@ -182,9 +182,9 @@ async function main() {
 
   installGracefulShutdown();
 
-  logStartupStep("http", `Binding HTTP listener on port ${env.PORT}…`);
+  logStartupStep("http", `Binding HTTP listener on port ${env.CUSTOMER_PORT}…`);
   await new Promise((resolve, reject) => {
-    server.listen(env.PORT, () => {
+    server.listen(env.CUSTOMER_PORT, () => {
       resolve();
     });
     server.on("error", reject);
@@ -193,7 +193,7 @@ async function main() {
   const cache = buildReadCacheStartupStatus(env);
   logStartupReady(
     {
-      port: env.PORT,
+      port: env.CUSTOMER_PORT,
       nodeEnv: env.NODE_ENV,
       cacheOn: cache.cacheOn,
       redisConfigured: cache.redisConfigured,
@@ -202,7 +202,7 @@ async function main() {
       outboxWorker: env.OUTBOX_WORKER_ENABLED,
       realtimeEnabled: env.REALTIME_ENABLED
     },
-    `Server ready on http://localhost:${env.PORT} — ${cache.summary}`
+    `Server ready on http://localhost:${env.CUSTOMER_PORT} — ${cache.summary}`
   );
 
   if (env.OUTBOX_WORKER_ENABLED) {
@@ -246,9 +246,9 @@ startWithRetry().catch((err) => {
   if (err?.code === "EADDRINUSE") {
     logStartupFailure(
       "http",
-      `Port ${env.PORT} already in use — stop the other process or change PORT in .env`,
+      `Port ${env.CUSTOMER_PORT} already in use — stop the other process or change CUSTOMER_PORT in .env`,
       err,
-      { port: env.PORT }
+      { port: env.CUSTOMER_PORT }
     );
   } else if (
     formatted.code === "ECONNREFUSED" ||
