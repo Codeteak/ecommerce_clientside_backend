@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { createRequireCustomerShopAccess } from "../../src/interface/http/middleware/requireCustomerShopAccess.js";
 import { ForbiddenError } from "../../src/domain/errors/ForbiddenError.js";
+import { AppError } from "../../src/domain/errors/AppError.js";
 
 vi.mock("../../src/infra/db/tx.js", () => ({
   withClient: vi.fn((fn) => fn({}))
@@ -57,7 +58,7 @@ describe("requireCustomerShopAccess", () => {
     expect(next.mock.calls[0]).toHaveLength(0);
   });
 
-  it("returns 403 when shop status is not active", async () => {
+  it("returns 403 with Shop is blocked when shop status is blocked", async () => {
     const authRepo = {
       getMembershipWithShopForCustomer: vi.fn().mockResolvedValue({
         membership: {
@@ -75,6 +76,11 @@ describe("requireCustomerShopAccess", () => {
 
     await middleware(req, res, next);
 
-    expect(next).toHaveBeenCalledWith(expect.any(ForbiddenError));
+    expect(next).toHaveBeenCalledWith(expect.any(AppError));
+    expect(next.mock.calls[0][0]).toMatchObject({
+      message: "Shop is blocked",
+      code: "SHOP_BLOCKED",
+      statusCode: 403
+    });
   });
 });

@@ -84,6 +84,7 @@ describe("checkShopServiceArea", () => {
     });
 
     expect(result.inServiceArea).toBe(false);
-    expect(result.code).toBe("SHOP_UNAVAILABLE");
+    expect(result.code).toBe("SHOP_BLOCKED");
+    expect(result.message).toBe("Shop is blocked");
   });
 });

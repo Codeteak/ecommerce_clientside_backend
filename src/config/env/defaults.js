@@ -3,7 +3,7 @@ export function getDevLikeDefaults(nodeEnv) {
   const objectStoragePublicBaseUrl =
     nodeEnv === "test" ? "https://storage.test" : "";
   return {
-    PORT: "4100",
+    CUSTOMER_PORT: "4100",
     CORS_ORIGIN: [
       "http://localhost:5173",
       "http://localhost:3000",

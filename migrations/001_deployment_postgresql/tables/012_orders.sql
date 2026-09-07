@@ -24,5 +24,7 @@ CREATE TABLE IF NOT EXISTS orders (
   promotion_discount_total_minor BIGINT,
   applied_promotion_ids JSONB,
   coupon_code_normalized TEXT,
+  delivery_tracking_url TEXT,
+  yadro_order_id TEXT,
   UNIQUE (shop_id, order_number)
 );

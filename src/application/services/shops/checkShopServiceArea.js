@@ -1,6 +1,6 @@
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { haversineMeters } from "../../../domain/geo/haversineMeters.js";
-import { shopAllowsCustomers } from "../auth/shopPolicy.js";
+import { shopAllowsCustomers, shopUnavailableCode, shopUnavailableMessage } from "../auth/shopPolicy.js";
 
 /**
  * Purpose: Decide if a delivery point is within the configured radius of the shop’s address hub.
@@ -53,8 +53,8 @@ export function createCheckShopServiceArea({ shopServiceAreaRepo, shopResolveCac
         distanceM: null,
         maxRadiusM: defaultMaxRadiusM,
         shopLocation: null,
-        code: "SHOP_UNAVAILABLE",
-        message: "This shop is not available for orders."
+        code: shopUnavailableCode(shopRow),
+        message: shopUnavailableMessage(shopRow)
       };
     }
 

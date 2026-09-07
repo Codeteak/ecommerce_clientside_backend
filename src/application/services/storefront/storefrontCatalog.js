@@ -8,6 +8,7 @@ import {
   mapStorefrontCategoryRow as mapCategoryRow,
   mapStorefrontProductRow as mapProductRow
 } from "./storefrontCatalogMappers.js";
+import { resolveStorefrontHomeSections } from "./storefrontHomeSections.js";
 import { shouldCacheProductList } from "./shouldCacheProductList.js";
 import { withCategoryListingOffers } from "../promotions/mapCategoryListingPromotions.js";
 import { formatShopBranding } from "../shops/formatShopBranding.js";
@@ -392,6 +393,15 @@ export function createStorefrontCatalog({
       );
       if (!row) return null;
       return mapCategoryRow(row);
+    },
+
+    async listHomeSections(shopIdRaw) {
+      const shopId = requireShopId(shopIdRaw);
+      await ensureShopForCatalog(shopId);
+      const sections = await cachedSWR(shopId, "home-sections:v1", "home-sections:list", () =>
+        resolveStorefrontHomeSections(catalogRepo, shopId)
+      );
+      return { data: { sections } };
     }
   };
 }

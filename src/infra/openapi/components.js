@@ -663,7 +663,17 @@ export const schemas = {
       accepted_at: { type: "string", format: "date-time", nullable: true },
       out_for_delivery_at: { type: "string", format: "date-time", nullable: true },
       delivered_at: { type: "string", format: "date-time", nullable: true },
-      rejected_at: { type: "string", format: "date-time", nullable: true }
+      rejected_at: { type: "string", format: "date-time", nullable: true },
+      delivery_tracking_url: {
+        type: "string",
+        nullable: true,
+        description: "Public Yaadro delivery tracking page URL (set after shop accepts and DMS create succeeds)."
+      },
+      yadro_order_id: {
+        type: "string",
+        nullable: true,
+        description: "Yaadro DMS order id for partner correlation."
+      }
     },
     required: [
       "id",

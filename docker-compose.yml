@@ -14,7 +14,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "const http=require('http');const p=process.env.PORT||4100;const r=http.get({host:'127.0.0.1',port:p,path:'/health',timeout:3000},res=>process.exit(res.statusCode===200?0:1));r.on('error',()=>process.exit(1));r.on('timeout',()=>{r.destroy();process.exit(1);});"
+          "const http=require('http');const p=process.env.CUSTOMER_PORT||4100;const r=http.get({host:'127.0.0.1',port:p,path:'/health',timeout:3000},res=>process.exit(res.statusCode===200?0:1));r.on('error',()=>process.exit(1));r.on('timeout',()=>{r.destroy();process.exit(1);});"
         ]
       interval: 30s
       timeout: 5s

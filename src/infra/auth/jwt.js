@@ -10,7 +10,7 @@ const STAFF_REALTIME_ROLES = new Set(["picker", "owner", "admin", "manager"]);
  */
 export function signCustomerAccessToken({ userId, customerId, shopId, role = "customer" }) {
   const jti = randomUUID();
-  const payload = { sub: userId, customerId, role };
+  const payload = { sub: userId, customerId, role, sid: jti };
   if (shopId != null && shopId !== "") {
     payload.shopId = shopId;
   }
@@ -22,7 +22,7 @@ export function signCustomerAccessToken({ userId, customerId, shopId, role = "cu
     expiresIn: env.JWT_ACCESS_EXPIRES_IN || env.JWT_EXPIRES_IN,
     jwtid: jti
   });
-  return { token, jti };
+  return { token, jti, sid: jti };
 }
 
 export function verifyCustomerAccessToken(token) {

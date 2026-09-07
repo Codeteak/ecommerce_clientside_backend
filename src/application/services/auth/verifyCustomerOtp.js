@@ -1,7 +1,6 @@
 import { AuthError } from "../../../domain/errors/AuthError.js";
-import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
-import { shopAllowsCustomers } from "./shopPolicy.js";
+import { assertShopAllowsCustomers } from "./shopPolicy.js";
 import { verifyOtpCode } from "../../../infra/security/otpHasher.js";
 import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normalizeCustomerPhone.js";
 import { getRequestLogger } from "../../../infra/logging/requestContext.js";
@@ -46,9 +45,7 @@ export function createVerifyCustomerOtp({ authRepo, buildStorefrontSession, otpM
     if (!shop) {
       throw new NotFoundError("Shop not found");
     }
-    if (!shopAllowsCustomers(shop)) {
-      throw new ValidationError("Shop is not available");
-    }
+    assertShopAllowsCustomers(shop, { statusCode: 400 });
 
     await setTenantContext(client, shopId);
 

@@ -12,7 +12,7 @@ function boolFromEnv(val) {
 export const envSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-    PORT: z.coerce.number().int().positive(),
+    CUSTOMER_PORT: z.coerce.number().int().positive(),
     CORS_ORIGIN: z
       .string()
       .min(1)

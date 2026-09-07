@@ -2,13 +2,55 @@ import { env } from "../../config/env.js";
 import { parseJwtDurationMinutes } from "../../config/env/parseJwtDurationMinutes.js";
 import { withRetry } from "../../utils/withRetry.js";
 
-function jtiKey(jti) {
-  return `access:jti:${jti}`;
+/**
+ * Redis allowlist for access-token session ids — same model as shop admin:
+ * key `auth:session:customer:{userId}` = SET of active `sid` / `jti` values.
+ * Plus per-sid key for fast exists checks (TTL = access token lifetime).
+ */
+
+const MAX_CUSTOMER_SESSIONS = 20;
+const SESSION_SCOPE = "customer";
+
+function sessionSetKey(userId) {
+  return `auth:session:${SESSION_SCOPE}:${userId}`;
 }
 
-function userJtiSetKey(userId) {
-  return `user:${userId}:access_jtis`;
+function sidKey(sid) {
+  return `access:jti:${sid}`;
 }
+
+const ADD_SESSION_WITH_CAP_LUA = `
+local k = KEYS[1]
+local sid = ARGV[1]
+local ttl = tonumber(ARGV[2])
+local maxSessions = tonumber(ARGV[3])
+local sidKey = ARGV[4]
+local userId = ARGV[5]
+local t = redis.call('TYPE', k)
+if type(t) == 'table' then t = t['ok'] end
+if t ~= 'none' and t ~= 'set' then
+  redis.call('DEL', k)
+end
+if sid == nil or sid == '' then
+  return {}
+end
+redis.call('SADD', k, sid)
+redis.call('SET', sidKey, userId, 'EX', ttl)
+if ttl and ttl > 0 then
+  redis.call('EXPIRE', k, ttl)
+end
+local count = redis.call('SCARD', k)
+if maxSessions and maxSessions > 0 and count > maxSessions then
+  local overflow = count - maxSessions
+  for i = 1, overflow do
+    local dropped = redis.call('SPOP', k)
+    if dropped then
+      redis.call('DEL', 'access:jti:' .. dropped)
+    end
+  end
+end
+return redis.call('SMEMBERS', k)
+`;
 
 export function accessTokenTtlSec() {
   const minutes = parseJwtDurationMinutes(env.JWT_ACCESS_EXPIRES_IN || env.JWT_EXPIRES_IN);
@@ -17,7 +59,7 @@ export function accessTokenTtlSec() {
 }
 
 /**
- * Redis allowlist for issued access-token jti values.
+ * Redis allowlist for issued access-token jti / sid values (admin-compatible).
  */
 export function createAccessTokenRegistry({ redis }) {
   const required = env.NODE_ENV === "production" && env.ACCESS_JTI_REDIS_REQUIRED !== false;
@@ -25,14 +67,20 @@ export function createAccessTokenRegistry({ redis }) {
   async function registerAccessJti(userId, jti, ttlSec = accessTokenTtlSec()) {
     if (!redis || !userId || !jti) return false;
     const sec = Math.max(1, Number(ttlSec) || accessTokenTtlSec());
+    const sid = String(jti);
     try {
       await withRetry(
         async () => {
-          const multi = redis.multi();
-          multi.set(jtiKey(jti), String(userId), "EX", sec);
-          multi.sadd(userJtiSetKey(userId), String(jti));
-          multi.expire(userJtiSetKey(userId), sec);
-          await multi.exec();
+          await redis.eval(
+            ADD_SESSION_WITH_CAP_LUA,
+            1,
+            sessionSetKey(userId),
+            sid,
+            String(sec),
+            String(MAX_CUSTOMER_SESSIONS),
+            sidKey(sid),
+            String(userId)
+          );
         },
         { event: "access_jti_register_retry", context: { userId } }
       );
@@ -51,7 +99,7 @@ export function createAccessTokenRegistry({ redis }) {
       };
     }
     try {
-      const v = await withRetry(() => redis.exists(jtiKey(jti)), {
+      const v = await withRetry(() => redis.exists(sidKey(jti)), {
         event: "access_jti_exists_retry"
       });
       return Number(v) === 1
@@ -70,10 +118,17 @@ export function createAccessTokenRegistry({ redis }) {
     return status.active;
   }
 
-  async function revokeAccessJti(jti) {
+  async function revokeAccessJti(jti, userId = null) {
     if (!redis || !jti) return false;
     try {
-      await withRetry(() => redis.del(jtiKey(jti)), { event: "access_jti_revoke_retry" });
+      await withRetry(async () => {
+        const pipe = redis.multi();
+        pipe.del(sidKey(jti));
+        if (userId) {
+          pipe.srem(sessionSetKey(userId), String(jti));
+        }
+        await pipe.exec();
+      }, { event: "access_jti_revoke_retry" });
       return true;
     } catch {
       return false;
@@ -83,16 +138,20 @@ export function createAccessTokenRegistry({ redis }) {
   async function revokeAllAccessForUser(userId) {
     if (!redis || !userId) return false;
     try {
-      const jtis = await redis.smembers(userJtiSetKey(userId));
+      const setKey = sessionSetKey(userId);
+      const jtis = await redis.smembers(setKey);
       if (Array.isArray(jtis) && jtis.length) {
         const pipe = redis.multi();
         for (const jti of jtis) {
-          pipe.del(jtiKey(jti));
+          pipe.del(sidKey(jti));
         }
-        pipe.del(userJtiSetKey(userId));
+        pipe.del(setKey);
+        // Legacy key from older registry
+        pipe.del(`user:${userId}:access_jtis`);
         await pipe.exec();
       } else {
-        await redis.del(userJtiSetKey(userId));
+        await redis.del(setKey);
+        await redis.del(`user:${userId}:access_jtis`);
       }
       return true;
     } catch {

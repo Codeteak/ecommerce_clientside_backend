@@ -3,7 +3,7 @@ import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { randomInt } from "node:crypto";
 import { hashOtpCode } from "../../../infra/security/otpHasher.js";
 import { logger } from "../../../config/logger.js";
-import { shopAllowsCustomers } from "../auth/shopPolicy.js";
+import { assertShopAllowsCustomers } from "../auth/shopPolicy.js";
 import {
   formatCustomerPhoneForSms,
   normalizeCustomerPhoneForStorage
@@ -42,9 +42,7 @@ export function createRequestPhoneChangeOtp({
     if (!shop) {
       throw new NotFoundError("Shop not found");
     }
-    if (!shopAllowsCustomers(shop)) {
-      throw new ValidationError("Shop is not available");
-    }
+    assertShopAllowsCustomers(shop, { statusCode: 400 });
 
     if (await authRepo.isPhoneUsedByAnotherActiveShopStaff(client, newPhone, userId)) {
       throw new ValidationError("Phone number is already in use");

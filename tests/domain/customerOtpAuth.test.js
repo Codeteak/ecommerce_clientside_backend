@@ -64,7 +64,8 @@ describe("customer OTP auth", () => {
     const run = createRequestCustomerOtp({ authRepo, smsSender: { sendOtp: vi.fn() } });
 
     await expect(run({}, { phone: "+919999999999", shopId })).rejects.toMatchObject({
-      code: "VALIDATION_ERROR"
+      code: "SHOP_BLOCKED",
+      message: "Shop is blocked"
     });
     expect(authRepo.insertOtpChallenge).not.toHaveBeenCalled();
   });
