@@ -42,9 +42,20 @@ describe("envSchema production", () => {
     }
   });
 
-  it("accepts production with REDIS_URL set", () => {
-    const result = envSchema.safeParse(baseProductionEnv);
+  it("accepts production when Google OAuth URL fields are omitted", () => {
+    const {
+      GOOGLE_OAUTH_AUTH_URL: _a,
+      GOOGLE_OAUTH_TOKEN_URL: _t,
+      GOOGLE_OAUTH_USERINFO_URL: _u,
+      GOOGLE_OAUTH_SCOPE: _s,
+      ...withoutGoogleUrls
+    } = baseProductionEnv;
+    const result = envSchema.safeParse(withoutGoogleUrls);
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.GOOGLE_OAUTH_AUTH_URL).toContain("accounts.google.com");
+      expect(result.data.GOOGLE_OAUTH_SCOPE).toContain("openid");
+    }
   });
 
   it("accepts production with CACHE_ON=false when REDIS_URL is set", () => {

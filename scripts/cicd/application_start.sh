@@ -101,15 +101,24 @@ ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 export ECR_IMAGE_URI
 
-echo "[application_start] Restarting services..."
+COMPOSE_FILE="${APP_DIR}/docker-compose.yml"
+if [[ ! -f "${COMPOSE_FILE}" ]]; then
+  echo "[application_start] Missing ${COMPOSE_FILE}"
+  ls -la "${APP_DIR}" || true
+  exit 1
+fi
+
+export CUSTOMER_PORT="${APP_PORT}"
+
+echo "[application_start] Restarting services with ${COMPOSE_FILE} (port ${CUSTOMER_PORT})..."
 if command -v docker-compose >/dev/null 2>&1; then
-  docker-compose pull
-  docker-compose down --remove-orphans
-  docker-compose up -d --force-recreate
+  docker-compose -f "${COMPOSE_FILE}" pull
+  docker-compose -f "${COMPOSE_FILE}" down --remove-orphans
+  docker-compose -f "${COMPOSE_FILE}" up -d --force-recreate
 else
-  docker compose pull
-  docker compose down --remove-orphans
-  docker compose up -d --force-recreate
+  docker compose -f "${COMPOSE_FILE}" pull
+  docker compose -f "${COMPOSE_FILE}" down --remove-orphans
+  docker compose -f "${COMPOSE_FILE}" up -d --force-recreate
 fi
 
 echo "[application_start] Deployment complete."
