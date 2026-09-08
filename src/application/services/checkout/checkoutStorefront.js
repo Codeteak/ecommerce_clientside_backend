@@ -145,16 +145,9 @@ export function createCheckoutStorefront({
       });
 
       const delivery = Number(deliveryFeeMinor) || 0;
-      const total = subtotal + delivery;
+      // `subtotal` from priceStorefrontLines is already net of promotions/coupon.
+      const total = Math.max(0, subtotal) + delivery;
       const orderNumber = randomOrderNumber();
-
-      await cartValidation.assertAddressServiceable(
-        shopId,
-        profile.address,
-        requestMeta,
-        userId,
-        customerId
-      );
 
       const customerName = profile.display_name || "";
 
@@ -196,6 +189,8 @@ export function createCheckoutStorefront({
         couponDiscountMinor
       });
 
+      // Storefront carts are Redis session carts — their ids are NOT in Postgres `carts`.
+      // Passing that id into checkout_idempotency.cart_id hits FK checkout_idempotency_cart_id_fkey (23503).
       await recordCheckoutIdempotency({
         orderRepo,
         client,
@@ -203,12 +198,15 @@ export function createCheckoutStorefront({
         customerIdText: custKey,
         rawIdem,
         orderId: order.id,
-        cartId: cart?.id ?? null
+        cartId: null
       });
 
-      if (cart) {
-        await cartRepo.deleteCartItemsForCart(client, shopId, cart.id);
-        await cartRepo.deleteCart(client, shopId, cart.id);
+      // Always clear Redis session cart after success (client-line checkout used to leave it behind).
+      const sessionCart =
+        cart ?? (await cartRepo.findCartByShopAndCustomerId(client, shopId, custKey));
+      if (sessionCart?.id) {
+        await cartRepo.deleteCartItemsForCart(client, shopId, sessionCart.id);
+        await cartRepo.deleteCart(client, shopId, sessionCart.id);
       }
 
       if (typeof emitOrderPlaced === "function") {
