@@ -4,6 +4,7 @@ import {
   formatStorefrontSummary
 } from "../formatStorefrontCartResponse.js";
 import { parseBillableCartQuantity } from "./cartLineRules.js";
+import { rankSuggestedCouponsByDiscount } from "../../promotions/rankSuggestedCoupons.js";
 
 export function createCartViewBuilder({
   cartRepo,
@@ -23,10 +24,18 @@ export function createCartViewBuilder({
     cartId,
     items,
     couponCode = null,
+    couponCodes = null,
     includeSuggestedCoupons = true,
     priceMetaByItemId = new Map()
   }) {
-    const pricingOut = await runPricing(client, shopId, customerId, items, couponCode);
+    const pricingOut = await runPricing(
+      client,
+      shopId,
+      customerId,
+      items,
+      couponCode,
+      couponCodes
+    );
     const priced = pricingOut?.priced ?? null;
     const couponError = pricingOut?.couponError ?? null;
 
@@ -50,13 +59,21 @@ export function createCartViewBuilder({
         customerId,
         cartSubtotalMinor: subtotalMinor,
         onlyApplicable: true,
-        limit: 3
+        limit: 20
       });
-      suggested_coupons = (couponList.coupons ?? []).slice(0, 3).map((c) => ({
-        code: c.code,
-        applicable: c.eligibility?.applicable === true,
-        reason_codes: c.eligibility?.ineligibilityCodes ?? []
-      }));
+      const ruleLines = items.map((it) => {
+        const qty = parseBillableCartQuantity(it.quantity);
+        const unit = Number(it.list_price_minor_per_unit ?? it.unit_price_minor ?? 0);
+        return {
+          lineTotalMinor: Math.round(unit * qty),
+          categoryId: it.global_category_id ?? null
+        };
+      });
+      suggested_coupons = rankSuggestedCouponsByDiscount(
+        couponList.coupons ?? [],
+        { subtotalMinor, lines: ruleLines },
+        3
+      );
     }
 
     if (!priced || !items.length) {
@@ -140,7 +157,7 @@ export function createCartViewBuilder({
     shopId,
     customerId,
     items,
-    { couponCode = null, includeSuggestedCoupons = true } = {}
+    { couponCode = null, couponCodes = null, includeSuggestedCoupons = true } = {}
   ) {
     return formatPricedCartView({
       client,
@@ -149,6 +166,7 @@ export function createCartViewBuilder({
       cartId: null,
       items,
       couponCode,
+      couponCodes,
       includeSuggestedCoupons,
       priceMetaByItemId: new Map()
     });
@@ -158,7 +176,7 @@ export function createCartViewBuilder({
     client,
     shopIdRaw,
     scope,
-    { couponCode = null, includeSuggestedCoupons = true } = {}
+    { couponCode = null, couponCodes = null, includeSuggestedCoupons = true } = {}
   ) {
     const { shopId, cart, customerId } = await resolveCart(client, shopIdRaw, scope);
     let items = await cartRepo.listCartItems(client, shopId, cart.id);
@@ -198,6 +216,7 @@ export function createCartViewBuilder({
       cartId: cart.id,
       items,
       couponCode,
+      couponCodes,
       includeSuggestedCoupons,
       priceMetaByItemId
     });

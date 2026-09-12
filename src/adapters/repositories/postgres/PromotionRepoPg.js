@@ -1,6 +1,23 @@
 import { PromotionRepo } from "../../../application/ports/repositories/PromotionRepo.js";
 import { setTenantContext } from "../../../infra/db/tenantContext.js";
 
+/** Weekly recurrence (IST DOW); null recurrence_rule keeps starts_at/ends_at-only behavior. */
+const ACTIVE_PROMOTION_RECURRENCE_SQL = `
+  AND (
+    p.recurrence_rule IS NULL
+    OR (
+      p.recurrence_rule->>'type' = 'weekly'
+      AND EXTRACT(DOW FROM (now() AT TIME ZONE 'Asia/Kolkata'))::int = ANY (
+        ARRAY(
+          SELECT jsonb_array_elements_text(
+            COALESCE(p.recurrence_rule->'daysOfWeek', '[]'::jsonb)
+          )::int
+        )
+      )
+    )
+  )
+`;
+
 /**
  * Purpose: PostgreSQL repository for customer promotion reads.
  */
@@ -11,6 +28,9 @@ export class PromotionRepoPg extends PromotionRepo {
       `SELECT promotions_paused,
               default_overlap_mode,
               default_allow_coupon_after_auto,
+              default_stack_sku_with_category,
+              default_stack_sku_with_cart,
+              default_stack_category_with_cart,
               first_coupon_eligibility_days,
               max_coupons_per_order,
               allow_combine_auto_campaigns
@@ -78,6 +98,7 @@ export class PromotionRepoPg extends PromotionRepo {
          AND c.ends_at >= now()
          AND p.starts_at <= now()
          AND p.ends_at >= now()
+         ${ACTIVE_PROMOTION_RECURRENCE_SQL}
          AND ($3::text IS NULL OR c.code_normalized = $3)
        ORDER BY p.priority ASC, p.created_at DESC, c.code_normalized ASC
        ${limit != null ? "LIMIT $4" : ""}`,
@@ -132,6 +153,7 @@ export class PromotionRepoPg extends PromotionRepo {
          AND c.ends_at >= now()
          AND p.starts_at <= now()
          AND p.ends_at >= now()
+         ${ACTIVE_PROMOTION_RECURRENCE_SQL}
          AND ($2::text IS NULL OR c.code_normalized = $2)
        ORDER BY p.priority ASC, p.created_at DESC, c.code_normalized ASC
        ${limit != null ? "LIMIT $3" : ""}`,
@@ -206,6 +228,10 @@ export class PromotionRepoPg extends PromotionRepo {
                 'category_percent_off'
               )
          ) AS has_coupon_rules,
+         p.allow_coupon_after_auto,
+         p.stack_sku_with_cart,
+         p.stack_sku_with_category,
+         p.stack_category_with_cart,
          COALESCE(rules.promotion_rules, '[]'::json) AS promotion_rules
        FROM promotion_coupons c
        JOIN promotions p
@@ -246,6 +272,7 @@ export class PromotionRepoPg extends PromotionRepo {
          AND c.ends_at >= now()
          AND p.starts_at <= now()
          AND p.ends_at >= now()
+         ${ACTIVE_PROMOTION_RECURRENCE_SQL}
        LIMIT 1`,
       [shopId, codeNormalized, customerId != null ? String(customerId) : null]
     );
@@ -309,6 +336,7 @@ export class PromotionRepoPg extends PromotionRepo {
           AND p.status = 'active'
           AND p.starts_at <= now()
           AND p.ends_at >= now()
+          ${ACTIVE_PROMOTION_RECURRENCE_SQL}
           AND pp.shop_product_id = ANY($2::uuid[])`,
       [shopId, ids]
     );
@@ -321,7 +349,8 @@ export class PromotionRepoPg extends PromotionRepo {
           AND p.is_deleted = false
           AND p.status = 'active'
           AND p.starts_at <= now()
-          AND p.ends_at >= now()`;
+          AND p.ends_at >= now()
+          ${ACTIVE_PROMOTION_RECURRENCE_SQL}`;
 
     const { rows: skuRows } = await client.query(
       `SELECT DISTINCT COALESCE(sp.global_category_id, gp.global_category_id)::text AS id
@@ -369,11 +398,12 @@ export class PromotionRepoPg extends PromotionRepo {
 
   async listActiveBundleRulesForShop(client, shopId) {
     await setTenantContext(client, shopId);
-    const { rows } = await client.query(
-      `SELECT br.promotion_id,
+    const sqlWithCross = `SELECT br.promotion_id,
               br.scope,
               br.shop_product_id,
               br.global_category_id,
+              br.buy_shop_product_id,
+              br.reward_shop_product_id,
               br.buy_qty,
               br.get_qty,
               br.reward_type,
@@ -391,7 +421,84 @@ export class PromotionRepoPg extends PromotionRepo {
           AND p.status = 'active'
           AND p.starts_at <= now()
           AND p.ends_at >= now()
+          ${ACTIVE_PROMOTION_RECURRENCE_SQL}
         ORDER BY p.priority ASC, p.created_at DESC, br.updated_at DESC
+        LIMIT 200`;
+    const sqlLegacy = `SELECT br.promotion_id,
+              br.scope,
+              br.shop_product_id,
+              br.global_category_id,
+              NULL::uuid AS buy_shop_product_id,
+              NULL::uuid AS reward_shop_product_id,
+              br.buy_qty,
+              br.get_qty,
+              br.reward_type,
+              br.reward_percent_bps,
+              p.priority,
+              p.created_at,
+              p.ends_at
+         FROM promotion_bundle_rules br
+         JOIN promotions p
+           ON p.id = br.promotion_id
+          AND p.shop_id = br.shop_id
+        WHERE br.shop_id = $1::uuid
+          AND br.is_deleted = false
+          AND p.is_deleted = false
+          AND p.status = 'active'
+          AND p.starts_at <= now()
+          AND p.ends_at >= now()
+          ${ACTIVE_PROMOTION_RECURRENCE_SQL}
+          AND br.scope IN ('same_shop_product', 'global_category')
+        ORDER BY p.priority ASC, p.created_at DESC, br.updated_at DESC
+        LIMIT 200`;
+    try {
+      const { rows } = await client.query(sqlWithCross, [shopId]);
+      return rows;
+    } catch (err) {
+      const msg = String(err?.message ?? err);
+      if (msg.includes("buy_shop_product_id") || msg.includes("reward_shop_product_id")) {
+        const { rows } = await client.query(sqlLegacy, [shopId]);
+        return rows;
+      }
+      throw err;
+    }
+  }
+
+  async listActiveAutoCartRulesForShop(client, shopId) {
+    await setTenantContext(client, shopId);
+    const { rows } = await client.query(
+      `SELECT pr.promotion_id,
+              pr.rule_kind,
+              pr.percent_bps,
+              pr.amount_minor::text AS amount_minor,
+              pr.min_subtotal_minor::text AS min_subtotal_minor,
+              pr.global_category_id::text AS global_category_id,
+              pr.max_discount_minor::text AS max_discount_minor,
+              p.priority,
+              p.created_at,
+              p.allow_coupon_after_auto,
+              p.stack_sku_with_cart,
+              p.stack_category_with_cart,
+              p.stack_sku_with_category
+         FROM promotion_rules pr
+         JOIN promotions p
+           ON p.id = pr.promotion_id
+          AND p.shop_id = pr.shop_id
+        WHERE pr.shop_id = $1::uuid
+          AND pr.is_deleted = false
+          AND p.is_deleted = false
+          AND p.status = 'active'
+          AND p.starts_at <= now()
+          AND p.ends_at >= now()
+          ${ACTIVE_PROMOTION_RECURRENCE_SQL}
+          AND NOT EXISTS (
+            SELECT 1
+              FROM promotion_coupons c
+             WHERE c.shop_id = pr.shop_id
+               AND c.promotion_id = pr.promotion_id
+               AND c.is_deleted = false
+          )
+        ORDER BY p.priority ASC, p.created_at DESC, pr.updated_at DESC
         LIMIT 200`,
       [shopId]
     );
@@ -420,6 +527,7 @@ export class PromotionRepoPg extends PromotionRepo {
           AND p.status = 'active'
           AND p.starts_at <= now()
           AND p.ends_at >= now()
+          ${ACTIVE_PROMOTION_RECURRENCE_SQL}
           AND (
             (br.scope = 'same_shop_product' AND br.shop_product_id = $2::uuid)
             OR (

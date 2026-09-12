@@ -26,9 +26,13 @@ export async function buildCheckoutOrderLines({
   custKey,
   items,
   couponCode,
+  couponCodes,
   priceStorefrontLines
 }) {
-  if (couponCode && !items.length) {
+  const hasCouponRequest =
+    (typeof couponCode === "string" && couponCode.trim()) ||
+    (Array.isArray(couponCodes) && couponCodes.length > 0);
+  if (hasCouponRequest && !items.length) {
     throw checkoutError("EMPTY_CART_WITH_COUPON", "Cannot apply a coupon to an empty cart.");
   }
 
@@ -41,6 +45,8 @@ export async function buildCheckoutOrderLines({
   let couponDiscountMinor = 0;
   let couponCodeNormalized = null;
   /** @type {string[]} */
+  let couponCodesNormalized = [];
+  /** @type {string[]} */
   let appliedPromotionIds = [];
   /** @type {Array<Record<string, unknown>>} */
   let orderItems = [];
@@ -52,6 +58,7 @@ export async function buildCheckoutOrderLines({
       shopId,
       customerId: custKey,
       couponCode,
+      couponCodes,
       lines: items
         .filter((it) => !it.is_custom && it.product_id)
         .map((it) => {
@@ -70,7 +77,12 @@ export async function buildCheckoutOrderLines({
     subtotal = priced.subtotalMinor;
     promotionDiscountTotalMinor = priced.promotionDiscountTotalMinor;
     couponDiscountMinor = priced.couponDiscountMinor;
-    couponCodeNormalized = priced.coupon?.code ?? null;
+    couponCodeNormalized = priced.couponCodeNormalized ?? priced.coupon?.code ?? null;
+    couponCodesNormalized = Array.isArray(priced.couponCodesNormalized)
+      ? priced.couponCodesNormalized
+      : couponCodeNormalized
+        ? [couponCodeNormalized]
+        : [];
     appliedPromotionIds = priced.appliedPromotionIds;
 
     const pricedByCartItem = new Map(
@@ -153,6 +165,7 @@ export async function buildCheckoutOrderLines({
     promotionDiscountTotalMinor,
     couponDiscountMinor,
     couponCodeNormalized,
+    couponCodesNormalized,
     appliedPromotionIds,
     orderItems,
     pricedResult

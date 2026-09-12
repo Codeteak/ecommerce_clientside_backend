@@ -693,7 +693,9 @@ ${shopProductLeftJoinGlobal}
       await setTenantContext(client, shopId);
       const { rows } = await client.query(
         `SELECT sp.id, ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug,
+                ${shopProductCategoryIdSql} AS category_id,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
+                sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
                 ${shopProductImageUrlSql} AS global_image_url,
                 pm.id AS thumb_media_id,
                 pm.storage_key AS thumb_storage_key,

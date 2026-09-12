@@ -23,8 +23,9 @@ flowchart TB
   subgraph engine [Pricing engine - this API]
     PSL[priceStorefrontLines]
     PSL --> SKU[SKU sale overlays]
-    SKU --> BXGY[evaluateBundleDiscounts]
-    BXGY --> CPN[evaluateCartPromotionRules]
+    SKU --> BXGY[evaluateBundleDiscounts / cross-item]
+    BXGY --> AUTO[evaluateAutoCartRules]
+    AUTO --> CPN[coupon evaluateCartPromotionRules]
   end
 
   subgraph read [Storefront surfaces]
@@ -68,7 +69,7 @@ Key columns:
 |--------|---------|
 | `promotions_paused` | When `true`, no SKU/bundle/coupon discounts apply |
 | `default_overlap_mode` | `priority` or `best_for_customer` when multiple SKU promos overlap |
-| `default_allow_coupon_after_auto` | Documented default; **not enforced** in pricing code today |
+| `default_allow_coupon_after_auto` | Enforced in `priceStorefrontLines` (blocks coupon after auto when false) |
 | `first_coupon_eligibility_days` | Window for `new_customer_only` coupons |
 | `max_coupons_per_order` | Exposed in coupon list API; checkout accepts **one** `couponCode` |
 | `allow_combine_auto_campaigns` | If `false`, at most one bundle rule wins per scope |
@@ -492,7 +493,7 @@ npm test -- tests/domain/publicPromotionBenefits.test.js
 |------|-------|
 | No promotion CRUD in this API | Campaigns must be created elsewhere |
 | `getCustomerCouponDetail` | Service exists but is **not wired** to routes/repo |
-| Stacking columns on `promotions` / settings | `stack_*`, `default_allow_coupon_after_auto` — **not enforced** in `priceStorefrontLines` |
+| Stacking columns on `promotions` / settings | `stack_*`, `default_allow_coupon_after_auto` — **enforced** in `priceStorefrontLines` (and shop reprice) |
 | `max_coupons_per_order` | Returned in coupon list; checkout uses single code |
 | Redemption ledger | Only **coupon** discounts; auto SKU/bundle not in `promotion_redemptions` |
 | Code case in DB | API uppercases; ensure `code_normalized` storage matches lookup |

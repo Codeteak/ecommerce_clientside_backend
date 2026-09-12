@@ -41,6 +41,12 @@ export function createShopPromotionCache({ catalogCache, promotionRepo, ttlSec =
       );
     },
 
+    listActiveAutoCartRulesForShop(client, shopId) {
+      return wrapShop(shopId, "autoCartRules", () =>
+        promotionRepo.listActiveAutoCartRulesForShop(client, shopId)
+      );
+    },
+
     listActiveCategoryPromotionSignals(client, shopId) {
       return wrapShop(shopId, "categorySignals", () =>
         promotionRepo.listActiveCategoryPromotionSignals(client, shopId)

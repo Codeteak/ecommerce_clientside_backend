@@ -33,9 +33,15 @@ function getHandler(ctx) {
 function previewHandler(ctx) {
   return asyncHandler(async (req, res) => {
     const shopId = requireShopId(req.shopId);
-    const scope = { customerId: req.customerAuth.customerId };
+    const customerId = req.customerAuth?.customerId ?? null;
+    const scope = { customerId };
     const out = await withTx((c) =>
-      ctx.storefrontCart.previewFromClientItems(c, shopId, scope, req.body ?? {})
+      ctx.storefrontCartPreview(c, shopId, scope, {
+        items: req.body?.items ?? [],
+        couponCode: req.body?.couponCode ?? null,
+        couponCodes: req.body?.couponCodes ?? null,
+        includeSuggestedCoupons: req.body?.includeSuggestedCoupons
+      })
     );
     res.json(out);
   });

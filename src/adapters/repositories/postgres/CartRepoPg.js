@@ -150,6 +150,11 @@ export class CartRepoPg extends CartRepo {
     return this.#enrichSessionItems(client, shopId, rec.items || []);
   }
 
+  /** Enrich synthetic preview lines the same way as Redis session cart items. */
+  async enrichCartItemsForPreview(client, shopId, items) {
+    return this.#enrichSessionItems(client, shopId, Array.isArray(items) ? items : []);
+  }
+
   async insertCartItem() {
     throw new AppError("Server cart is retired", {
       statusCode: 410,

@@ -128,6 +128,9 @@ export function formatStorefrontPromotions(promotionsBase, suggestedCoupons, ite
       : [],
     coupon: {
       code: coupon.code ?? null,
+      ...(Array.isArray(coupon.codes) && coupon.codes.length
+        ? { codes: coupon.codes }
+        : {}),
       status: coupon.status ?? "none",
       discount_minor: Number(coupon.discount_minor ?? 0),
       reason_code: coupon.reason_code ?? null,
@@ -150,7 +153,11 @@ export function formatStorefrontSummary(priced, unitsTotal) {
     return {
       subtotal_minor: 0,
       subtotal_before_coupon_minor: 0,
+      subtotal_before_auto_cart_minor: 0,
       promotion_discount_minor: 0,
+      line_promo_discount_minor: 0,
+      bundle_discount_minor: 0,
+      auto_cart_discount_minor: 0,
       coupon_discount_minor: 0,
       currency: "INR",
       units_display_total: 0
@@ -159,7 +166,14 @@ export function formatStorefrontSummary(priced, unitsTotal) {
   return {
     subtotal_minor: priced.subtotalMinor,
     subtotal_before_coupon_minor: priced.subtotalBeforeCouponMinor ?? priced.subtotalMinor,
+    subtotal_before_auto_cart_minor:
+      priced.subtotalBeforeAutoCartMinor ??
+      priced.subtotalBeforeCouponMinor ??
+      priced.subtotalMinor,
     promotion_discount_minor: priced.promotionDiscountTotalMinor,
+    line_promo_discount_minor: priced.linePromoDiscountMinor ?? 0,
+    bundle_discount_minor: priced.bundleDiscountMinor ?? 0,
+    auto_cart_discount_minor: priced.autoCartDiscountMinor ?? 0,
     coupon_discount_minor: priced.couponDiscountMinor ?? 0,
     currency: "INR",
     units_display_total: unitsTotal

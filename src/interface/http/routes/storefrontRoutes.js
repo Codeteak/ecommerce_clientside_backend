@@ -24,6 +24,7 @@ export function mountStorefrontRoutes(r, deps) {
     couponsListLimiter,
     requireCustomerJwt,
     requireCustomerShopAccess,
+    optionalCustomerJwt,
     locationGuard,
     validate,
     storefrontLocationBodySchema,
@@ -105,6 +106,13 @@ export function mountStorefrontRoutes(r, deps) {
     );
     r.get(`${prefix}/home-sections`, storefrontCat.listHomeSections);
 
+    r.post(
+      `${prefix}/cart/preview`,
+      optionalCustomerJwt,
+      validate({ body: storefrontCartPreviewBodySchema }),
+      storefrontCart.preview
+    );
+
     r.post(`${prefix}/cart`, requireCustomerJwt, requireCustomerShopAccess, storefrontCart.getOrCreate);
     r.get(
       `${prefix}/cart`,
@@ -112,14 +120,6 @@ export function mountStorefrontRoutes(r, deps) {
       requireCustomerShopAccess,
       validate({ query: storefrontCartGetQuerySchema }),
       storefrontCart.get
-    );
-    r.post(
-      `${prefix}/cart/preview`,
-      requireCustomerJwt,
-      requireCustomerShopAccess,
-      cartMutateLimiter,
-      validate({ body: storefrontCartPreviewBodySchema }),
-      storefrontCart.preview
     );
     r.post(
       `${prefix}/cart/items`,

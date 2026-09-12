@@ -87,6 +87,17 @@ export class PromotionRepo {
   }
 
   /**
+   * Active cart/category rules on campaigns with no live coupon (automatic discounts).
+   * @param {import("pg").PoolClient} _client
+   * @param {string} _shopId
+   */
+  async listActiveAutoCartRulesForShop(_client, _shopId) {
+    void _client;
+    void _shopId;
+    throw new Error("Not implemented");
+  }
+
+  /**
    * Category-level listing signals for storefront category browse (SKU promos + category % rules).
    * @param {import("pg").PoolClient} _client
    * @param {string} _shopId

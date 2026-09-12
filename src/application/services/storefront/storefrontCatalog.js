@@ -398,8 +398,10 @@ export function createStorefrontCatalog({
     async listHomeSections(shopIdRaw) {
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
-      const sections = await cachedSWR(shopId, "home-sections:v1", "home-sections:list", () =>
-        resolveStorefrontHomeSections(catalogRepo, shopId)
+      const sections = await cachedSWR(shopId, "home-sections:v2", "home-sections:list", () =>
+        resolveStorefrontHomeSections(catalogRepo, shopId, {
+          loadListingPromotionsContext
+        })
       );
       return { data: { sections } };
     }

@@ -87,6 +87,7 @@ export class OrderRepoPg extends OrderRepo {
       totalMinor,
       promotionDiscountTotalMinor,
       couponCodeNormalized,
+      couponCodesNormalized,
       appliedPromotionIds,
       notes,
       items,
@@ -99,34 +100,67 @@ export class OrderRepoPg extends OrderRepo {
         ? JSON.stringify(appliedPromotionIds)
         : null;
 
-    const { rows: oRows } = await client.query(
-      `INSERT INTO orders (
-         shop_id, customer_id, customer_name, customer_phone, customer_address,
-         order_number, status, payment_method,
-         subtotal_minor, delivery_fee_minor, total_minor,
-         promotion_discount_total_minor, coupon_code_normalized, applied_promotion_ids,
-         notes
-       ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15)
-       RETURNING id, placed_at`,
-      [
-        shopId,
-        customerIdText,
-        customerName ?? null,
-        customerPhone ?? null,
-        customerAddress ?? null,
-        orderNumber,
-        status,
-        paymentMethod,
-        subtotalMinor,
-        deliveryFeeMinor,
-        totalMinor,
-        promotionDiscountTotalMinor ?? null,
-        couponCodeNormalized ?? null,
-        appliedIdsJson,
-        notes
-      ]
-    );
-    const order = oRows[0];
+    const codesJson =
+      Array.isArray(couponCodesNormalized) && couponCodesNormalized.length
+        ? JSON.stringify(couponCodesNormalized)
+        : couponCodeNormalized
+          ? JSON.stringify([couponCodeNormalized])
+          : JSON.stringify([]);
+
+    const insertParamsBase = [
+      shopId,
+      customerIdText,
+      customerName ?? null,
+      customerPhone ?? null,
+      customerAddress ?? null,
+      orderNumber,
+      status,
+      paymentMethod,
+      subtotalMinor,
+      deliveryFeeMinor,
+      totalMinor,
+      promotionDiscountTotalMinor ?? null,
+      couponCodeNormalized ?? null,
+      appliedIdsJson,
+      notes
+    ];
+
+    let order;
+    await client.query("SAVEPOINT sp_coupon_codes_normalized");
+    try {
+      const { rows: oRows } = await client.query(
+        `INSERT INTO orders (
+           shop_id, customer_id, customer_name, customer_phone, customer_address,
+           order_number, status, payment_method,
+           subtotal_minor, delivery_fee_minor, total_minor,
+           promotion_discount_total_minor, coupon_code_normalized, applied_promotion_ids,
+           notes, coupon_codes_normalized
+         ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16::jsonb)
+         RETURNING id, placed_at`,
+        [...insertParamsBase, codesJson]
+      );
+      order = oRows[0];
+      await client.query("RELEASE SAVEPOINT sp_coupon_codes_normalized");
+    } catch (err) {
+      await client.query("ROLLBACK TO SAVEPOINT sp_coupon_codes_normalized");
+      // Migration 013 may not be applied yet — fall back without coupon_codes_normalized.
+      const missingCol =
+        err?.code === "42703" ||
+        (typeof err?.message === "string" && err.message.includes("coupon_codes_normalized"));
+      if (!missingCol) throw err;
+      const { rows: oRows } = await client.query(
+        `INSERT INTO orders (
+           shop_id, customer_id, customer_name, customer_phone, customer_address,
+           order_number, status, payment_method,
+           subtotal_minor, delivery_fee_minor, total_minor,
+           promotion_discount_total_minor, coupon_code_normalized, applied_promotion_ids,
+           notes
+         ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15)
+         RETURNING id, placed_at`,
+        insertParamsBase
+      );
+      order = oRows[0];
+    }
 
     if (items.length > 0) {
       const productIds = items.map((it) => it.productId ?? null);

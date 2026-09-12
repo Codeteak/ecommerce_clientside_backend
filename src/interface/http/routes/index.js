@@ -179,6 +179,7 @@ export function createRoutes(ctx) {
     couponsListLimiter,
     requireCustomerJwt: ctx.requireCustomerJwt,
     requireCustomerShopAccess: ctx.requireCustomerShopAccess,
+    optionalCustomerJwt: ctx.optionalCustomerJwt,
     locationGuard: ctx.locationGuard,
     validate,
     storefrontLocationBodySchema,

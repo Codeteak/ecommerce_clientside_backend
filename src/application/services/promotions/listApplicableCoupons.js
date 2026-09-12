@@ -22,11 +22,11 @@ export function createListApplicableCoupons({ promotionRepo, shopPromotionCache,
 
   /**
    * @param {import("pg").PoolClient} client
-   * @param {{ shopId: string, customerId: string, code?: string | null, cartSubtotalMinor?: number | null, onlyApplicable?: boolean, limit?: number | null }} input
+   * @param {{ shopId: string, customerId?: string | null, code?: string | null, cartSubtotalMinor?: number | null, onlyApplicable?: boolean, limit?: number | null }} input
    */
   return async function listApplicableCoupons(client, {
     shopId,
-    customerId,
+    customerId = null,
     code = null,
     cartSubtotalMinor = null,
     onlyApplicable = false,
@@ -53,20 +53,30 @@ export function createListApplicableCoupons({ promotionRepo, shopPromotionCache,
       };
     }
 
-    const [customerRow, deliveredCount] = await Promise.all([
-      authRepo.getCustomerCreatedAtById(client, customerId),
-      orderRepo.countDeliveredOrdersForCustomer(client, shopId, String(customerId))
-    ]);
+    const custKey =
+      customerId != null && String(customerId).trim() !== "" ? String(customerId).trim() : null;
 
-    if (!customerRow?.created_at) {
-      return {
-        promotionsPaused: false,
-        settings: publicSettings,
-        coupons: []
-      };
+    let customerCreatedAt = new Date(0);
+    let deliveredCount = 0;
+    let hasCustomerContext = false;
+
+    if (custKey) {
+      const [customerRow, count] = await Promise.all([
+        authRepo.getCustomerCreatedAtById(client, custKey),
+        orderRepo.countDeliveredOrdersForCustomer(client, shopId, custKey)
+      ]);
+      if (!customerRow?.created_at) {
+        return {
+          promotionsPaused: false,
+          settings: publicSettings,
+          coupons: []
+        };
+      }
+      customerCreatedAt = new Date(customerRow.created_at);
+      deliveredCount = count;
+      hasCustomerContext = true;
     }
 
-    const customerCreatedAt = new Date(customerRow.created_at);
     const eligibilityDays = publicSettings.firstCouponEligibilityDays;
     const ms = Math.max(0, eligibilityDays) * 24 * 60 * 60 * 1000;
     const newCustomerCutoff = new Date(Date.now() - ms);
@@ -82,23 +92,29 @@ export function createListApplicableCoupons({ promotionRepo, shopPromotionCache,
       ? await shopPromotionCache.listShopCouponCatalogRows(client, shopId, normalizedCode, {
           limit: repoLimit
         })
-      : await promotionRepo.listEligibleCouponsWithUsage(
-          client,
-          shopId,
-          customerId,
-          normalizedCode,
-          { limit: repoLimit }
-        );
+      : custKey
+        ? await promotionRepo.listEligibleCouponsWithUsage(
+            client,
+            shopId,
+            custKey,
+            normalizedCode,
+            { limit: repoLimit }
+          )
+        : await promotionRepo.listEligibleCouponDefinitions(client, shopId, normalizedCode, {
+            limit: repoLimit
+          });
 
     let redemptionByCoupon = new Map();
-    if (shopPromotionCache && rows.length > 0) {
+    if (rows.length > 0) {
       const couponIds = rows.map((r) => String(r.id));
-      redemptionByCoupon = await promotionRepo.getCouponRedemptionCounts(
-        client,
-        shopId,
-        couponIds,
-        customerId
-      );
+      if (shopPromotionCache || !custKey) {
+        redemptionByCoupon = await promotionRepo.getCouponRedemptionCounts(
+          client,
+          shopId,
+          couponIds,
+          custKey
+        );
+      }
     }
 
     const eligibilityCtx = {
@@ -112,24 +128,35 @@ export function createListApplicableCoupons({ promotionRepo, shopPromotionCache,
       .filter((row) => {
         const totalLimit = row.max_redemptions_total;
         const perCustomerLimit = row.max_redemptions_per_customer;
-        const liveCounts = shopPromotionCache ? redemptionByCoupon.get(String(row.id)) : null;
-        const totalRedemptions = shopPromotionCache
-          ? (liveCounts?.total_redemptions ?? 0)
-          : Number(row.total_redemptions) || 0;
-        const customerRedemptions = shopPromotionCache
-          ? (liveCounts?.customer_redemptions ?? 0)
-          : Number(row.customer_redemptions) || 0;
+        const liveCounts =
+          shopPromotionCache || !custKey ? redemptionByCoupon.get(String(row.id)) : null;
+        const totalRedemptions =
+          shopPromotionCache || !custKey
+            ? (liveCounts?.total_redemptions ?? 0)
+            : Number(row.total_redemptions) || 0;
+        const customerRedemptions =
+          shopPromotionCache || !custKey
+            ? (liveCounts?.customer_redemptions ?? 0)
+            : Number(row.customer_redemptions) || 0;
         if (typeof totalLimit === "number" && totalRedemptions >= totalLimit) return false;
-        if (typeof perCustomerLimit === "number" && customerRedemptions >= perCustomerLimit) return false;
+        if (
+          hasCustomerContext &&
+          typeof perCustomerLimit === "number" &&
+          customerRedemptions >= perCustomerLimit
+        ) {
+          return false;
+        }
 
         const minSub = row.min_subtotal_minor != null ? Number(row.min_subtotal_minor) : null;
         const firstOrderOnly = row.first_order_only === true;
         const newCustomerOnly = row.new_customer_only === true;
-        const eligibility = buildCouponEligibility(
-          { minSubtotalMinor: minSub, firstOrderOnly, newCustomerOnly },
-          eligibilityCtx
-        );
-        if (firstOrderOnly || newCustomerOnly) {
+
+        // Guest / no customerId: skip first-order / new-customer gates (same as priceStorefrontLines).
+        if (hasCustomerContext && (firstOrderOnly || newCustomerOnly)) {
+          const eligibility = buildCouponEligibility(
+            { minSubtotalMinor: minSub, firstOrderOnly, newCustomerOnly },
+            eligibilityCtx
+          );
           if (!eligibility.applicable) return false;
         }
         return true;
@@ -139,10 +166,15 @@ export function createListApplicableCoupons({ promotionRepo, shopPromotionCache,
         const firstOrderOnly = row.first_order_only === true;
         const newCustomerOnly = row.new_customer_only === true;
 
-        const eligibility = buildCouponEligibility(
-          { minSubtotalMinor: minSub, firstOrderOnly, newCustomerOnly },
-          eligibilityCtx
-        );
+        const eligibility = hasCustomerContext
+          ? buildCouponEligibility(
+              { minSubtotalMinor: minSub, firstOrderOnly, newCustomerOnly },
+              eligibilityCtx
+            )
+          : buildCouponEligibility(
+              { minSubtotalMinor: minSub, firstOrderOnly: false, newCustomerOnly: false },
+              eligibilityCtx
+            );
 
         return {
           id: row.id,

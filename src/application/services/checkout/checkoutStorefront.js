@@ -26,16 +26,28 @@ async function recordPromotionRedemptions({
 }) {
   if (!promotionRepo || !pricedResult) return;
 
-  if (pricedResult.coupon && couponDiscountMinor > 0) {
+  const appliedCoupons = Array.isArray(pricedResult.appliedCoupons)
+    ? pricedResult.appliedCoupons
+    : pricedResult.coupon && couponDiscountMinor > 0
+      ? [pricedResult.coupon]
+      : [];
+
+  for (const coupon of appliedCoupons) {
+    const discountMinor = Math.max(0, Math.trunc(Number(coupon?.discountMinor) || 0));
+    if (!coupon?.promotionId || discountMinor <= 0) continue;
     await promotionRepo.insertPromotionRedemption(client, {
       shopId,
       orderId,
       customerId,
-      promotionId: pricedResult.coupon.promotionId,
-      couponId: pricedResult.coupon.id,
-      discountMinor: couponDiscountMinor
+      promotionId: coupon.promotionId,
+      couponId: coupon.id ?? null,
+      discountMinor
     });
   }
+
+  const couponPromotionIds = new Set(
+    appliedCoupons.map((c) => (c?.promotionId != null ? String(c.promotionId) : "")).filter(Boolean)
+  );
 
   const autoRows = Array.isArray(pricedResult.appliedPromotionDiscounts)
     ? pricedResult.appliedPromotionDiscounts
@@ -44,6 +56,8 @@ async function recordPromotionRedemptions({
     const promotionId = row?.promotionId != null ? String(row.promotionId) : "";
     const discountMinor = Math.max(0, Math.trunc(Number(row?.discountMinor) || 0));
     if (!promotionId || discountMinor <= 0) continue;
+    // Coupon discounts are already recorded above; skip double-counting those promotion ids.
+    if (couponPromotionIds.has(promotionId)) continue;
     await promotionRepo.insertPromotionRedemption(client, {
       shopId,
       orderId,
@@ -72,9 +86,20 @@ export function createCheckoutStorefront({
 
   return async function checkoutStorefront(client, input) {
     const log = getRequestLogger();
-    const { shopId: shopRaw, customerId, userId, notes, requestMeta, idempotencyKey, couponCode: rawCoupon } =
-      input;
+    const {
+      shopId: shopRaw,
+      customerId,
+      userId,
+      notes,
+      requestMeta,
+      idempotencyKey,
+      couponCode: rawCoupon,
+      couponCodes: rawCouponCodes
+    } = input;
     const couponCode = normalizeCouponCode(rawCoupon ?? null);
+    const couponCodes = Array.isArray(rawCouponCodes)
+      ? rawCouponCodes.map((c) => normalizeCouponCode(c)).filter(Boolean)
+      : undefined;
     const shopId = requireShopId(shopRaw);
     const rawIdem = typeof idempotencyKey === "string" ? idempotencyKey.trim() : "";
     assertValidIdempotencyKey(rawIdem);
@@ -123,6 +148,7 @@ export function createCheckoutStorefront({
         promotionDiscountTotalMinor,
         couponDiscountMinor,
         couponCodeNormalized,
+        couponCodesNormalized,
         appliedPromotionIds,
         orderItems,
         pricedResult
@@ -133,6 +159,7 @@ export function createCheckoutStorefront({
         custKey,
         items,
         couponCode,
+        couponCodes,
         priceStorefrontLines
       });
 
@@ -164,6 +191,7 @@ export function createCheckoutStorefront({
         totalMinor: total,
         promotionDiscountTotalMinor,
         couponCodeNormalized,
+        couponCodesNormalized,
         appliedPromotionIds,
         currency: "INR",
         notes: notes ?? null,

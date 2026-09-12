@@ -88,10 +88,12 @@ export function createStorefrontCart({
     },
 
     /**
-     * Price client cart lines (and optional coupon) without reading/writing Redis.
+     * Price client cart lines (and optional coupon(s)) without reading/writing Redis.
+     * Prefer storefrontCartPreview for guest-capable multi-coupon preview.
      * @param {object} body
      * @param {Array<{ productId: string, quantity: number }>} body.items
      * @param {string|null} [body.couponCode]
+     * @param {string[]|null} [body.couponCodes]
      * @param {boolean|string} [body.includeSuggestedCoupons]
      */
     async previewFromClientItems(client, shopIdRaw, scope, body = {}) {
@@ -126,6 +128,7 @@ export function createStorefrontCart({
 
       return buildCartViewFromClientItems(client, shopId, customerId, items, {
         couponCode: body.couponCode ?? null,
+        couponCodes: body.couponCodes ?? null,
         includeSuggestedCoupons
       });
     },

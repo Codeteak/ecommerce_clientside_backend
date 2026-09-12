@@ -163,4 +163,12 @@ export class CartRepo {
     void _items;
     throw new Error("Not implemented");
   }
+
+  /** Enrich synthetic preview lines (alias of view enrichment). */
+  async enrichCartItemsForPreview(_client, _shopId, _items) {
+    void _client;
+    void _shopId;
+    void _items;
+    throw new Error("Not implemented");
+  }
 }

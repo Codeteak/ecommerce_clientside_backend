@@ -1,4 +1,9 @@
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
+import { buildStorefrontListingUnitPriceMap } from "../promotions/resolveStorefrontSkuUnitPrices.js";
+import {
+  filterBundleRuleRowsForProduct,
+  mapActiveBundleRuleRow
+} from "../promotions/mapActiveBundleRulesPublic.js";
 
 function asIdList(value) {
   if (!Array.isArray(value)) return [];
@@ -15,16 +20,48 @@ function priceMinor(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-export function mapHomeSectionProduct(row) {
+/**
+ * @param {Record<string, unknown>} row
+ * @param {Map<string, { promoPriceMinor: number | null }>} priceMap
+ * @param {unknown[]} bundleRowsRaw
+ */
+export function mapHomeSectionProduct(row, priceMap = null, bundleRowsRaw = []) {
   const globalImageUrl =
     typeof row.global_image_url === "string" && row.global_image_url !== "" ? row.global_image_url : null;
   const imageUrl = globalImageUrl ?? toPublicMediaUrl(row.thumb_storage_key);
+  const id = String(row.id);
+  const listMinor = priceMinor(row.price_minor_per_unit);
+  const offerMinor = priceMinor(row.offer_price_minor_per_unit);
+  const promoEntry = priceMap?.get(id);
+  const promoPriceMinor = promoEntry?.promoPriceMinor ?? null;
+  const baseline =
+    offerMinor != null && listMinor != null && offerMinor < listMinor ? offerMinor : listMinor;
+  const finalMinor =
+    promoPriceMinor != null && baseline != null
+      ? Math.min(baseline, promoPriceMinor)
+      : promoPriceMinor != null
+        ? promoPriceMinor
+        : baseline;
+
+  const categoryId = row.category_id != null ? String(row.category_id) : null;
+  const bundleRules = filterBundleRuleRowsForProduct(bundleRowsRaw, id, categoryId).map(
+    mapActiveBundleRuleRow
+  );
+
   return {
     id: row.id,
     name: row.name,
     slug: row.slug,
     imageUrl: imageUrl ?? null,
-    priceMinorPerUnit: priceMinor(row.price_minor_per_unit)
+    priceMinorPerUnit: listMinor,
+    offerPriceMinorPerUnit: offerMinor,
+    promoPriceMinorPerUnit: promoPriceMinor,
+    finalPriceMinorPerUnit: finalMinor,
+    actualPriceMinor: listMinor != null ? String(Math.trunc(listMinor)) : null,
+    offerPriceMinor: offerMinor != null ? String(Math.trunc(offerMinor)) : null,
+    promoPriceMinor: promoPriceMinor != null ? String(Math.trunc(promoPriceMinor)) : null,
+    finalPriceMinor: finalMinor != null ? String(Math.trunc(finalMinor)) : null,
+    bundleRules
   };
 }
 
@@ -52,8 +89,17 @@ export function isoOrNull(value) {
 
 /**
  * Resolve staff-configured home shelves for storefront (enabled + in-date, products hydrated).
+ * @param {import("../../ports/repositories/CatalogRepo.js").CatalogRepo} catalogRepo
+ * @param {string} shopId
+ * @param {{
+ *   loadListingPromotionsContext?: (shopId: string, pageRows: unknown[]) => Promise<{
+ *     promotionsPaused: boolean,
+ *     priceMap: Map<string, { promoPriceMinor: number | null }>,
+ *     bundleRowsRaw: unknown[]
+ *   }>
+ * }} [opts]
  */
-export async function resolveStorefrontHomeSections(catalogRepo, shopId) {
+export async function resolveStorefrontHomeSections(catalogRepo, shopId, opts = {}) {
   const rows = await catalogRepo.listEnabledHomeSectionsStorefront(shopId);
   if (!rows.length) return [];
 
@@ -72,7 +118,32 @@ export async function resolveStorefrontHomeSections(catalogRepo, shopId) {
     catalogRepo.listSellableProductsByIdsStorefront(shopId, [...new Set(productIds)]),
     catalogRepo.listActiveCategoriesByIdsStorefront(shopId, [...new Set(categoryIds)])
   ]);
-  const products = productRows.map(mapHomeSectionProduct);
+
+  let priceMap = new Map();
+  let bundleRowsRaw = [];
+  if (typeof opts.loadListingPromotionsContext === "function" && productRows.length > 0) {
+    const ctx = await opts.loadListingPromotionsContext(shopId, productRows);
+    priceMap = ctx.priceMap ?? new Map();
+    bundleRowsRaw = Array.isArray(ctx.bundleRowsRaw) ? ctx.bundleRowsRaw : [];
+    if (ctx.promotionsPaused) {
+      priceMap = buildStorefrontListingUnitPriceMap({
+        promotionsPaused: true,
+        defaultOverlapMode: "priority",
+        products: productRows,
+        overlays: []
+      });
+      bundleRowsRaw = [];
+    }
+  } else {
+    priceMap = buildStorefrontListingUnitPriceMap({
+      promotionsPaused: false,
+      defaultOverlapMode: "priority",
+      products: productRows,
+      overlays: []
+    });
+  }
+
+  const products = productRows.map((row) => mapHomeSectionProduct(row, priceMap, bundleRowsRaw));
   const categories = categoryRows.map(mapHomeSectionCategory);
 
   return rows.map((row) => {

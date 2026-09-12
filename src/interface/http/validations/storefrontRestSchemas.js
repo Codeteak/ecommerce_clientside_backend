@@ -62,6 +62,17 @@ export const storefrontCartPreviewBodySchema = z.object({
     .min(1)
     .max(100),
   couponCode: optionalCouponCode,
+  couponCodes: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(64)
+        .transform((v) => v.toUpperCase())
+    )
+    .max(10)
+    .optional(),
   includeSuggestedCoupons: z.preprocess((v) => {
     if (v === undefined || v === "" || v === null) return true;
     if (typeof v === "boolean") return v;
@@ -106,6 +117,17 @@ export const storefrontCheckoutBodySchema = z.object({
     .optional()
     .nullable()
     .transform((v) => (v == null || v === "" ? undefined : v.toUpperCase())),
+  couponCodes: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(64)
+        .transform((v) => v.toUpperCase())
+    )
+    .max(10)
+    .optional(),
   items: z
     .array(
       z.object({

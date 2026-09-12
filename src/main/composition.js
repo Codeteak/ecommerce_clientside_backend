@@ -10,6 +10,7 @@ import { env } from "../config/env.js";
 import { effectiveReadCacheTtlSec } from "../config/env/readCacheTtl.js";
 import { createShopResolver } from "../interface/http/middleware/shopResolver.js";
 import { createRequireCustomerJwt } from "../interface/http/middleware/requireCustomerJwt.js";
+import { createOptionalCustomerJwt } from "../interface/http/middleware/optionalCustomerJwt.js";
 import { createLocationGuard } from "../interface/http/middleware/locationGuard.js";
 import { createRequireCustomerShopAccess } from "../interface/http/middleware/requireCustomerShopAccess.js";
 import { createListCatalogItems } from "../application/services/catalog/listCatalogItems.js";
@@ -45,6 +46,8 @@ import { createStorefrontCatalog } from "../application/services/storefront/stor
 import { createPrewarmStorefrontCache } from "../application/services/cache/prewarmStorefrontCache.js";
 import { createStorefrontListingPromotions } from "../application/services/storefront/storefrontListingPromotions.js";
 import { createStorefrontCart } from "../application/services/storefront/storefrontCart.js";
+import { createStorefrontCartPreview } from "../application/services/storefront/storefrontCartPreview.js";
+import { createCartPricing } from "../application/services/storefront/cart/cartPricing.js";
 import { createCheckoutStorefront } from "../application/services/checkout/checkoutStorefront.js";
 import { logger } from "../config/logger.js";
 import { ConsoleSmsSender } from "../adapters/sms/consoleSmsSender.js";
@@ -148,6 +151,32 @@ export function createAppContext() {
       }
     : customerJwtMiddleware();
 
+  const optionalCustomerJwtFactory = createOptionalCustomerJwt({
+    authRepo,
+    accessTokenRegistry,
+    skipDbSessionCheck: env.NODE_ENV === "test",
+    sessionValidityCache,
+    shouldUseSessionCache: () => false,
+    allowJtiDbFallback: env.ACCESS_JTI_DB_FALLBACK_ENABLED
+  });
+  const optionalCustomerJwt = env.DISABLE_CUSTOMER_AUTH
+    ? (req, _res, next) => {
+        const hasBearer =
+          typeof req.headers.authorization === "string" &&
+          req.headers.authorization.startsWith("Bearer ") &&
+          req.headers.authorization.slice("Bearer ".length).trim();
+        if (hasBearer || req.get("x-dev-customer-id") || req.get("x-dev-user-id")) {
+          req.customerAuth = {
+            userId: req.get("x-dev-user-id") || env.DEV_AUTH_USER_ID,
+            customerId: req.get("x-dev-customer-id") || env.DEV_AUTH_CUSTOMER_ID,
+            shopId: req.shopId || req.get("x-shop-id") || null,
+            role: "customer"
+          };
+        }
+        next();
+      }
+    : optionalCustomerJwtFactory();
+
   const shopResolver = createShopResolver({
     shopResolveCache,
     shopLookupRepo,
@@ -194,6 +223,13 @@ export function createAppContext() {
     ensureShopForCatalog,
     priceStorefrontLines,
     listApplicableCoupons
+  });
+  const storefrontCartPreview = createStorefrontCartPreview({
+    cartRepo,
+    ensureShopForCatalog,
+    priceStorefrontLines,
+    listApplicableCoupons,
+    pricing: createCartPricing({ priceStorefrontLines })
   });
   const assertCustomerShopAccess = createAssertCustomerShopAccess({ authRepo });
   const requireCustomerShopAccess = createRequireCustomerShopAccess({ authRepo });
@@ -332,10 +368,12 @@ export function createAppContext() {
     updateCustomerProfile: updateCustomerProfile({ authRepo }),
     checkShopServiceArea,
     requireCustomerJwt,
+    optionalCustomerJwt,
     requireCustomerShopAccess,
     locationGuard: createLocationGuard(),
     storefrontCatalog,
     storefrontCart,
+    storefrontCartPreview,
     assertCustomerShopAccess,
     updateStorefrontProfile,
     listApplicableCoupons,

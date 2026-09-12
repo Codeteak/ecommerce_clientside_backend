@@ -25,6 +25,8 @@
  *   scope: string,
  *   shop_product_id?: string,
  *   global_category_id?: string,
+ *   buy_shop_product_id?: string,
+ *   reward_shop_product_id?: string,
  *   buy_qty: number,
  *   get_qty: number,
  *   reward_type: string,
@@ -157,12 +159,39 @@ function matchingLines(lines, rule) {
  * @returns {number} discount minor for this rule
  */
 function applyBundleRuleToLines(lines, rule) {
-  const matched = matchingLines(lines, rule);
-  if (!matched.length) return 0;
-
   const buyQty = Math.max(1, Math.trunc(Number(rule.buy_qty)));
   const getQty = Math.max(1, Math.trunc(Number(rule.get_qty)));
   const pid = String(rule.promotion_id);
+
+  if (rule.scope === "cross_shop_products") {
+    const buyId = rule.buy_shop_product_id != null ? String(rule.buy_shop_product_id) : "";
+    const rewardId =
+      rule.reward_shop_product_id != null ? String(rule.reward_shop_product_id) : "";
+    if (!buyId || !rewardId) return 0;
+    const buyQtyInCart = lines
+      .filter((l) => String(l.productId) === buyId)
+      .reduce((s, l) => s + Math.max(0, l.paidQuantity ?? l.quantity), 0);
+    if (buyQtyInCart < buyQty) return 0;
+    const sets = Math.floor(buyQtyInCart / buyQty);
+    let freeLeft = sets * getQty;
+    let ruleDiscount = 0;
+    for (const line of lines) {
+      if (String(line.productId) !== rewardId || freeLeft <= 0) continue;
+      const paid = Math.max(0, line.paidQuantity ?? line.quantity);
+      const freeQty = Math.min(paid, freeLeft);
+      if (freeQty <= 0) continue;
+      freeLeft -= freeQty;
+      const unitDiscount = discountForFreeUnits(line.unitFinalMinor, freeQty, rule);
+      line.freeQuantity = (line.freeQuantity ?? 0) + freeQty;
+      line.paidQuantity = Math.max(0, paid - freeQty);
+      if (!line.appliedPromotionIds.includes(pid)) line.appliedPromotionIds.push(pid);
+      ruleDiscount += unitDiscount;
+    }
+    return ruleDiscount;
+  }
+
+  const matched = matchingLines(lines, rule);
+  if (!matched.length) return 0;
 
   if (rule.scope === "same_shop_product") {
     let ruleDiscount = 0;
