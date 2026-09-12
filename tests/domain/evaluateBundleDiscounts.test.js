@@ -91,4 +91,42 @@ describe("evaluateBundleDiscounts", () => {
     expect(lines[0].displayQuantity).toBe(1);
     expect(lines[0].linePayableMinor).toBe(4500);
   });
+
+  it("category BOGO tags every matched line with appliedPromotionIds", () => {
+    const lines = [
+      {
+        productId: "cheap",
+        categoryId: "dairy",
+        quantity: 1,
+        unitFinalMinor: 3000,
+        lineTotalMinor: 3000,
+        appliedPromotionIds: []
+      },
+      {
+        productId: "pricey",
+        categoryId: "dairy",
+        quantity: 1,
+        unitFinalMinor: 5000,
+        lineTotalMinor: 5000,
+        appliedPromotionIds: []
+      }
+    ];
+    evaluateBundleDiscounts(
+      lines,
+      [
+        {
+          promotion_id: "promo-cat-bogo",
+          scope: "global_category",
+          global_category_id: "dairy",
+          buy_qty: 2,
+          get_qty: 1,
+          reward_type: "free"
+        }
+      ],
+      { allowCombineAutoCampaigns: true }
+    );
+    expect(lines[0].freeQuantity + lines[1].freeQuantity).toBe(1);
+    expect(lines[0].appliedPromotionIds).toContain("promo-cat-bogo");
+    expect(lines[1].appliedPromotionIds).toContain("promo-cat-bogo");
+  });
 });

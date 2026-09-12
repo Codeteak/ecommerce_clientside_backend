@@ -3,6 +3,8 @@
 import { z } from "zod";
 import { env } from "../../../config/env.js";
 import { validate } from "../middleware/validate.js";
+import { ForbiddenError } from "../../../domain/errors/ForbiddenError.js";
+import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import {
   storefrontCatalogCacheInvalidateBodySchema,
   storefrontCatalogCachePrewarmBodySchema,
@@ -34,6 +36,7 @@ export function mountStorefrontRoutes(r, deps) {
     storefrontCartItemBodySchema,
     storefrontCartItemPatchSchema,
     storefrontCartItemDeleteBodySchema,
+    storefrontCartPreviewBodySchema,
     storefrontCheckoutBodySchema,
     storefrontProfilePostSchema,
     storefrontAddressPostSchema,
@@ -54,15 +57,14 @@ export function mountStorefrontRoutes(r, deps) {
     getShopCatalogRevision
   } = deps;
 
-  function catalogCacheOpsAuth(req, res) {
+  function catalogCacheOpsAuth(req, next) {
     const token = req.get("X-Catalog-Cache-Invalidate");
     if (!token || token !== env.CATALOG_CACHE_INVALIDATE_TOKEN) {
-      res.status(403).json({
-        error: {
-          code: "FORBIDDEN",
-          message: "Invalid or missing X-Catalog-Cache-Invalidate token"
-        }
-      });
+      next(
+        new ForbiddenError("You don't have permission to perform this action.", {
+          reason: "invalid_catalog_cache_token"
+        })
+      );
       return false;
     }
     return true;
@@ -110,6 +112,14 @@ export function mountStorefrontRoutes(r, deps) {
       requireCustomerShopAccess,
       validate({ query: storefrontCartGetQuerySchema }),
       storefrontCart.get
+    );
+    r.post(
+      `${prefix}/cart/preview`,
+      requireCustomerJwt,
+      requireCustomerShopAccess,
+      cartMutateLimiter,
+      validate({ body: storefrontCartPreviewBodySchema }),
+      storefrontCart.preview
     );
     r.post(
       `${prefix}/cart/items`,
@@ -203,9 +213,12 @@ export function mountStorefrontRoutes(r, deps) {
       r.get(`${prefix}/catalog/revision`, (req, res, next) => {
         const shopId = String(req.get("x-shop-id") || req.query.shopId || "").trim();
         if (!shopId) {
-          return res.status(400).json({
-            error: { code: "BAD_REQUEST", message: "x-shop-id header required" }
-          });
+          return next(
+            new ValidationError("We couldn't tell which shop this request is for.", {
+              fieldErrors: { "x-shop-id": ["This header is required."] },
+              formErrors: []
+            })
+          );
         }
         Promise.resolve(getShopCatalogRevision(shopId))
           .then((generation) => {
@@ -222,7 +235,7 @@ export function mountStorefrontRoutes(r, deps) {
         authLimiter,
         validate({ body: storefrontCatalogCacheInvalidateBodySchema }),
         (req, res, next) => {
-          if (!catalogCacheOpsAuth(req, res)) return;
+          if (!catalogCacheOpsAuth(req, next)) return;
           Promise.resolve(
             invalidateShopCatalogCache(req.body.shopId, {
               prewarm: req.body.prewarm === true,
@@ -246,7 +259,7 @@ export function mountStorefrontRoutes(r, deps) {
         authLimiter,
         validate({ body: storefrontCatalogCachePrewarmBodySchema }),
         (req, res, next) => {
-          if (!catalogCacheOpsAuth(req, res)) return;
+          if (!catalogCacheOpsAuth(req, next)) return;
           Promise.resolve(
             prewarmStorefrontCache(req.body.shopId, {
               topCategoryLimit: req.body.topCategoryLimit

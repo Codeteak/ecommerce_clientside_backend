@@ -2,24 +2,43 @@ import { describe, it, expect, vi } from "vitest";
 import { AppError } from "../../src/domain/errors/AppError.js";
 import { createCheckoutStorefront } from "../../src/application/services/checkout/checkoutStorefront.js";
 
+const PRODUCT_ID = "11111111-1111-4111-8111-111111111111";
+const CLIENT_ITEMS = [{ productId: PRODUCT_ID, quantity: 1 }];
+
+function clientValidatedLine(overrides = {}) {
+  return {
+    id: "cart-item-1",
+    product_id: PRODUCT_ID,
+    title_snapshot: "A",
+    unit_label: "kg",
+    quantity: "1",
+    unit_price_minor: 100,
+    is_custom: false,
+    custom_note: null,
+    ...overrides
+  };
+}
+
+function checkoutInput(extra = {}) {
+  return {
+    shopId: "00000000-0000-4000-8000-000000000001",
+    customerId: "cust-1",
+    userId: "user-1",
+    items: CLIENT_ITEMS,
+    ...extra
+  };
+}
+
 function deps() {
   return {
     cartRepo: {
       findCartByShopAndCustomerId: vi.fn().mockResolvedValue({ id: "cart-1" }),
-      validateCartForCheckoutCommit: vi.fn().mockResolvedValue([
-        {
-          id: "cart-item-1",
-          product_id: "11111111-1111-4111-8111-111111111111",
-          title_snapshot: "A",
-          unit_label: "kg",
-          quantity: "1",
-          unit_price_minor: 100,
-          is_custom: false,
-          custom_note: null
-        }
-      ]),
+      validateClientLinesForCheckout: vi.fn().mockResolvedValue([clientValidatedLine()]),
+      validateCartForCheckoutCommit: vi.fn().mockRejectedValue(
+        new AppError("Server cart checkout is retired", { statusCode: 410, code: "CART_SERVER_RETIRED" })
+      ),
       getProductSnapshotForCart: vi.fn().mockResolvedValue({
-        id: "11111111-1111-4111-8111-111111111111",
+        id: PRODUCT_ID,
         name: "A",
         base_unit: "kg",
         price_minor_per_unit: 100,
@@ -30,7 +49,7 @@ function deps() {
       deleteCart: vi.fn().mockResolvedValue(undefined),
       listLiveProductPricingByIds: vi.fn().mockResolvedValue([
         {
-          id: "11111111-1111-4111-8111-111111111111",
+          id: PRODUCT_ID,
           price_minor_per_unit: "100",
           offer_price_minor_per_unit: null,
           global_category_id: null
@@ -120,14 +139,7 @@ describe("checkoutStorefront validations", () => {
       }
     });
     const run = createCheckoutStorefront(d);
-    const out = await run(
-      {},
-      {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1"
-      }
-    );
+    const out = await run({}, checkoutInput());
     expect(out).toMatchObject({
       orderId: "order-1",
       total_minor: 120
@@ -138,12 +150,9 @@ describe("checkoutStorefront validations", () => {
   it("uses profile address even when a different addressId is provided", async () => {
     const d = deps();
     const run = createCheckoutStorefront(d);
-    const out = await run({}, {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1",
+    const out = await run({}, checkoutInput({
         addressId: "33333333-3333-4333-8333-333333333333"
-      });
+      }));
     expect(out).toMatchObject({ orderId: "order-1", total_minor: 120 });
   });
 
@@ -155,38 +164,22 @@ describe("checkoutStorefront validations", () => {
       maxRadiusM: 5000
     });
     const run = createCheckoutStorefront(d);
-    await expect(
-      run({}, {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1"
-      })
-    ).rejects.toMatchObject({ code: "ADDRESS_NOT_SERVICEABLE" });
-    await expect(
-      run({}, {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1"
-      })
-    ).rejects.toMatchObject({ message: expect.stringContaining("distance 6200m, max 5000m") });
+    await expect(run({}, checkoutInput())).rejects.toMatchObject({ code: "ADDRESS_NOT_SERVICEABLE" });
+    await expect(run({}, checkoutInput())).rejects.toMatchObject({
+      message: expect.stringContaining("distance 6200m, max 5000m")
+    });
   });
 
   it("fails when any cart product is not in stock", async () => {
     const d = deps();
-    d.cartRepo.validateCartForCheckoutCommit = vi.fn().mockRejectedValue(
+    d.cartRepo.validateClientLinesForCheckout = vi.fn().mockRejectedValue(
       new AppError("One or more products are unavailable. Please refresh your cart.", {
         statusCode: 400,
         code: "PRODUCT_UNAVAILABLE"
       })
     );
     const run = createCheckoutStorefront(d);
-    await expect(
-      run({}, {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1"
-      })
-    ).rejects.toMatchObject({ code: "PRODUCT_UNAVAILABLE" });
+    await expect(run({}, checkoutInput())).rejects.toMatchObject({ code: "PRODUCT_UNAVAILABLE" });
   });
 
   it("returns existing order when idempotency key matches a completed checkout", async () => {
@@ -198,29 +191,16 @@ describe("checkoutStorefront validations", () => {
       total_minor: "99"
     });
     const run = createCheckoutStorefront(d);
-    const out = await run(
-      {},
-      {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1",
-        idempotencyKey: "idem-key-12345678"
-      }
-    );
+    const out = await run({}, checkoutInput({ idempotencyKey: "idem-key-12345678" }));
     expect(out).toMatchObject({ orderId: "order-existing", orderNumber: "ORD-1", total_minor: 99 });
-    expect(d.cartRepo.validateCartForCheckoutCommit).not.toHaveBeenCalled();
+    expect(d.cartRepo.validateClientLinesForCheckout).not.toHaveBeenCalled();
     expect(d.orderRepo.insertOrderWithItemsAndOutbox).not.toHaveBeenCalled();
   });
 
   it("creates order on valid checkout path", async () => {
     const d = deps();
     const run = createCheckoutStorefront(d);
-    const out = await run({}, {
-      shopId: "00000000-0000-4000-8000-000000000001",
-      customerId: "cust-1",
-      userId: "user-1",
-      notes: "ring bell"
-    });
+    const out = await run({}, checkoutInput({ notes: "ring bell" }));
 
     expect(d.orderRepo.insertOrderWithItemsAndOutbox).toHaveBeenCalledTimes(1);
     expect(d.orderRepo.insertOrderWithItemsAndOutbox).toHaveBeenCalledWith(
@@ -322,15 +302,7 @@ describe("checkoutStorefront validations", () => {
   it("records idempotency mapping when Idempotency-Key is provided", async () => {
     const d = deps();
     const run = createCheckoutStorefront(d);
-    await run(
-      {},
-      {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1",
-        idempotencyKey: "checkout-key-abcdefgh"
-      }
-    );
+    await run({}, checkoutInput({ idempotencyKey: "checkout-key-abcdefgh" }));
     expect(d.orderRepo.insertCheckoutIdempotency).toHaveBeenCalledWith(
       {},
       expect.objectContaining({
@@ -378,14 +350,7 @@ describe("checkoutStorefront validations", () => {
     const d = deps();
     const emitOrderPlaced = vi.fn();
     const run = createCheckoutStorefront({ ...d, emitOrderPlaced });
-    await run(
-      {},
-      {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1"
-      }
-    );
+    await run({}, checkoutInput());
     expect(emitOrderPlaced).toHaveBeenCalledTimes(1);
     expect(emitOrderPlaced).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -399,9 +364,9 @@ describe("checkoutStorefront validations", () => {
 
   it("persists bundle display quantity and promotion ids on order lines", async () => {
     const cartItemId = "cart-item-1";
-    const productId = "11111111-1111-4111-8111-111111111111";
+    const productId = PRODUCT_ID;
     const d = deps();
-    d.cartRepo.validateCartForCheckoutCommit = vi.fn().mockResolvedValue([
+    d.cartRepo.validateClientLinesForCheckout = vi.fn().mockResolvedValue([
       {
         id: cartItemId,
         product_id: productId,
@@ -435,14 +400,7 @@ describe("checkoutStorefront validations", () => {
       ]
     });
     const run = createCheckoutStorefront(d);
-    await run(
-      {},
-      {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1"
-      }
-    );
+    await run({}, checkoutInput({ items: [{ productId, quantity: 2 }] }));
     expect(d.orderRepo.insertOrderWithItemsAndOutbox).toHaveBeenCalledWith(
       {},
       expect.objectContaining({
@@ -461,18 +419,64 @@ describe("checkoutStorefront validations", () => {
     );
   });
 
+  it("buy 1 get 1 stores display qty 2 (pack) and paidQuantity 1", async () => {
+    const d = pricedDeps();
+    const productId = "11111111-1111-4111-8111-111111111111";
+    const cartItemId = "cart-item-1";
+    d.cartRepo.validateClientLinesForCheckout = vi.fn().mockResolvedValue([
+      {
+        id: cartItemId,
+        product_id: productId,
+        quantity: "1",
+        unit_price_minor: 5000,
+        unit_size_snapshot: "1",
+        title_snapshot: "Milk",
+        unit_label: "pc",
+        is_custom: false,
+        custom_note: null
+      }
+    ]);
+    d.priceStorefrontLines = vi.fn().mockResolvedValue({
+      subtotalMinor: 5000,
+      promotionDiscountTotalMinor: 5000,
+      couponDiscountMinor: 0,
+      appliedPromotionIds: ["promo-bogo"],
+      lines: [
+        {
+          cartItemId,
+          productId,
+          quantity: 1,
+          paid_quantity: 1,
+          free_quantity: 1,
+          display_quantity: 2,
+          list_price_minor: "5000",
+          total_price_minor: "5000",
+          final_price_minor: "5000",
+          line_total_minor: "5000",
+          applied_promotion_ids: ["promo-bogo"]
+        }
+      ]
+    });
+    const run = createCheckoutStorefront(d);
+    await run({}, checkoutInput({ items: [{ productId, quantity: 1 }] }));
+    expect(d.orderRepo.insertOrderWithItemsAndOutbox).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({
+            quantity: 2,
+            paidQuantity: 1,
+            freeQuantity: 1
+          })
+        ]
+      })
+    );
+  });
+
   it("applies coupon via pricing engine and records redemption", async () => {
     const d = pricedDeps();
     const run = createCheckoutStorefront(d);
-    const out = await run(
-      {},
-      {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1",
-        couponCode: "SAVE10"
-      }
-    );
+    const out = await run({}, checkoutInput({ couponCode: "SAVE10" }));
     expect(d.priceStorefrontLines).toHaveBeenCalled();
     expect(d.promotionRepo.insertPromotionRedemption).toHaveBeenCalled();
     expect(out).toMatchObject({
@@ -510,14 +514,7 @@ describe("checkoutStorefront validations", () => {
     });
 
     const run = createCheckoutStorefront(d);
-    await run(
-      {},
-      {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1"
-      }
-    );
+    await run({}, checkoutInput());
 
     expect(d.promotionRepo.insertPromotionRedemption).toHaveBeenCalledWith(
       {},
@@ -529,11 +526,8 @@ describe("checkoutStorefront validations", () => {
     );
   });
 
-  it("rejects coupon on empty cart before pricing", async () => {
+  it("rejects checkout without client items", async () => {
     const d = deps();
-    d.cartRepo.validateCartForCheckoutCommit = vi.fn().mockRejectedValue(
-      new AppError("Cart is empty", { statusCode: 400, code: "CART_EMPTY" })
-    );
     const run = createCheckoutStorefront({ ...d, priceStorefrontLines: vi.fn() });
     await expect(
       run(
@@ -546,6 +540,7 @@ describe("checkoutStorefront validations", () => {
         }
       )
     ).rejects.toMatchObject({ code: "CART_EMPTY" });
+    expect(d.cartRepo.validateClientLinesForCheckout).not.toHaveBeenCalled();
   });
 
   it("does not fail checkout when realtime emit fails and writes retry outbox event", async () => {
@@ -554,14 +549,7 @@ describe("checkoutStorefront validations", () => {
       throw new Error("socket down");
     });
     const run = createCheckoutStorefront({ ...d, emitOrderPlaced });
-    const out = await run(
-      {},
-      {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1"
-      }
-    );
+    const out = await run({}, checkoutInput());
     expect(out.orderId).toBe("order-1");
     expect(d.orderRepo.insertOutboxEvent).toHaveBeenCalledWith(
       {},

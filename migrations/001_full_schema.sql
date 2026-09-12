@@ -2148,3 +2148,119 @@ BEGIN
       CHECK (seo_description IS NULL OR char_length(seo_description) <= 512);
   END IF;
 END $$;
+
+-- 042_sold_by_weight.sql
+ALTER TABLE shop_products
+  ADD COLUMN IF NOT EXISTS sold_by_weight BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE order_items
+  ADD COLUMN IF NOT EXISTS ordered_quantity NUMERIC(18, 4);
+
+COMMENT ON COLUMN shop_products.sold_by_weight IS
+  'When true, customer orders by weight; price_minor_per_unit is per base_unit (kg/g).';
+COMMENT ON COLUMN order_items.ordered_quantity IS
+  'Customer-requested quantity at checkout; quantity is billed/picked.';
+
+-- 043_product_image_suggestions_by_barcode.sql
+CREATE OR REPLACE FUNCTION app.find_shared_catalog_gallery_asset_ids_by_barcode(p_barcode text)
+RETURNS uuid[]
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
+DECLARE
+  v_norm text := trim(p_barcode);
+  v_ids uuid[];
+BEGIN
+  IF v_norm = '' THEN
+    RETURN ARRAY[]::uuid[];
+  END IF;
+
+  SELECT COALESCE(array_agg(z.media_asset_id ORDER BY z.min_ord), ARRAY[]::uuid[])
+  INTO v_ids
+  FROM (
+    SELECT y.media_asset_id, y.min_ord
+    FROM (
+      SELECT x.media_asset_id, MIN(x.global_ord) AS min_ord
+      FROM (
+        SELECT
+          spi.media_asset_id,
+          ROW_NUMBER() OVER (
+            ORDER BY 0, sp.updated_at DESC NULLS LAST, spi.sort_order ASC, sp.id, spi.id
+          ) AS global_ord
+        FROM shop_product_images spi
+        INNER JOIN shop_products sp ON sp.id = spi.shop_product_id
+        WHERE sp.barcode = v_norm
+           OR (sp.shop_barcode IS NOT NULL AND sp.shop_barcode = v_norm)
+        UNION ALL
+        SELECT
+          gpi.media_asset_id,
+          ROW_NUMBER() OVER (
+            ORDER BY 1, gp.updated_at DESC NULLS LAST, gpi.sort_order ASC, gp.id, gpi.id
+          ) + 100000 AS global_ord
+        FROM global_product_images gpi
+        INNER JOIN global_products gp ON gp.id = gpi.global_product_id
+        WHERE gp.barcode = v_norm
+      ) x
+      GROUP BY x.media_asset_id
+    ) y
+    ORDER BY y.min_ord
+    LIMIT 10
+  ) z;
+
+  RETURN COALESCE(v_ids, ARRAY[]::uuid[]);
+END;
+$$;
+
+ALTER FUNCTION app.find_shared_catalog_gallery_asset_ids_by_barcode(text) SET row_security = off;
+REVOKE ALL ON FUNCTION app.find_shared_catalog_gallery_asset_ids_by_barcode(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.find_shared_catalog_gallery_asset_ids_by_barcode(text) TO PUBLIC;
+
+CREATE OR REPLACE FUNCTION app.find_product_gallery_asset_ids_by_name_and_shop(p_shop_id uuid, p_name text)
+RETURNS uuid[]
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
+DECLARE
+  v_norm text := lower(trim(p_name));
+  v_ids uuid[];
+BEGIN
+  IF v_norm = '' OR length(v_norm) < 2 OR p_shop_id IS NULL THEN
+    RETURN ARRAY[]::uuid[];
+  END IF;
+
+  SELECT COALESCE(array_agg(z.media_asset_id ORDER BY z.min_ord), ARRAY[]::uuid[])
+  INTO v_ids
+  FROM (
+    SELECT y.media_asset_id, y.min_ord
+    FROM (
+      SELECT x.media_asset_id, MIN(x.global_ord) AS min_ord
+      FROM (
+        SELECT
+          spi.media_asset_id,
+          ROW_NUMBER() OVER (
+            ORDER BY sp.updated_at DESC NULLS LAST, spi.sort_order ASC, sp.id, spi.id
+          ) AS global_ord
+        FROM shop_product_images spi
+        INNER JOIN shop_products sp ON sp.id = spi.shop_product_id
+        WHERE sp.shop_id = p_shop_id
+          AND lower(sp.name) LIKE '%' || v_norm || '%'
+      ) x
+      GROUP BY x.media_asset_id
+    ) y
+    ORDER BY y.min_ord
+    LIMIT 10
+  ) z;
+
+  RETURN COALESCE(v_ids, ARRAY[]::uuid[]);
+END;
+$$;
+
+ALTER FUNCTION app.find_product_gallery_asset_ids_by_name_and_shop(uuid, text) SET row_security = off;
+REVOKE ALL ON FUNCTION app.find_product_gallery_asset_ids_by_name_and_shop(uuid, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.find_product_gallery_asset_ids_by_name_and_shop(uuid, text) TO PUBLIC;

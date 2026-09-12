@@ -1,4 +1,5 @@
 import { env } from "../../../config/env.js";
+import { AppError } from "../../../domain/errors/AppError.js";
 import { requireShopId } from "../../../application/services/catalog/catalogShopId.js";
 import { verifyServiceabilityCookie, getServiceabilityCookieName } from "../../../infra/http/serviceabilityCookie.js";
 import { getRequestLogger } from "../../../infra/logging/requestContext.js";
@@ -15,7 +16,7 @@ import { getRequestLogger } from "../../../infra/logging/requestContext.js";
  */
 export function createLocationGuard() {
   /** @type {import("express").RequestHandler} */
-  return (req, res, next) => {
+  return (req, _res, next) => {
     if (!env.STOREFRONT_ENFORCE_SERVICEABILITY) {
       return next();
     }
@@ -25,12 +26,12 @@ export function createLocationGuard() {
       const payload = verifyServiceabilityCookie(raw);
 
       if (payload && payload.shopId === shopId && payload.serviceable === false) {
-        return res.status(403).json({
-          error: {
-            code: "SERVICE_AREA",
-            message: "Location not verified as serviceable for this shop"
-          }
-        });
+        return next(
+          new AppError("We don't deliver to that location yet.", {
+            statusCode: 403,
+            code: "SERVICE_AREA"
+          })
+        );
       }
 
       if (!payload || payload.shopId !== shopId || payload.serviceable !== true) {

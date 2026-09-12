@@ -1,20 +1,52 @@
 import { requireShopId } from "../catalog/catalogShopId.js";
+import { AppError } from "../../../domain/errors/AppError.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
-import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { createCartCatalogSync } from "./cart/cartCatalogSync.js";
 import { createCartPricing } from "./cart/cartPricing.js";
 import { createCartViewBuilder } from "./cart/cartViewBuilder.js";
 import {
-  assertLineQuantity,
-  assertSellableProductSnapshot,
-  assertWritableCartItemId,
-  cartError,
-  resolveRequestedQuantity
-} from "./cart/cartLineRules.js";
+  formatStorefrontPromotions,
+  formatStorefrontSummary
+} from "./formatStorefrontCartResponse.js";
 
 /**
- * Purpose: Storefront cart business logic with live product checks, pricing, and coupon hints.
+ * Purpose: Storefront cart business logic — pricing/preview from client lines.
+ * Server-side Redis cart mutate/get-or-create is retired (localStorage is source of truth).
  */
+function retiredServerCartError() {
+  return new AppError(
+    "Server cart is retired. Persist cart in the client and use POST /storefront/cart/preview or checkout with items.",
+    { statusCode: 410, code: "CART_SERVER_RETIRED" }
+  );
+}
+
+function emptyCartView() {
+  const promotionsBase = {
+    paused: false,
+    auto: {
+      applied_promotion_ids: [],
+      bundle_discount_minor: 0,
+      line_promo_discount_minor: 0,
+      has_sku_promo: false,
+      has_bundle: false
+    },
+    coupon: {
+      code: null,
+      status: "none",
+      discount_minor: 0,
+      reason_code: null,
+      reason_message: null
+    },
+    suggested_coupons: []
+  };
+  return {
+    cart_id: null,
+    items: [],
+    summary: formatStorefrontSummary(null, 0),
+    promotions: formatStorefrontPromotions(promotionsBase, [], [])
+  };
+}
+
 export function createStorefrontCart({
   cartRepo,
   ensureShopForCatalog,
@@ -24,7 +56,7 @@ export function createStorefrontCart({
   const catalogSync = createCartCatalogSync({ cartRepo });
   const pricing = createCartPricing({ priceStorefrontLines });
 
-  async function resolveCart(client, shopIdRaw, scope) {
+  async function resolveCustomerScope(client, shopIdRaw, scope) {
     const shopId = requireShopId(shopIdRaw);
     await ensureShopForCatalog(shopId);
 
@@ -32,139 +64,82 @@ export function createStorefrontCart({
     if (!customerId) {
       throw new ValidationError("customer auth required");
     }
-
-    let cart = await cartRepo.findCartByShopAndCustomerId(client, shopId, customerId);
-    if (!cart) {
-      try {
-        cart = await cartRepo.insertCart(client, shopId, customerId);
-      } catch (err) {
-        if (err?.code === "23505") {
-          cart = await cartRepo.findCartByShopAndCustomerId(client, shopId, customerId);
-        }
-        if (!cart) {
-          throw err;
-        }
-      }
-    }
-    return { shopId, cart, customerId };
+    return { shopId, customerId };
   }
 
-  const { buildCartView } = createCartViewBuilder({
+  const { buildCartViewFromClientItems } = createCartViewBuilder({
     cartRepo,
     catalogSync,
     pricing,
     listApplicableCoupons,
-    resolveCart
+    resolveCart: async () => {
+      throw retiredServerCartError();
+    }
   });
 
   return {
-    async createOrGetCart(client, shopIdRaw, scope) {
-      const { shopId, cart } = await resolveCart(client, shopIdRaw, scope);
-      return { cartId: cart.id, shopId };
+    async createOrGetCart() {
+      throw retiredServerCartError();
     },
 
-    async getCartContents(client, shopIdRaw, scope, options = {}) {
+    async getCartContents() {
+      // Redis-backed GET is retired; clients use localStorage + POST /cart/preview.
+      return emptyCartView();
+    },
+
+    /**
+     * Price client cart lines (and optional coupon) without reading/writing Redis.
+     * @param {object} body
+     * @param {Array<{ productId: string, quantity: number }>} body.items
+     * @param {string|null} [body.couponCode]
+     * @param {boolean|string} [body.includeSuggestedCoupons]
+     */
+    async previewFromClientItems(client, shopIdRaw, scope, body = {}) {
+      const { shopId, customerId } = await resolveCustomerScope(client, shopIdRaw, scope);
+
       const includeSuggestedCoupons =
-        options.includeSuggestedCoupons !== false &&
-        options.includeSuggestedCoupons !== "0" &&
-        options.includeSuggestedCoupons !== "false";
-      return buildCartView(client, shopIdRaw, scope, {
-        couponCode: options.couponCode ?? null,
+        body.includeSuggestedCoupons !== false &&
+        body.includeSuggestedCoupons !== "0" &&
+        body.includeSuggestedCoupons !== "false";
+
+      const clientLines = Array.isArray(body.items) ? body.items : [];
+      if (!clientLines.length) {
+        return emptyCartView();
+      }
+
+      const validated = await cartRepo.validateClientLinesForCheckout(client, shopId, clientLines);
+      const withShop = validated.map((it) => ({
+        ...it,
+        cart_id: it.cart_id ?? null,
+        shop_id: shopId
+      }));
+
+      const items =
+        typeof cartRepo.enrichCartItemsForView === "function"
+          ? await cartRepo.enrichCartItemsForView(client, shopId, withShop)
+          : withShop.map((it) => ({
+              ...it,
+              list_price_minor_per_unit: it.unit_price_minor,
+              offer_price_minor_per_unit: null,
+              global_category_id: null
+            }));
+
+      return buildCartViewFromClientItems(client, shopId, customerId, items, {
+        couponCode: body.couponCode ?? null,
         includeSuggestedCoupons
       });
     },
 
-    async addItem(client, shopIdRaw, scope, body) {
-      const { shopId, cart } = await resolveCart(client, shopIdRaw, scope);
-      const productId = body?.productId;
-      if (!productId) {
-        throw new ValidationError("productId is required");
-      }
-
-      const q = resolveRequestedQuantity(body, null);
-      assertLineQuantity(q);
-
-      const snapRows = await cartRepo.listProductSnapshotsForCart(client, shopId, [productId]);
-      const p = snapRows[0] ?? null;
-      assertSellableProductSnapshot(p);
-
-      const existing = await cartRepo.findMatchingCartItem(client, shopId, cart.id, p.id, false, null);
-      if (existing) {
-        const mergedQty = Number(existing.quantity) + q;
-        assertLineQuantity(mergedQty);
-        await cartRepo.updateCartItemSnapshot(client, shopId, existing.id, {
-          quantity: mergedQty,
-          unitPriceMinor: Number(p.price_minor_per_unit),
-          titleSnapshot: p.name,
-          unitLabel: p.base_unit,
-          unitSizeSnapshot: String(p.unit_size ?? "1")
-        });
-      } else {
-        await cartRepo.insertCartItem(client, {
-          cartId: cart.id,
-          shopId,
-          productId: p.id,
-          titleSnapshot: p.name,
-          quantity: q,
-          unitLabel: p.base_unit,
-          unitSizeSnapshot: String(p.unit_size ?? "1"),
-          unitPriceMinor: Number(p.price_minor_per_unit),
-          isCustom: false,
-          customNote: null
-        });
-      }
-
-      return buildCartView(client, shopIdRaw, scope, { couponCode: body?.couponCode ?? null });
+    async addItem() {
+      throw retiredServerCartError();
     },
 
-    async updateItemQuantity(client, shopIdRaw, scope, itemId, body) {
-      assertWritableCartItemId(itemId);
-      const { shopId, cart } = await resolveCart(client, shopIdRaw, scope);
-      const hit = await cartRepo.findCartItemWithCart(client, shopId, itemId);
-      if (!hit || hit.cart_id !== cart.id) {
-        throw new NotFoundError("Cart item not found");
-      }
-
-      const currentQty = Number(hit.quantity ?? 0);
-
-      const hasDelta = body?.delta !== undefined && body?.delta !== null && body?.delta !== "";
-      if (hasDelta && Number(body.delta) < 0 && currentQty <= 1) {
-        throw cartError(
-          "MINIMUM_QUANTITY",
-          "Minimum quantity is 1. Remove the item to delete it from your cart."
-        );
-      }
-
-      const targetQty = resolveRequestedQuantity(body, currentQty);
-      assertLineQuantity(targetQty);
-
-      if (!hit.is_custom && hit.product_id) {
-        const snapRows = await cartRepo.listProductSnapshotsForCart(client, shopId, [hit.product_id]);
-        const p = snapRows[0] ?? null;
-        assertSellableProductSnapshot(p);
-        await cartRepo.updateCartItemSnapshot(client, shopId, itemId, {
-          quantity: targetQty,
-          unitPriceMinor: Number(p.price_minor_per_unit),
-          titleSnapshot: p.name,
-          unitLabel: p.base_unit,
-          unitSizeSnapshot: String(p.unit_size ?? "1")
-        });
-      } else {
-        await cartRepo.updateCartItemQuantity(client, shopId, itemId, targetQty);
-      }
-
-      return buildCartView(client, shopIdRaw, scope, { couponCode: body?.couponCode ?? null });
+    async updateItemQuantity() {
+      throw retiredServerCartError();
     },
 
-    async removeItem(client, shopIdRaw, scope, itemId, body = {}) {
-      assertWritableCartItemId(itemId);
-      const { shopId, cart } = await resolveCart(client, shopIdRaw, scope);
-      const hit = await cartRepo.findCartItemWithCart(client, shopId, itemId);
-      if (!hit || hit.cart_id !== cart.id) {
-        throw new NotFoundError("Cart item not found");
-      }
-      await cartRepo.deleteCartItem(client, shopId, itemId);
-      return buildCartView(client, shopIdRaw, scope, { couponCode: body?.couponCode ?? null });
+    async removeItem() {
+      throw retiredServerCartError();
     }
   };
 }

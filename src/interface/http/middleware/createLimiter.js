@@ -5,7 +5,8 @@ import { RedisStore } from "rate-limit-redis";
 import { env } from "../../../config/env.js";
 import { logger } from "../../../config/logger.js";
 import { ensureSharedRedisReady, getSharedRedisClient } from "../../../infra/redis/sharedRedis.js";
-import { sendTooManyRequests } from "../responses/httpResponses.js";
+import { AppError } from "../../../domain/errors/AppError.js";
+import { ErrorCodes } from "../../../domain/errors/errorCodes.js";
 
 /** @type {Map<string, import("rate-limit-redis").RedisStore>} */
 const storesById = new Map();
@@ -107,6 +108,7 @@ export function createLimiter({ storeId, windowMs, maxTest, maxProd, message, ke
     legacyHeaders: false,
     ...(store ? { store } : {}),
     keyGenerator: withKeyGenerator(keyGenerator),
-    handler: (_req, res) => sendTooManyRequests(res, message)
+    handler: (_req, _res, next) =>
+      next(new AppError(message, { statusCode: 429, code: ErrorCodes.TOO_MANY_REQUESTS }))
   });
 }

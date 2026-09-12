@@ -265,7 +265,8 @@ All routes require customer JWT + shop access unless noted.
 | Method | Route | Query/body | Service |
 |--------|-------|------------|---------|
 | `GET` | `/storefront/coupons` | `code?`, `cartSubtotalMinor?`, `onlyApplicable?`, `limit?` | `listApplicableCoupons` |
-| `GET` | `/storefront/cart` | `couponCode?`, `includeSuggestedCoupons?` | `storefrontCart.getCartContents` |
+| `GET` | `/storefront/cart` | (retired; empty cart) | `storefrontCart.getCartContents` |
+| `POST` | `/storefront/cart/preview` | `items[]`, `couponCode?` | `storefrontCart.previewFromClientItems` |
 | `POST/PATCH/DELETE` | `/storefront/cart/items` | `couponCode` in query/body | Rebuilds cart with pricing |
 | `GET` | `/storefront/products` | — | Catalog + listing promos |
 | `GET` | `/storefront/products/:slug` | — | Detail + `bundle_rules` |

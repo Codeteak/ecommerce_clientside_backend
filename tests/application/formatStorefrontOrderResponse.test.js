@@ -45,4 +45,12 @@ describe("mapStorefrontOrderRow", () => {
     expect(out.delivery_tracking_url).toBe("https://track.example/o/1");
     expect(out.yadro_order_id).toBe("55");
   });
+
+  it("reads tracking_url alias", () => {
+    const out = mapStorefrontOrderRow({
+      subtotal_minor: 1000,
+      tracking_url: "https://yaadro.com/track/9"
+    });
+    expect(out.delivery_tracking_url).toBe("https://yaadro.com/track/9");
+  });
 });

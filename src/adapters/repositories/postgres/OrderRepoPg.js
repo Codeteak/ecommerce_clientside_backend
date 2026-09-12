@@ -133,6 +133,11 @@ export class OrderRepoPg extends OrderRepo {
       const names = items.map((it) => it.name);
       const unitLabels = items.map((it) => it.unitLabel ?? null);
       const quantities = items.map((it) => it.quantity);
+      const orderedQuantities = items.map((it) =>
+        it.paidQuantity != null && Number.isFinite(Number(it.paidQuantity))
+          ? Number(it.paidQuantity)
+          : it.quantity
+      );
       const unitPrices = items.map((it) => it.unitPriceMinor);
       const lineTotals = items.map((it) => it.lineTotalMinor);
       const listPrices = items.map((it) => it.listPriceMinor ?? it.unitPriceMinor);
@@ -149,7 +154,7 @@ export class OrderRepoPg extends OrderRepo {
       await client.query(
         `INSERT INTO order_items (
            order_id, product_id, product_name_snapshot, unit_label_snapshot,
-           unit_size_snapshot, quantity, unit_price_minor_snapshot, line_total_minor,
+           unit_size_snapshot, quantity, ordered_quantity, unit_price_minor_snapshot, line_total_minor,
            list_price_minor, line_discount_minor, applied_promotion_ids,
            is_custom, custom_note
          )
@@ -159,6 +164,7 @@ export class OrderRepoPg extends OrderRepo {
                 u.unit_label_snapshot,
                 u.unit_size_snapshot,
                 u.quantity,
+                u.ordered_quantity,
                 u.unit_price_minor_snapshot,
                 u.line_total_minor,
                 u.list_price_minor,
@@ -172,19 +178,21 @@ export class OrderRepoPg extends OrderRepo {
              $4::text[],
              $5::numeric[],
              $6::numeric[],
-             $7::int[],
+             $7::numeric[],
              $8::int[],
              $9::int[],
              $10::int[],
-             $11::jsonb[],
-             $12::boolean[],
-             $13::text[]
+             $11::int[],
+             $12::jsonb[],
+             $13::boolean[],
+             $14::text[]
            ) AS u(
              product_id,
              product_name_snapshot,
              unit_label_snapshot,
              unit_size_snapshot,
              quantity,
+             ordered_quantity,
              unit_price_minor_snapshot,
              line_total_minor,
              list_price_minor,
@@ -200,6 +208,7 @@ export class OrderRepoPg extends OrderRepo {
           unitLabels,
           unitSizeSnapshots,
           quantities,
+          orderedQuantities,
           unitPrices,
           lineTotals,
           listPrices,

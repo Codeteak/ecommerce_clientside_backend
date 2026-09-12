@@ -153,4 +153,14 @@ export class CartRepo {
     void _productIds;
     throw new Error("Not implemented");
   }
+
+  /**
+   * Enrich cart lines with live catalog pricing/images for storefront cart views.
+   */
+  async enrichCartItemsForView(_client, _shopId, _items) {
+    void _client;
+    void _shopId;
+    void _items;
+    throw new Error("Not implemented");
+  }
 }

@@ -23,8 +23,9 @@ function clone(record) {
 }
 
 /**
- * Cart persistence without Postgres tables.
- * Redis when REDIS_URL is set; otherwise in-process memory (local/dev).
+ * Legacy Redis/memory cart helpers.
+ * Storefront cart writes are retired (localStorage + checkout items).
+ * Load/delete remain for clearing leftover session keys after checkout.
  */
 export async function loadCartByShopCustomer(shopId, customerId) {
   const sc = shopCustomerKey(shopId, customerId);
