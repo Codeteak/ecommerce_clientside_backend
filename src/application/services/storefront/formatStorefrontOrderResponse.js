@@ -8,6 +8,13 @@ export function toMinorInt(value) {
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
+function pickHttpUrl(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return null;
+  return trimmed;
+}
+
 /**
  * @param {Record<string, unknown> | null | undefined} row
  */
@@ -36,10 +43,9 @@ export function mapStorefrontOrderRow(row) {
     auto_promotion_discount_minor: autoPromotionDiscount,
     subtotal_before_coupon_minor: subtotal + couponDiscount,
     coupon_code: couponCode,
-    delivery_tracking_url:
-      typeof row.delivery_tracking_url === "string" && row.delivery_tracking_url.trim()
-        ? row.delivery_tracking_url.trim()
-        : row.delivery_tracking_url ?? null,
+    delivery_tracking_url: pickHttpUrl(
+      row.delivery_tracking_url ?? row.deliveryTrackingUrl ?? row.tracking_link ?? row.tracking_url
+    ),
     yadro_order_id:
       row.yadro_order_id != null && String(row.yadro_order_id).trim() !== ""
         ? String(row.yadro_order_id).trim()

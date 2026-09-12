@@ -1,4 +1,5 @@
 import { asyncHandler } from "../asyncHandler.js";
+import { getRequestLogger } from "../../../infra/logging/requestContext.js";
 
 function getHandler(ctx) {
   return asyncHandler(async (_req, res) => {
@@ -13,12 +14,17 @@ function readyHandler(ctx) {
       const body = await ctx.getReadiness();
       res.json(body);
     } catch (err) {
-      const code = err.statusCode === 503 ? 503 : 500;
-      res.status(code).json({
+      const status = err.statusCode === 503 ? 503 : 500;
+      getRequestLogger().error(
+        { event: "api.health.not_ready", err, checks: err.checks },
+        "Readiness probe failed"
+      );
+      // Dependency names and driver messages stay in the logs; probes only need the status.
+      res.status(status).json({
+        success: false,
         error: {
           code: "NOT_READY",
-          message: err.message || "Service not ready",
-          checks: err.checks
+          message: "The service is temporarily unavailable. Please try again shortly."
         }
       });
     }

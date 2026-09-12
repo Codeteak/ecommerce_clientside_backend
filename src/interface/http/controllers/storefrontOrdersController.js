@@ -9,6 +9,15 @@ import { asyncHandler } from "../asyncHandler.js";
  * responses for the authenticated customer.
  */
 
+/** Avoid Express ETag 304s — pollers get an empty body and the order history page goes blank. */
+function sendPrivateJson(res, body) {
+  res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.status(200);
+  res.type("json");
+  return res.end(JSON.stringify(body));
+}
+
 function listHandler(ctx) {
   return asyncHandler(async (req, res) => {
     const shopId = requireShopId(req.shopId);
@@ -18,7 +27,7 @@ function listHandler(ctx) {
       await ctx.assertCustomerShopAccess(c, shopId, customerId);
       return ctx.orderRepo.listOrdersForCustomer(c, shopId, String(customerId), { limit });
     });
-    res.json({ orders: rows });
+    sendPrivateJson(res, { orders: rows });
   });
 }
 
@@ -33,7 +42,7 @@ function getByIdHandler(ctx) {
     if (!detail) {
       throw new NotFoundError("Order not found");
     }
-    res.json(detail);
+    sendPrivateJson(res, detail);
   });
 }
 

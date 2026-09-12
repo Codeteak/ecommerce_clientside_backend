@@ -68,18 +68,35 @@ export const parameters = {
 export const schemas = {
   Error: {
     type: "object",
+    description:
+      "Standard error envelope. `message` is always human-readable copy safe to show a user; " +
+      "internal failures are sanitized and never echo driver or stack text.",
     properties: {
+      success: { type: "boolean", enum: [false] },
       error: {
         type: "object",
         properties: {
-          code: { type: "string" },
+          code: {
+            type: "string",
+            description:
+              "Machine-readable code, e.g. VALIDATION_ERROR, UNAUTHORIZED, NOT_FOUND, COUPON_EXPIRED."
+          },
           message: { type: "string" },
-          details: {}
+          details: {
+            type: "object",
+            additionalProperties: true,
+            description:
+              "Optional context. Field-level validation always uses `fieldErrors` / `formErrors`."
+          }
         },
         required: ["code", "message"]
+      },
+      requestId: {
+        type: "string",
+        description: "Correlation id, also returned in the `x-request-id` response header."
       }
     },
-    required: ["error"]
+    required: ["success", "error"]
   },
   OtpRequestBody: {
     type: "object",
@@ -613,6 +630,16 @@ export const schemas = {
       placed_at: { type: "string", format: "date-time" },
       picker_id: { type: "string", format: "uuid", nullable: true },
       picker_name: { type: "string", nullable: true },
+      delivery_tracking_url: {
+        type: "string",
+        nullable: true,
+        description: "Public Yaadro delivery tracking page URL (set after shop accepts)."
+      },
+      yadro_order_id: {
+        type: "string",
+        nullable: true,
+        description: "Yaadro DMS order id for partner correlation."
+      },
       items: {
         type: "array",
         items: { $ref: "#/components/schemas/StorefrontOrderLineItem" }

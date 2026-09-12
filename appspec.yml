@@ -27,5 +27,5 @@ hooks:
       runas: root
   ValidateService:
     - location: scripts/cicd/validate_service.sh
-      timeout: 180
+      timeout: 420
       runas: root

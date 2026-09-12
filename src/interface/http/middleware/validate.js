@@ -15,7 +15,7 @@ export function validate({ body, query, params } = {}) {
           code: "VALIDATION_ERROR",
           issues: zodIssuesSummary(err.flatten())
         });
-        next(new ValidationError("Invalid request", err.flatten()));
+        next(new ValidationError("Please check the highlighted fields.", err.flatten()));
       } else {
         next(err);
       }

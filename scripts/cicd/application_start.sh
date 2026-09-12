@@ -38,19 +38,25 @@ import json, os, sys
 data = json.load(sys.stdin)
 prefix = os.environ.get("APP_ENV_SECRET_PREFIX", "CUSTOMER_")
 common = "COMMON_"
-known = ("COMMON_", "SHOP_API_", "CUSTOMER_", "SUPERADMIN_", "MAPPER_")
+known = ("COMMON_", "SHOP_API_", "CUSTOMER_WEB_", "CUSTOMER_", "SUPERADMIN_", "MAPPER_")
+
+def belongs(key, pfx):
+    if not key.startswith(pfx):
+        return False
+    return not any(key.startswith(o) for o in known if o != pfx and len(o) > len(pfx))
+
 out = {}
 has_prefixed = any(isinstance(k, str) and k.startswith(known) for k in data)
 if has_prefixed:
     for k, v in data.items():
         if isinstance(v, (dict, list)) or not isinstance(k, str):
             continue
-        if k.startswith(common):
+        if belongs(k, common):
             out[k[len(common):]] = str(v)
     for k, v in data.items():
         if isinstance(v, (dict, list)) or not isinstance(k, str):
             continue
-        if k.startswith(prefix):
+        if belongs(k, prefix):
             out[k[len(prefix):]] = str(v)
 else:
     for k, v in data.items():
@@ -111,7 +117,16 @@ fi
 export CUSTOMER_PORT="${APP_PORT}"
 
 echo "[application_start] Restarting services with ${COMPOSE_FILE} (port ${CUSTOMER_PORT})..."
-if command -v docker-compose >/dev/null 2>&1; then
+# On combo hosts (Customer+Superadmin), do not docker compose down — that can disrupt the sibling API.
+if [[ "${YAADRO_COMBO_HOST:-0}" == "1" ]]; then
+  if command -v docker-compose >/dev/null 2>&1; then
+    docker-compose -f "${COMPOSE_FILE}" pull
+    docker-compose -f "${COMPOSE_FILE}" up -d --force-recreate --no-deps api
+  else
+    docker compose -f "${COMPOSE_FILE}" pull
+    docker compose -f "${COMPOSE_FILE}" up -d --force-recreate --no-deps api
+  fi
+elif command -v docker-compose >/dev/null 2>&1; then
   docker-compose -f "${COMPOSE_FILE}" pull
   docker-compose -f "${COMPOSE_FILE}" down --remove-orphans
   docker-compose -f "${COMPOSE_FILE}" up -d --force-recreate

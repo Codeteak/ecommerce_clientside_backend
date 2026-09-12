@@ -3,9 +3,9 @@ import { withTx } from "../../../infra/db/tx.js";
 import { asyncHandler } from "../asyncHandler.js";
 
 /**
- * Purpose: This file handles storefront cart HTTP endpoints.
- * It uses authenticated customer scope,
- * then calls cart services and sends JSON HTTP responses.
+ * Purpose: Storefront cart HTTP endpoints.
+ * Cart contents live on the client; preview prices client lines without Redis.
+ * Mutate endpoints return 410 (CART_SERVER_RETIRED).
  */
 
 function getOrCreateHandler(ctx) {
@@ -25,6 +25,17 @@ function getHandler(ctx) {
     const includeSuggestedCoupons = req.query?.includeSuggestedCoupons;
     const out = await withTx((c) =>
       ctx.storefrontCart.getCartContents(c, shopId, scope, { couponCode, includeSuggestedCoupons })
+    );
+    res.json(out);
+  });
+}
+
+function previewHandler(ctx) {
+  return asyncHandler(async (req, res) => {
+    const shopId = requireShopId(req.shopId);
+    const scope = { customerId: req.customerAuth.customerId };
+    const out = await withTx((c) =>
+      ctx.storefrontCart.previewFromClientItems(c, shopId, scope, req.body ?? {})
     );
     res.json(out);
   });
@@ -64,6 +75,7 @@ function deleteItemHandler(ctx) {
 export const storefrontCartController = {
   getOrCreate: (ctx) => getOrCreateHandler(ctx),
   get: (ctx) => getHandler(ctx),
+  preview: (ctx) => previewHandler(ctx),
   addItem: (ctx) => addItemHandler(ctx),
   patchItem: (ctx) => patchItemHandler(ctx),
   deleteItem: (ctx) => deleteItemHandler(ctx),
@@ -72,6 +84,7 @@ export const storefrontCartController = {
     return {
       getOrCreate: getOrCreateHandler(ctx),
       get: getHandler(ctx),
+      preview: previewHandler(ctx),
       addItem: addItemHandler(ctx),
       patchItem: patchItemHandler(ctx),
       deleteItem: deleteItemHandler(ctx)

@@ -1,5 +1,6 @@
 import { requireShopId } from "../../../application/services/catalog/catalogShopId.js";
 import { assertShopAllowsCustomers } from "../../../application/services/auth/shopPolicy.js";
+import { AuthError } from "../../../domain/errors/AuthError.js";
 import { ForbiddenError } from "../../../domain/errors/ForbiddenError.js";
 import { withClient } from "../../../infra/db/tx.js";
 
@@ -13,17 +14,12 @@ import { withClient } from "../../../infra/db/tx.js";
  */
 export function createRequireCustomerShopAccess({ authRepo }) {
   /** @type {import("express").RequestHandler} */
-  return async function requireCustomerShopAccess(req, res, next) {
+  return async function requireCustomerShopAccess(req, _res, next) {
     try {
       const shopId = requireShopId(req.shopId);
       const customerId = req.customerAuth?.customerId;
       if (!customerId) {
-        return res.status(401).json({
-          error: {
-            code: "UNAUTHORIZED",
-            message: "Customer authentication required"
-          }
-        });
+        return next(new AuthError("Please sign in to continue."));
       }
 
       await withClient(async (client) => {

@@ -3,9 +3,9 @@ import { NotFoundError } from "../../src/domain/errors/NotFoundError.js";
 import { errorHandler } from "../../src/interface/http/middleware/errorHandler.js";
 
 describe("NotFoundError via errorHandler", () => {
-  it("returns 404 with { error: { code, message } } shape", () => {
+  it("returns 404 with the standard error envelope", () => {
     const err = new NotFoundError("Order not found");
-    const req = { method: "GET", path: "/storefront/orders/x" };
+    const req = { method: "GET", path: "/storefront/orders/x", id: "req-1" };
     const res = {
       statusCode: 200,
       body: null,
@@ -24,10 +24,12 @@ describe("NotFoundError via errorHandler", () => {
 
     expect(res.statusCode).toBe(404);
     expect(res.body).toEqual({
+      success: false,
       error: {
         code: "NOT_FOUND",
         message: "Order not found"
-      }
+      },
+      requestId: "req-1"
     });
   });
 });

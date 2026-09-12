@@ -16,43 +16,16 @@ export function createCartViewBuilder({
     catalogSync;
   const { runPricing, buildPromotionBlock } = pricing;
 
-  async function buildCartView(
+  async function formatPricedCartView({
     client,
-    shopIdRaw,
-    scope,
-    { couponCode = null, includeSuggestedCoupons = true } = {}
-  ) {
-    const { shopId, cart, customerId } = await resolveCart(client, shopIdRaw, scope);
-    let items = await cartRepo.listCartItems(client, shopId, cart.id);
-    let mutated = false;
-    let snapshots =
-      items.length > 0 ? await loadSnapshotsByProductId(client, shopId, items) : new Map();
-
-    if (items.length > 0) {
-      const pruneResult = await pruneUnsellableCartLines(client, shopId, items, snapshots);
-      snapshots = pruneResult.snapshots;
-      if (pruneResult.removed) {
-        mutated = true;
-        items = await cartRepo.listCartItems(client, shopId, cart.id);
-        snapshots =
-          items.length > 0 ? await loadSnapshotsByProductId(client, shopId, items) : new Map();
-      }
-    }
-
-    let priceMetaByItemId = new Map();
-    if (items.length > 0) {
-      const syncResult = await syncCartLinesFromCatalog(client, shopId, items, snapshots);
-      snapshots = syncResult.snapshots;
-      priceMetaByItemId = syncResult.metaByItemId;
-      if (syncResult.mutated) {
-        mutated = true;
-      }
-    }
-
-    if (mutated) {
-      items = await cartRepo.listCartItems(client, shopId, cart.id);
-    }
-
+    shopId,
+    customerId,
+    cartId,
+    items,
+    couponCode = null,
+    includeSuggestedCoupons = true,
+    priceMetaByItemId = new Map()
+  }) {
     const pricingOut = await runPricing(client, shopId, customerId, items, couponCode);
     const priced = pricingOut?.priced ?? null;
     const couponError = pricingOut?.couponError ?? null;
@@ -89,7 +62,7 @@ export function createCartViewBuilder({
     if (!priced || !items.length) {
       const emptyItems = [];
       return {
-        cart_id: cart.id,
+        cart_id: cartId,
         items: emptyItems,
         summary: formatStorefrontSummary(null, 0),
         promotions: formatStorefrontPromotions(promotionsBase, suggested_coupons, emptyItems)
@@ -155,12 +128,80 @@ export function createCartViewBuilder({
     );
 
     return {
-      cart_id: cart.id,
+      cart_id: cartId,
       items: cartItems,
       summary: formatStorefrontSummary(priced, displayUnitsTotal),
       promotions
     };
   }
 
-  return { buildCartView };
+  async function buildCartViewFromClientItems(
+    client,
+    shopId,
+    customerId,
+    items,
+    { couponCode = null, includeSuggestedCoupons = true } = {}
+  ) {
+    return formatPricedCartView({
+      client,
+      shopId,
+      customerId,
+      cartId: null,
+      items,
+      couponCode,
+      includeSuggestedCoupons,
+      priceMetaByItemId: new Map()
+    });
+  }
+
+  async function buildCartView(
+    client,
+    shopIdRaw,
+    scope,
+    { couponCode = null, includeSuggestedCoupons = true } = {}
+  ) {
+    const { shopId, cart, customerId } = await resolveCart(client, shopIdRaw, scope);
+    let items = await cartRepo.listCartItems(client, shopId, cart.id);
+    let mutated = false;
+    let snapshots =
+      items.length > 0 ? await loadSnapshotsByProductId(client, shopId, items) : new Map();
+
+    if (items.length > 0) {
+      const pruneResult = await pruneUnsellableCartLines(client, shopId, items, snapshots);
+      snapshots = pruneResult.snapshots;
+      if (pruneResult.removed) {
+        mutated = true;
+        items = await cartRepo.listCartItems(client, shopId, cart.id);
+        snapshots =
+          items.length > 0 ? await loadSnapshotsByProductId(client, shopId, items) : new Map();
+      }
+    }
+
+    let priceMetaByItemId = new Map();
+    if (items.length > 0) {
+      const syncResult = await syncCartLinesFromCatalog(client, shopId, items, snapshots);
+      snapshots = syncResult.snapshots;
+      priceMetaByItemId = syncResult.metaByItemId;
+      if (syncResult.mutated) {
+        mutated = true;
+      }
+    }
+
+    if (mutated) {
+      items = await cartRepo.listCartItems(client, shopId, cart.id);
+    }
+
+    return formatPricedCartView({
+      client,
+      shopId,
+      customerId,
+      cartId: cart.id,
+      items,
+      couponCode,
+      includeSuggestedCoupons,
+      priceMetaByItemId
+    });
+  }
+
+  return { buildCartView, buildCartViewFromClientItems };
 }

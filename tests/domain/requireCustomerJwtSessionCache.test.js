@@ -42,7 +42,10 @@ describe("requireCustomerJwt session cache", () => {
 
     expect(sessionValidityCache.get).not.toHaveBeenCalled();
     expect(authRepo.isCustomerSessionValid).toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 401, code: "UNAUTHORIZED" })
+    );
   });
 
   it("falls back to DB session validation when access jti is missing and fallback is enabled", async () => {
@@ -108,7 +111,9 @@ describe("requireCustomerJwt session cache", () => {
     await middleware(req, res, next);
 
     expect(authRepo.isCustomerSessionValid).not.toHaveBeenCalled();
-    expect(next).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 401, code: "UNAUTHORIZED" })
+    );
   });
 });

@@ -6,7 +6,10 @@ export const catalogShopIdSchema = z.string().uuid("shopId must be a valid UUID"
 export function requireShopId(shopId) {
   const parsed = catalogShopIdSchema.safeParse(shopId);
   if (!parsed.success) {
-    throw new ValidationError("Invalid or missing shopId", { issues: parsed.error.flatten() });
+    throw new ValidationError(
+      "We couldn't tell which shop this request is for.",
+      parsed.error.flatten()
+    );
   }
   return parsed.data;
 }
@@ -19,7 +22,7 @@ export function parseOptionalUuidParam(raw) {
   }
   const parsed = optionalUuid.safeParse(raw);
   if (!parsed.success) {
-    throw new ValidationError("Invalid query parameter", { issues: parsed.error.flatten() });
+    throw new ValidationError("Please check the highlighted fields.", parsed.error.flatten());
   }
   return parsed.data;
 }

@@ -1,25 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { ValidationError } from "../../src/domain/errors/ValidationError.js";
+import { AppError } from "../../src/domain/errors/AppError.js";
 import { createStorefrontCart } from "../../src/application/services/storefront/storefrontCart.js";
-import { MAX_LINE_QUANTITY } from "../../src/application/services/storefront/cart/cartLineRules.js";
 
 const shopId = "00000000-0000-4000-8000-000000000001";
-const cartId = "11111111-1111-4111-8111-111111111111";
 const productId = "22222222-2222-4222-8222-222222222222";
 const cartItemId = "33333333-3333-4333-8333-333333333333";
-
-function productSnapshot(overrides = {}) {
-  return {
-    id: productId,
-    name: "Apple",
-    base_unit: "kg",
-    unit_size: "2",
-    price_minor_per_unit: 100,
-    status: "active",
-    availability: "in_stock",
-    ...overrides
-  };
-}
 
 function cartLine(overrides = {}) {
   return {
@@ -33,6 +18,7 @@ function cartLine(overrides = {}) {
     list_price_minor_per_unit: "100",
     offer_price_minor_per_unit: "90",
     is_custom: false,
+    global_category_id: null,
     ...overrides
   };
 }
@@ -68,23 +54,18 @@ function pricedResult(cartItemIdOverride = cartItemId) {
 
 function deps(overrides = {}) {
   const baseCartRepo = {
-    findCartByShopAndCustomerId: vi.fn().mockResolvedValue({ id: cartId }),
+    validateClientLinesForCheckout: vi.fn().mockResolvedValue([cartLine()]),
+    enrichCartItemsForView: vi.fn().mockImplementation(async (_c, _s, items) => items),
+    findCartByShopAndCustomerId: vi.fn(),
     insertCart: vi.fn(),
-    listCartItems: vi.fn().mockResolvedValue([cartLine()]),
-    listProductSnapshotsForCart: vi.fn().mockResolvedValue([productSnapshot()]),
-    getProductSnapshotForCart: vi.fn().mockResolvedValue(productSnapshot()),
-    findMatchingCartItem: vi.fn().mockResolvedValue(null),
-    findCartItemWithCart: vi.fn().mockResolvedValue({
-      id: cartItemId,
-      cart_id: cartId,
-      product_id: productId,
-      is_custom: false,
-      quantity: "2"
-    }),
-    updateCartItemSnapshot: vi.fn().mockResolvedValue(cartLine()),
-    updateCartItemQuantity: vi.fn().mockResolvedValue(cartLine()),
-    insertCartItem: vi.fn().mockResolvedValue(cartLine()),
-    deleteCartItem: vi.fn().mockResolvedValue(undefined)
+    listCartItems: vi.fn(),
+    listProductSnapshotsForCart: vi.fn(),
+    findMatchingCartItem: vi.fn(),
+    findCartItemWithCart: vi.fn(),
+    updateCartItemSnapshot: vi.fn(),
+    updateCartItemQuantity: vi.fn(),
+    insertCartItem: vi.fn(),
+    deleteCartItem: vi.fn()
   };
 
   return {
@@ -107,136 +88,68 @@ function deps(overrides = {}) {
 }
 
 describe("storefront cart", () => {
-  it("increments quantity when same product is added again", async () => {
-    const d = deps();
-    d.cartRepo.findMatchingCartItem.mockResolvedValue({ id: cartItemId, quantity: "2" });
-    d.cartRepo.updateCartItemSnapshot.mockResolvedValue(cartLine({ quantity: "5" }));
-    const service = createStorefrontCart(d);
-    const out = await service.addItem({}, shopId, { customerId: "cust-1" }, {
-      productId,
-      quantity: 3
+  it("returns empty cart for GET without Redis", async () => {
+    const service = createStorefrontCart(deps());
+    const out = await service.getCartContents({}, shopId, { customerId: "cust-1" });
+    expect(out.cart_id).toBeNull();
+    expect(out.items).toEqual([]);
+    expect(out.summary.subtotal_minor).toBe(0);
+  });
+
+  it("retires createOrGetCart with 410", async () => {
+    const service = createStorefrontCart(deps());
+    await expect(service.createOrGetCart({}, shopId, { customerId: "cust-1" })).rejects.toMatchObject({
+      code: "CART_SERVER_RETIRED",
+      statusCode: 410
     });
-
-    expect(d.cartRepo.updateCartItemSnapshot).toHaveBeenCalledWith(
-      expect.anything(),
-      shopId,
-      cartItemId,
-      expect.objectContaining({ unitSizeSnapshot: "2" })
-    );
-    expect(out.cart_id).toBe(cartId);
-    expect(out.promotions).toBeDefined();
-    expect(out.summary.subtotal_minor).toBe(180);
   });
 
-  it("snapshots unit_size when inserting a new cart line", async () => {
-    const d = deps();
-    const service = createStorefrontCart(d);
-    await service.addItem({}, shopId, { customerId: "cust-1" }, { productId, quantity: 1 });
-
-    expect(d.cartRepo.insertCartItem).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        unitSizeSnapshot: "2",
-        unitLabel: "kg"
-      })
-    );
-  });
-
-  it("returns promotion and coupon blocks on GET cart", async () => {
-    const d = deps();
-    const service = createStorefrontCart(d);
-    const out = await service.getCartContents({}, shopId, { customerId: "cust-1" }, { couponCode: "SAVE10" });
-
-    expect(out.promotions.coupon.code).toBe("SAVE10");
-    expect(out.promotions.suggested_coupons).toHaveLength(1);
-    expect(out.summary.coupon_discount_minor).toBe(0);
-  });
-
-  it("rejects quantity above max per line", async () => {
-    const d = deps();
-    const service = createStorefrontCart(d);
+  it("retires addItem with 410", async () => {
+    const service = createStorefrontCart(deps());
     await expect(
-      service.addItem({}, shopId, { customerId: "cust-1" }, {
-        productId,
-        quantity: MAX_LINE_QUANTITY + 1
-      })
-    ).rejects.toMatchObject({ code: "LINE_QUANTITY_CAP" });
-  });
-
-  it("rejects merge that would exceed max per line", async () => {
-    const d = deps();
-    const existingQty = MAX_LINE_QUANTITY - 2;
-    d.cartRepo.findMatchingCartItem.mockResolvedValue({
-      id: cartItemId,
-      quantity: String(existingQty)
-    });
-    const service = createStorefrontCart(d);
+      service.addItem({}, shopId, { customerId: "cust-1" }, { productId, quantity: 1 })
+    ).rejects.toBeInstanceOf(AppError);
     await expect(
-      service.addItem({}, shopId, { customerId: "cust-1" }, { productId, quantity: 3 })
-    ).rejects.toMatchObject({ code: "LINE_QUANTITY_CAP" });
+      service.addItem({}, shopId, { customerId: "cust-1" }, { productId, quantity: 1 })
+    ).rejects.toMatchObject({ code: "CART_SERVER_RETIRED" });
   });
 
-  it("PATCH with delta -1 at quantity 1 returns MINIMUM_QUANTITY", async () => {
-    const d = deps();
-    d.cartRepo.findCartItemWithCart.mockResolvedValue({
-      id: cartItemId,
-      cart_id: cartId,
-      product_id: productId,
-      is_custom: false,
-      quantity: "1"
-    });
-    const service = createStorefrontCart(d);
+  it("retires updateItemQuantity and removeItem with 410", async () => {
+    const service = createStorefrontCart(deps());
     await expect(
-      service.updateItemQuantity({}, shopId, { customerId: "cust-1" }, cartItemId, { delta: -1 })
-    ).rejects.toMatchObject({ code: "MINIMUM_QUANTITY" });
+      service.updateItemQuantity({}, shopId, { customerId: "cust-1" }, cartItemId, { delta: 1 })
+    ).rejects.toMatchObject({ code: "CART_SERVER_RETIRED" });
+    await expect(
+      service.removeItem({}, shopId, { customerId: "cust-1" }, cartItemId, {})
+    ).rejects.toMatchObject({ code: "CART_SERVER_RETIRED" });
   });
 
-  it("PATCH with delta returns full cart view", async () => {
+  it("previews client items with coupon and suggested coupons", async () => {
     const d = deps();
     const service = createStorefrontCart(d);
-    const out = await service.updateItemQuantity({}, shopId, { customerId: "cust-1" }, cartItemId, {
-      delta: 1,
+    const out = await service.previewFromClientItems({}, shopId, { customerId: "cust-1" }, {
+      items: [{ productId, quantity: 2 }],
       couponCode: "SAVE10"
     });
 
+    expect(d.cartRepo.validateClientLinesForCheckout).toHaveBeenCalled();
+    expect(d.cartRepo.enrichCartItemsForView).toHaveBeenCalled();
     expect(d.priceStorefrontLines).toHaveBeenCalled();
-    expect(out.items.length).toBeGreaterThan(0);
-    expect(out.promotions).toBeDefined();
+    expect(out.cart_id).toBeNull();
+    expect(out.promotions.coupon.code).toBe("SAVE10");
+    expect(out.promotions.suggested_coupons).toHaveLength(1);
+    expect(out.summary.subtotal_minor).toBe(180);
   });
 
-  it("GET cart removes unavailable product lines and returns empty cart", async () => {
-    const d = deps();
-    d.cartRepo.listProductSnapshotsForCart.mockResolvedValue([]);
-    d.cartRepo.listCartItems
-      .mockResolvedValueOnce([cartLine()])
-      .mockResolvedValue([]);
-    d.priceStorefrontLines.mockResolvedValue(null);
-    const service = createStorefrontCart(d);
-    const out = await service.getCartContents({}, shopId, { customerId: "cust-1" });
-
-    expect(d.cartRepo.deleteCartItem).toHaveBeenCalledWith({}, shopId, cartItemId);
-    expect(out.items).toEqual([]);
-    expect(out.summary.subtotal_minor).toBe(0);
-    expect(out.promotions.coupon.status).toBe("none");
-  });
-
-  it("rejects when product is unavailable", async () => {
-    const d = deps();
-    d.cartRepo.listProductSnapshotsForCart.mockResolvedValue([]);
-    const service = createStorefrontCart(d);
-    await expect(
-      service.updateItemQuantity({}, shopId, { customerId: "cust-1" }, cartItemId, { delta: 1 })
-    ).rejects.toMatchObject({ code: "PRODUCT_UNAVAILABLE" });
-  });
-
-  it("returns coupon not_applicable when pricing rejects coupon", async () => {
+  it("returns coupon not_applicable when pricing rejects coupon on preview", async () => {
     const d = deps();
     d.priceStorefrontLines.mockResolvedValueOnce({
       ...pricedResult(),
       couponRejected: { code: "MIN_SUBTOTAL_NOT_MET", message: "Min subtotal" }
     });
     const service = createStorefrontCart(d);
-    const out = await service.getCartContents({}, shopId, { customerId: "cust-1" }, {
+    const out = await service.previewFromClientItems({}, shopId, { customerId: "cust-1" }, {
+      items: [{ productId, quantity: 2 }],
       couponCode: "SAVE10"
     });
 
@@ -244,25 +157,7 @@ describe("storefront cart", () => {
     expect(out.promotions.coupon.reason_code).toBe("MIN_SUBTOTAL_NOT_MET");
   });
 
-  it("DELETE returns empty cart with coupon none", async () => {
-    const d = deps();
-    d.cartRepo.listCartItems.mockResolvedValueOnce([cartLine()]).mockResolvedValue([]);
-    d.cartRepo.findCartItemWithCart.mockResolvedValue({
-      id: cartItemId,
-      cart_id: cartId,
-      product_id: productId,
-      is_custom: false,
-      quantity: "2"
-    });
-    d.priceStorefrontLines.mockResolvedValue(null);
-    const service = createStorefrontCart(d);
-    const out = await service.removeItem({}, shopId, { customerId: "cust-1" }, cartItemId, {});
-
-    expect(out.items).toEqual([]);
-    expect(out.promotions.coupon.status).toBe("none");
-  });
-
-  it("exposes in-cart quantity and offer_quantity on one line for bundle promos", async () => {
+  it("exposes offer_quantity on preview for bundle promos", async () => {
     const d = deps();
     d.priceStorefrontLines.mockResolvedValue({
       ...pricedResult(),
@@ -275,83 +170,34 @@ describe("storefront cart", () => {
       ]
     });
     const service = createStorefrontCart(d);
-    const out = await service.getCartContents({}, shopId, { customerId: "cust-1" });
+    const out = await service.previewFromClientItems({}, shopId, { customerId: "cust-1" }, {
+      items: [{ productId, quantity: 2 }]
+    });
 
     expect(out.items).toHaveLength(1);
     expect(out.items[0].quantity).toBe(2);
     expect(out.items[0].offer_quantity).toBe(1);
     expect(out.summary.units_display_total).toBe(3);
-    expect(out.items[0].pricing).toHaveProperty("list_minor");
-    expect(out.items[0].promo.types).toContain("bundle");
-  });
-
-  it("batches product snapshots on GET cart with multiple lines", async () => {
-    const line2 = cartLine({
-      id: "44444444-4444-4444-8444-444444444444",
-      product_id: "55555555-5555-4555-8555-555555555555"
-    });
-    const d = deps();
-    d.cartRepo.listCartItems.mockResolvedValue([cartLine(), line2]);
-    d.cartRepo.listProductSnapshotsForCart.mockResolvedValue([
-      productSnapshot(),
-      productSnapshot({
-        id: "55555555-5555-4555-8555-555555555555",
-        name: "Banana"
-      })
-    ]);
-    const service = createStorefrontCart(d);
-    await service.getCartContents({}, shopId, { customerId: "cust-1" });
-
-    expect(d.cartRepo.listProductSnapshotsForCart).toHaveBeenCalledTimes(1);
-    expect(d.cartRepo.getProductSnapshotForCart).not.toHaveBeenCalled();
-  });
-
-  it("does not load suggested coupons when cart is empty", async () => {
-    const d = deps();
-    d.cartRepo.listCartItems.mockResolvedValue([]);
-    d.priceStorefrontLines.mockResolvedValue(null);
-    const service = createStorefrontCart(d);
-    await service.getCartContents({}, shopId, { customerId: "cust-1" });
-
-    expect(d.listApplicableCoupons).not.toHaveBeenCalled();
   });
 
   it("skips suggested coupons when includeSuggestedCoupons is false", async () => {
     const d = deps();
     const service = createStorefrontCart(d);
-    await service.getCartContents({}, shopId, { customerId: "cust-1" }, {
+    await service.previewFromClientItems({}, shopId, { customerId: "cust-1" }, {
+      items: [{ productId, quantity: 2 }],
       includeSuggestedCoupons: false
     });
 
     expect(d.listApplicableCoupons).not.toHaveBeenCalled();
   });
 
-  it("retries findCart when insertCart hits unique violation", async () => {
-    const d = deps();
-    const uniqueErr = Object.assign(new Error("duplicate key"), { code: "23505" });
-    d.cartRepo.findCartByShopAndCustomerId
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: cartId });
-    d.cartRepo.insertCart.mockRejectedValueOnce(uniqueErr);
-    const service = createStorefrontCart(d);
-    const out = await service.getCartContents({}, shopId, { customerId: "cust-1" });
-
-    expect(d.cartRepo.insertCart).toHaveBeenCalledTimes(1);
-    expect(d.cartRepo.findCartByShopAndCustomerId).toHaveBeenCalledTimes(2);
-    expect(out.cart_id).toBe(cartId);
-  });
-
-  it("rejects PATCH on legacy synthetic bundle-reward cart item ids", async () => {
+  it("returns empty view when preview items array is empty", async () => {
     const d = deps();
     const service = createStorefrontCart(d);
-    await expect(
-      service.updateItemQuantity(
-        {},
-        shopId,
-        { customerId: "cust-1" },
-        `${cartItemId}:bundle-reward`,
-        { delta: 1 }
-      )
-    ).rejects.toBeInstanceOf(ValidationError);
+    const out = await service.previewFromClientItems({}, shopId, { customerId: "cust-1" }, {
+      items: []
+    });
+    expect(out.items).toEqual([]);
+    expect(d.cartRepo.validateClientLinesForCheckout).not.toHaveBeenCalled();
   });
 });

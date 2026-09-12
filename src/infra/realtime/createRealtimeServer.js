@@ -51,9 +51,19 @@ async function attachRedisAdapter(io, redis, logger) {
  * - Staff/picker: staff JWT or REALTIME_CONNECT_TOKEN → shop room (order.placed)
  */
 export async function createRealtimeServer(httpServer, { redis, logger }) {
+  const allowedOrigins = Array.isArray(env.CORS_ORIGIN)
+    ? env.CORS_ORIGIN
+    : String(env.CORS_ORIGIN || "")
+        .split(",")
+        .map((o) => o.trim())
+        .filter(Boolean);
+
   const io = new Server(httpServer, {
     path: "/socket.io",
-    cors: { origin: true, credentials: true }
+    cors: {
+      origin: allowedOrigins.length > 0 ? allowedOrigins : false,
+      credentials: true
+    }
   });
 
   if (redis) {

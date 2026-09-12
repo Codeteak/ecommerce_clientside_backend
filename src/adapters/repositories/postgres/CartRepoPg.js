@@ -21,8 +21,6 @@ import {
   loadCartById,
   loadCartByItemId,
   loadCartByShopCustomer,
-  newCartItem,
-  newCartRecord,
   saveCart
 } from "./cartSessionStore.js";
 
@@ -68,6 +66,11 @@ export class CartRepoPg extends CartRepo {
       thumbnail_url: image?.url ?? null,
       thumbnail: image?.url ?? null
     };
+  }
+
+  /** Enrich session/client cart lines with live catalog pricing and images. */
+  async enrichCartItemsForView(client, shopId, items) {
+    return this.#enrichSessionItems(client, shopId, items);
   }
 
   async #enrichSessionItems(client, shopId, items) {
@@ -133,66 +136,43 @@ export class CartRepoPg extends CartRepo {
     return { id: rec.id, shop_id: rec.shop_id, customer_id: rec.customer_id, created_at: rec.created_at };
   }
 
-  async insertCart(_client, shopId, customerIdText) {
-    const existing = await loadCartByShopCustomer(shopId, customerIdText);
-    if (existing) {
-      return { id: existing.id, shop_id: existing.shop_id, customer_id: existing.customer_id, created_at: existing.created_at };
-    }
-    const rec = newCartRecord(shopId, customerIdText);
-    await saveCart(rec);
-    return { id: rec.id, shop_id: rec.shop_id, customer_id: rec.customer_id, created_at: rec.created_at };
+  async insertCart(_client, _shopId, _customerIdText) {
+    throw new AppError(
+      "Server cart is retired. Use client cart lines with POST /storefront/cart/preview or checkout.",
+      { statusCode: 410, code: "CART_SERVER_RETIRED" }
+    );
   }
 
   async listCartItems(client, shopId, cartId) {
+    // Read-only leftover session carts (transition); new carts are not created.
     const rec = await loadCartById(cartId);
     if (!rec || rec.shop_id !== shopId) return [];
     return this.#enrichSessionItems(client, shopId, rec.items || []);
   }
 
-  async insertCartItem(client, row) {
-    const rec = await loadCartById(row.cartId);
-    if (!rec) return null;
-    const item = newCartItem(row);
-    rec.items = [...(rec.items || []), item];
-    await saveCart(rec);
-    const [enriched] = await this.#enrichSessionItems(client, row.shopId, [item]);
-    return enriched ?? item;
+  async insertCartItem() {
+    throw new AppError("Server cart is retired", {
+      statusCode: 410,
+      code: "CART_SERVER_RETIRED"
+    });
   }
 
-  async updateCartItemSnapshot(client, shopId, cartItemId, snapshot) {
-    const rec = await this.#findRecordByItem(shopId, cartItemId);
-    if (!rec) return null;
-    rec.items = (rec.items || []).map((it) =>
-      String(it.id) === String(cartItemId)
-        ? {
-            ...it,
-            quantity: String(snapshot.quantity),
-            unit_price_minor: Number(snapshot.unitPriceMinor),
-            title_snapshot: snapshot.titleSnapshot,
-            unit_label: snapshot.unitLabel,
-            unit_size_snapshot: String(snapshot.unitSizeSnapshot ?? "1")
-          }
-        : it
-    );
-    await saveCart(rec);
-    const item = rec.items.find((it) => String(it.id) === String(cartItemId));
-    const [enriched] = await this.#enrichSessionItems(client, shopId, item ? [item] : []);
-    return enriched ?? null;
+  async updateCartItemSnapshot() {
+    throw new AppError("Server cart is retired", {
+      statusCode: 410,
+      code: "CART_SERVER_RETIRED"
+    });
   }
 
-  async updateCartItemQuantity(client, shopId, cartItemId, quantity) {
-    const rec = await this.#findRecordByItem(shopId, cartItemId);
-    if (!rec) return null;
-    rec.items = (rec.items || []).map((it) =>
-      String(it.id) === String(cartItemId) ? { ...it, quantity: String(quantity) } : it
-    );
-    await saveCart(rec);
-    const item = rec.items.find((it) => String(it.id) === String(cartItemId));
-    const [enriched] = await this.#enrichSessionItems(client, shopId, item ? [item] : []);
-    return enriched ?? null;
+  async updateCartItemQuantity() {
+    throw new AppError("Server cart is retired", {
+      statusCode: 410,
+      code: "CART_SERVER_RETIRED"
+    });
   }
 
   async deleteCartItem(_client, shopId, cartItemId) {
+    // Transition: allow deleting leftover Redis cart lines.
     const rec = await this.#findRecordByItem(shopId, cartItemId);
     if (!rec) return;
     rec.items = (rec.items || []).filter((it) => String(it.id) !== String(cartItemId));
@@ -236,17 +216,11 @@ export class CartRepoPg extends CartRepo {
     return rows[0] ?? null;
   }
   
-  async updateCartCustomerId(_client, shopId, cartId, newCustomerIdText) {
-    const rec = await loadCartById(cartId);
-    if (!rec || rec.shop_id !== shopId) return null;
-    const next = {
-      ...rec,
-      customer_id: String(newCustomerIdText),
-      items: [...(rec.items || [])]
-    };
-    await deleteCartRecord(rec);
-    await saveCart(next);
-    return { id: next.id };
+  async updateCartCustomerId(_client, _shopId, _cartId, _newCustomerIdText) {
+    throw new AppError("Server cart is retired", {
+      statusCode: 410,
+      code: "CART_SERVER_RETIRED"
+    });
   }
 
   async findCartItemWithCart(_client, shopId, itemId) {
@@ -444,7 +418,8 @@ export class CartRepoPg extends CartRepo {
               ${shopProductCategoryIdSql} AS global_category_id
          ${sellableShopProductJoin}
         WHERE sp.shop_id = $1::uuid
-          AND sp.id = ANY($2::uuid[])`,
+          AND sp.id = ANY($2::uuid[])
+          AND ${sellableAtPurchasePredicates}`,
       [shopId, ids]
     );
     return rows;

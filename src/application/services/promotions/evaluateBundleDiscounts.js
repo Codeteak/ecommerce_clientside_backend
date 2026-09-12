@@ -221,10 +221,13 @@ function allocateFreeUnitsAcrossLines(matched, totalFree, rule, promotionId) {
     const unitDiscount = discountForFreeUnits(line.unitFinalMinor, freeQty, rule);
     line.freeQuantity = (line.freeQuantity ?? 0) + freeQty;
     line.bundleDiscountMinor = (line.bundleDiscountMinor ?? 0) + unitDiscount;
+    ruleDiscount += unitDiscount;
+  }
+  // Tag every matched line (paid contributors + free recipients) so picker offers attach to all of them.
+  for (const line of matched) {
     if (!line.appliedPromotionIds.includes(promotionId)) {
       line.appliedPromotionIds.push(promotionId);
     }
-    ruleDiscount += unitDiscount;
   }
   return ruleDiscount;
 }

@@ -51,6 +51,26 @@ export const storefrontCartItemDeleteBodySchema = z.object({
   couponCode: optionalCouponCode
 });
 
+export const storefrontCartPreviewBodySchema = z.object({
+  items: z
+    .array(
+      z.object({
+        productId: z.string().uuid(),
+        quantity: z.coerce.number().positive().max(MAX_LINE_QUANTITY)
+      })
+    )
+    .min(1)
+    .max(100),
+  couponCode: optionalCouponCode,
+  includeSuggestedCoupons: z.preprocess((v) => {
+    if (v === undefined || v === "" || v === null) return true;
+    if (typeof v === "boolean") return v;
+    const s = String(Array.isArray(v) ? v[0] : v).toLowerCase();
+    if (s === "false" || s === "0") return false;
+    return true;
+  }, z.boolean())
+});
+
 export const storefrontProfilePostSchema = z
   .object({
     displayName: z.string().max(120).optional().nullable()
@@ -95,7 +115,6 @@ export const storefrontCheckoutBodySchema = z.object({
     )
     .min(1)
     .max(100)
-    .optional()
 });
 
 export const storefrontOrderIdParamSchema = z.object({

@@ -112,19 +112,11 @@ export function createCheckoutStorefront({
         return replay;
       }
 
-      const clientLines = Array.isArray(input.items) ? input.items : null;
-      let cart = null;
-      let items;
-
-      if (clientLines?.length) {
-        items = await cartRepo.validateClientLinesForCheckout(client, shopId, clientLines);
-      } else {
-        cart = await cartRepo.findCartByShopAndCustomerId(client, shopId, custKey);
-        if (!cart) {
-          throw new AppError("Cart not found", { statusCode: 404, code: "CART_NOT_FOUND" });
-        }
-        items = await cartRepo.validateCartForCheckoutCommit(client, shopId, cart.id);
+      const clientLines = Array.isArray(input.items) ? input.items : [];
+      if (!clientLines.length) {
+        throw new AppError("Cart is empty", { statusCode: 400, code: "CART_EMPTY" });
       }
+      const items = await cartRepo.validateClientLinesForCheckout(client, shopId, clientLines);
 
       const {
         subtotal,
@@ -201,9 +193,8 @@ export function createCheckoutStorefront({
         cartId: null
       });
 
-      // Always clear Redis session cart after success (client-line checkout used to leave it behind).
-      const sessionCart =
-        cart ?? (await cartRepo.findCartByShopAndCustomerId(client, shopId, custKey));
+      // Transition: clear any leftover Redis session cart from pre-localStorage clients.
+      const sessionCart = await cartRepo.findCartByShopAndCustomerId(client, shopId, custKey);
       if (sessionCart?.id) {
         await cartRepo.deleteCartItemsForCart(client, shopId, sessionCart.id);
         await cartRepo.deleteCart(client, shopId, sessionCart.id);
