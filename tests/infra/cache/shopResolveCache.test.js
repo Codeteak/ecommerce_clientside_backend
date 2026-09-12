@@ -100,6 +100,35 @@ describe("shopResolveCache", () => {
     ).toBe(true);
   });
 
+  it("negative-caches unresolved slug for a short TTL only", async () => {
+    const redis = mockRedis();
+    const shopLookupRepo = {
+      findShopIdBySlug: vi.fn().mockResolvedValue(null),
+      findShopIdByCustomDomain: vi.fn(),
+      findShopIdByDomain: vi.fn(),
+      findShopByDomain: vi.fn()
+    };
+    const cache = createShopResolveCache({
+      redis,
+      shopLookupRepo,
+      getShopById: vi.fn(),
+      resolveTtlSec: 300
+    });
+
+    const a = await cache.findShopIdBySlug("unknown-store");
+    const b = await cache.findShopIdBySlug("unknown-store");
+
+    expect(a).toBeNull();
+    expect(b).toBeNull();
+    expect(shopLookupRepo.findShopIdBySlug).toHaveBeenCalledTimes(1);
+    expect(redis.set).toHaveBeenCalledWith(
+      "resolve:slug:unknown-store",
+      expect.any(String),
+      "EX",
+      15
+    );
+  });
+
   it("invalidateDomain clears v5 and legacy domain summary keys", async () => {
     const redis = mockRedis();
     store["resolve:domain-summary:v5:shop.example.com"] = "{}";
