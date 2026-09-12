@@ -666,13 +666,8 @@ ${shopProductLeftJoinGlobal}
           WHERE shop_id = $1::uuid
             AND deleted_at IS NULL
             AND is_enabled = true
-            AND (
-              type <> 'event_shelf'
-              OR (
-                (starts_at IS NULL OR starts_at <= now())
-                AND (ends_at IS NULL OR ends_at >= now())
-              )
-            )
+            AND (starts_at IS NULL OR starts_at <= now())
+            AND (ends_at IS NULL OR ends_at >= now())
           ORDER BY sort_order ASC, created_at ASC`,
         [shopId]
       );

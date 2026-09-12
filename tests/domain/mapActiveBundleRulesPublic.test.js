@@ -35,6 +35,26 @@ describe("mapActiveBundleRuleRow", () => {
     expect(filterBundleRuleRowsForProduct(rows, "s2", null)).toHaveLength(0);
   });
 
+  it("filterBundleRuleRowsForProduct matches cross buy or reward product", () => {
+    const rows = [
+      {
+        promotion_id: "p3",
+        scope: "cross_shop_products",
+        shop_product_id: null,
+        global_category_id: null,
+        buy_shop_product_id: "buy1",
+        reward_shop_product_id: "get1",
+        buy_qty: 1,
+        get_qty: 1,
+        reward_type: "free",
+        ends_at: null
+      }
+    ];
+    expect(filterBundleRuleRowsForProduct(rows, "buy1", null)).toHaveLength(1);
+    expect(filterBundleRuleRowsForProduct(rows, "get1", null)).toHaveLength(1);
+    expect(filterBundleRuleRowsForProduct(rows, "other", null)).toHaveLength(0);
+  });
+
   it("maps same_shop_product row", () => {
     const out = mapActiveBundleRuleRow({
       promotion_id: "p1",

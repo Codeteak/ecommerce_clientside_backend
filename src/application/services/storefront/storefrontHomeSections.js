@@ -1,5 +1,8 @@
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
-import { buildStorefrontListingUnitPriceMap } from "../promotions/resolveStorefrontSkuUnitPrices.js";
+import {
+  buildStorefrontListingUnitPriceMap,
+  computeStorefrontUnitPricing
+} from "../promotions/resolveStorefrontSkuUnitPrices.js";
 import {
   filterBundleRuleRowsForProduct,
   mapActiveBundleRuleRow
@@ -34,14 +37,13 @@ export function mapHomeSectionProduct(row, priceMap = null, bundleRowsRaw = []) 
   const offerMinor = priceMinor(row.offer_price_minor_per_unit);
   const promoEntry = priceMap?.get(id);
   const promoPriceMinor = promoEntry?.promoPriceMinor ?? null;
-  const baseline =
-    offerMinor != null && listMinor != null && offerMinor < listMinor ? offerMinor : listMinor;
-  const finalMinor =
-    promoPriceMinor != null && baseline != null
-      ? Math.min(baseline, promoPriceMinor)
-      : promoPriceMinor != null
-        ? promoPriceMinor
-        : baseline;
+  // Match checkout engine: promo replaces baseline (does not min() with a worse promo).
+  const priced = computeStorefrontUnitPricing(
+    listMinor,
+    offerMinor,
+    promoPriceMinor
+  );
+  const finalMinor = priced.finalMinor;
 
   const categoryId = row.category_id != null ? String(row.category_id) : null;
   const bundleRules = filterBundleRuleRowsForProduct(bundleRowsRaw, id, categoryId).map(
@@ -163,14 +165,16 @@ export async function resolveStorefrontHomeSections(catalogRepo, shopId, opts = 
         getQty: Number.isInteger(getQty) ? getQty : null,
         label: bxgyLabel(buyQty, getQty),
         promotionId: row.promotion_id ?? null,
+        startsAt: isoOrNull(row.starts_at),
+        endsAt: isoOrNull(row.ends_at),
         buyProducts: orderByIds(products, asIdList(row.buy_product_ids)),
         getProducts: orderByIds(products, asIdList(row.get_product_ids))
       };
     }
     return {
       ...base,
-      startsAt: type === "event_shelf" ? isoOrNull(row.starts_at) : null,
-      endsAt: type === "event_shelf" ? isoOrNull(row.ends_at) : null,
+      startsAt: isoOrNull(row.starts_at),
+      endsAt: isoOrNull(row.ends_at),
       categories: orderByIds(categories, asIdList(row.category_ids)),
       products: orderByIds(products, asIdList(row.product_ids))
     };

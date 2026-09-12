@@ -11,6 +11,12 @@ export function filterBundleRuleRowsForProduct(rows, shopProductId, globalCatego
   return rows.filter((r) => {
     if (r.scope === "same_shop_product") return String(r.shop_product_id) === sid;
     if (r.scope === "global_category" && cid != null) return String(r.global_category_id) === cid;
+    if (r.scope === "cross_shop_products") {
+      return (
+        String(r.buy_shop_product_id ?? "") === sid ||
+        String(r.reward_shop_product_id ?? "") === sid
+      );
+    }
     return false;
   });
 }
@@ -36,6 +42,8 @@ export function mapActiveBundleRuleRow(r) {
   };
   if (r.shop_product_id != null) out.shop_product_id = r.shop_product_id;
   if (r.global_category_id != null) out.global_category_id = r.global_category_id;
+  if (r.buy_shop_product_id != null) out.buy_shop_product_id = r.buy_shop_product_id;
+  if (r.reward_shop_product_id != null) out.reward_shop_product_id = r.reward_shop_product_id;
   if (r.reward_percent_bps != null) out.reward_percent_bps = Number(r.reward_percent_bps);
   return out;
 }
