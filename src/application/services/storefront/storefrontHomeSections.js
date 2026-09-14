@@ -76,11 +76,26 @@ export function mapHomeSectionCategory(row) {
   };
 }
 
-export function bxgyLabel(buyQty, getQty) {
+export function bxgyLabel(buyQty, getQty, dealMode = "same_sku") {
   const buy = Number.isInteger(buyQty) ? buyQty : 1;
   const get = Number.isInteger(getQty) ? getQty : 1;
+  if (dealMode === "cross_sku") {
+    if (buy === 1 && get === 1) return "Buy 1 unlock 1 free (different product)";
+    return `Buy ${buy} unlock ${get} free (different product)`;
+  }
   if (buy === 1 && get === 1) return "Buy 1 Get 1 Free";
   return `Buy ${buy} Get ${get}`;
+}
+
+/** same_sku = classic BOGO; cross_sku = buy list unlocks different get products. */
+export function bxgyDealMode(buyProductIds, getProductIds) {
+  const buys = asIdList(buyProductIds);
+  const gets = asIdList(getProductIds);
+  if (gets.length === 0) return "same_sku";
+  if (buys.length === gets.length && buys.every((id) => gets.includes(id))) {
+    return "same_sku";
+  }
+  return "cross_sku";
 }
 
 export function isoOrNull(value) {
@@ -159,16 +174,20 @@ export async function resolveStorefrontHomeSections(catalogRepo, shopId, opts = 
     if (type === "buy_x_get_y") {
       const buyQty = row.buy_qty == null ? null : Number(row.buy_qty);
       const getQty = row.get_qty == null ? null : Number(row.get_qty);
+      const buyIds = asIdList(row.buy_product_ids);
+      const getIds = asIdList(row.get_product_ids);
+      const dealMode = bxgyDealMode(buyIds, getIds);
       return {
         ...base,
         buyQty: Number.isInteger(buyQty) ? buyQty : null,
         getQty: Number.isInteger(getQty) ? getQty : null,
-        label: bxgyLabel(buyQty, getQty),
+        dealMode,
+        label: bxgyLabel(buyQty, getQty, dealMode),
         promotionId: row.promotion_id ?? null,
         startsAt: isoOrNull(row.starts_at),
         endsAt: isoOrNull(row.ends_at),
-        buyProducts: orderByIds(products, asIdList(row.buy_product_ids)),
-        getProducts: orderByIds(products, asIdList(row.get_product_ids))
+        buyProducts: orderByIds(products, buyIds),
+        getProducts: orderByIds(products, getIds)
       };
     }
     return {

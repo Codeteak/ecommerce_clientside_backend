@@ -70,6 +70,7 @@ describe("resolveStorefrontHomeSections", () => {
     });
     expect(sections[0].categories[0].name).toBe("Dairy");
     expect(sections[1].label).toBe("Buy 1 Get 1 Free");
+    expect(sections[1].dealMode).toBe("same_sku");
     expect(sections[1].buyProducts).toHaveLength(1);
   });
 });
