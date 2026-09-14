@@ -149,11 +149,14 @@ export async function buildCheckoutOrderLines({
       const injectProductIds = [...new Set(injected.map((l) => String(l.productId)))];
       /** @type {Map<string, { name: string, unitLabel: string | null }>} */
       const nameById = new Map();
+      // Must use SAVEPOINT: a failed SELECT aborts the whole checkout txn (25P02).
+      // shop_products / global_products use `base_unit`, not `unit_label`.
+      await client.query("SAVEPOINT sp_bxgy_inject_names");
       try {
         const { rows } = await client.query(
           `SELECT sp.id,
                   COALESCE(sp.name, gp.name) AS name,
-                  COALESCE(sp.unit_label, gp.unit_label) AS unit_label
+                  COALESCE(sp.base_unit, gp.base_unit) AS unit_label
              FROM shop_products sp
              LEFT JOIN global_products gp ON gp.id = sp.global_product_id
             WHERE sp.shop_id = $1::uuid
@@ -166,7 +169,10 @@ export async function buildCheckoutOrderLines({
             unitLabel: row.unit_label != null ? String(row.unit_label) : null
           });
         }
+        await client.query("RELEASE SAVEPOINT sp_bxgy_inject_names");
       } catch {
+        await client.query("ROLLBACK TO SAVEPOINT sp_bxgy_inject_names");
+        await client.query("SAVEPOINT sp_bxgy_inject_names_fallback");
         try {
           const { rows } = await client.query(
             `SELECT sp.id, COALESCE(sp.name, gp.name) AS name
@@ -182,8 +188,10 @@ export async function buildCheckoutOrderLines({
               unitLabel: null
             });
           }
+          await client.query("RELEASE SAVEPOINT sp_bxgy_inject_names_fallback");
         } catch {
-          /* best-effort names */
+          await client.query("ROLLBACK TO SAVEPOINT sp_bxgy_inject_names_fallback");
+          /* best-effort names — checkout can still proceed without labels */
         }
       }
       for (const p of injected) {
