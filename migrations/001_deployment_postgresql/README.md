@@ -10,3 +10,4 @@
 - `040_unit_size_columns.sql`: `global_products.unit_size` and cart/order line snapshots (`unit_size_snapshot`), default `1`, must be `> 0`.
 - `041_shop_banner_columns.sql`: `shops.banner_enabled` (default `true`) and `shops.banner_media_asset_ids` (UUID array, max 6).
 - `042_shop_and_product_seo_columns.sql`: shop SEO columns on `shops` (`seo_title`, `seo_description`, `seo_keywords`, `tagline`, `locale`, `theme_color`, `og_image_storage_key`, `og_image_alt`, `twitter_card`) and product SEO columns on `global_products` (`seo_title`, `seo_description`).
+- `046`/`047`/`048` home sections: staff shelves + `system_key`; `048` adds `app.ensure_system_home_sections(shop_id)`, AFTER INSERT seed on `shops`, backfill, one-Damaka BXGY unique index, and guards against deleting/system-key drift / non-Damaka `buy_x_get_y`.
