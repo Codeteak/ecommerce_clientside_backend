@@ -410,11 +410,23 @@ export class PromotionRepoPg extends PromotionRepo {
               br.reward_percent_bps,
               p.priority,
               p.created_at,
-              p.ends_at
+              p.ends_at,
+              COALESCE(buy_sp.name, buy_gp.name) AS buy_product_name,
+              COALESCE(reward_sp.name, reward_gp.name) AS reward_product_name,
+              COALESCE(same_sp.name, same_gp.name) AS same_product_name
          FROM promotion_bundle_rules br
          JOIN promotions p
            ON p.id = br.promotion_id
           AND p.shop_id = br.shop_id
+         LEFT JOIN shop_products buy_sp
+           ON buy_sp.id = br.buy_shop_product_id AND buy_sp.shop_id = br.shop_id
+         LEFT JOIN global_products buy_gp ON buy_gp.id = buy_sp.global_product_id
+         LEFT JOIN shop_products reward_sp
+           ON reward_sp.id = br.reward_shop_product_id AND reward_sp.shop_id = br.shop_id
+         LEFT JOIN global_products reward_gp ON reward_gp.id = reward_sp.global_product_id
+         LEFT JOIN shop_products same_sp
+           ON same_sp.id = br.shop_product_id AND same_sp.shop_id = br.shop_id
+         LEFT JOIN global_products same_gp ON same_gp.id = same_sp.global_product_id
         WHERE br.shop_id = $1::uuid
           AND br.is_deleted = false
           AND p.is_deleted = false

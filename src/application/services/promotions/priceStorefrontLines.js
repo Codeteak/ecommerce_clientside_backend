@@ -1,7 +1,7 @@
 import { AppError } from "../../../domain/errors/AppError.js";
 import { buildCouponEligibility } from "./couponEligibility.js";
 import { evaluateAutoCartRules } from "./evaluateAutoCartRules.js";
-import { evaluateBundleDiscounts } from "./evaluateBundleDiscounts.js";
+import { evaluateBundleDiscounts, planCrossRewardInjections } from "./evaluateBundleDiscounts.js";
 import { evaluateCartPromotionRules } from "./evaluatePromotionRules.js";
 import {
   buildStorefrontListingUnitPriceMap,
@@ -193,6 +193,62 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
       });
     }
 
+    // Auto-add missing free reward SKUs for cross BXGY (buy qualifies, get not in cart).
+    const injections = planCrossRewardInjections(pricedLines, bundleRulesRaw);
+    if (injections.length > 0) {
+      const injectIds = [...new Set(injections.map((i) => i.productId))];
+      /** @type {Map<string, { listMinor: number, offerMinor: number | null, categoryId: string | null }>} */
+      const injectPricing = new Map();
+      try {
+        const { rows } = await client.query(
+          `SELECT sp.id,
+                  sp.price_minor_per_unit,
+                  sp.offer_price_minor_per_unit,
+                  sp.global_category_id
+             FROM shop_products sp
+            WHERE sp.shop_id = $1::uuid
+              AND sp.id = ANY($2::uuid[])
+              AND sp.status = 'active'`,
+          [shopId, injectIds]
+        );
+        for (const row of rows) {
+          injectPricing.set(String(row.id), {
+            listMinor: parseMinor(row.price_minor_per_unit),
+            offerMinor:
+              row.offer_price_minor_per_unit != null
+                ? parseMinor(row.offer_price_minor_per_unit)
+                : null,
+            categoryId: row.global_category_id != null ? String(row.global_category_id) : null
+          });
+        }
+      } catch {
+        /* products table shape may differ; skip injection */
+      }
+
+      for (const inj of injections) {
+        const live = injectPricing.get(inj.productId);
+        if (!live || live.listMinor <= 0) continue;
+        const promoPriceMinor = priceMap.get(inj.productId)?.promoPriceMinor ?? null;
+        const unit = computeStorefrontUnitPricing(live.listMinor, live.offerMinor, promoPriceMinor);
+        const qty = Math.max(1, Math.trunc(inj.quantity));
+        pricedLines.push({
+          cartItemId: `inject:${inj.productId}`,
+          productId: inj.productId,
+          categoryId: live.categoryId,
+          quantity: qty,
+          unitFinalMinor: unit.finalMinor,
+          lineTotalMinor: Math.round(qty * unit.finalMinor),
+          listMinor: unit.listMinor,
+          compareAtMinor: unit.compareAtMinor,
+          offerDiscountMinor: unit.offerDiscountMinor,
+          promoDiscountMinor: unit.promoDiscountMinor,
+          totalDiscountMinor: unit.totalDiscountMinor,
+          appliedPromotionIds: [],
+          injectedBundleReward: true
+        });
+      }
+    }
+
     const { bundleDiscountMinor, appliedByPromotion } = evaluateBundleDiscounts(pricedLines, bundleRulesRaw, {
       allowCombineAutoCampaigns
     });
@@ -242,6 +298,10 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
 
     const subtotalAfterAuto = Math.max(0, subtotalAfterBundles - autoCartDiscountMinor);
 
+    const hasActiveBxgy =
+      bundleDiscountMinor > 0 ||
+      pricedLines.some((l) => Math.max(0, Number(l.freeQuantity) || 0) > 0);
+
     let couponDiscountMinor = 0;
     /** @type {string | null} */
     let couponCodeNormalized = null;
@@ -262,9 +322,31 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
     let remainingSubtotal = subtotalAfterAuto;
     const customerId = input.customerId != null ? String(input.customerId) : null;
 
+    // Buy X Get Y does not stack with coupons (matches storefront policy).
+    if (hasActiveBxgy && codesToTry.length > 0) {
+      if (couponErrorMode === "omit") {
+        couponRejected = {
+          code: "COUPON_NOT_WITH_BUNDLE",
+          message: "Coupons cannot be used with Buy X Get Y offers."
+        };
+      } else {
+        throw pricingError(
+          "COUPON_NOT_WITH_BUNDLE",
+          "Coupons cannot be used with Buy X Get Y offers."
+        );
+      }
+    }
+
     /** @type {{ deliveredCount: number, customerCreatedAt: Date, newCustomerCutoff: Date } | null} */
     let eligibilityBase = null;
-    if (customerId && authRepo && orderRepo && codesToTry.length > 0 && !promotionsPaused) {
+    if (
+      customerId &&
+      authRepo &&
+      orderRepo &&
+      codesToTry.length > 0 &&
+      !promotionsPaused &&
+      !hasActiveBxgy
+    ) {
       const [customerRow, deliveredCount] = await Promise.all([
         authRepo.getCustomerCreatedAtById(client, customerId),
         orderRepo.countDeliveredOrdersForCustomer(client, shopId, customerId)
@@ -394,7 +476,7 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
       };
     }
 
-    if (codesToTry.length > 0 && !promotionsPaused) {
+    if (codesToTry.length > 0 && !promotionsPaused && !hasActiveBxgy) {
       for (const code of codesToTry) {
         try {
           const applied = await applyOneCoupon(code, remainingSubtotal);

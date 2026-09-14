@@ -79,6 +79,7 @@ export function formatStorefrontCartItem(row, pricedLine) {
     image_url: pickImageUrl(row),
     quantity: inCartQty,
     offer_quantity: offerQty,
+    is_bundle_reward: row.is_bundle_reward === true || String(row.id || "").includes(":bundle-reward") || String(row.id || "").startsWith("inject:"),
     pricing: {
       list_minor: listMinor != null ? String(listMinor) : null,
       offer_minor: offerMinor != null ? String(offerMinor) : null,

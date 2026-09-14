@@ -1,4 +1,43 @@
 /**
+ * Plan missing free reward product lines for cross BXGY when buy qualifies.
+ * @param {Array<{ productId: string, quantity: number, paidQuantity?: number }>} lines
+ * @param {BundleRuleRow[]} bundleRules
+ * @returns {Array<{ productId: string, quantity: number, promotionId: string }>}
+ */
+export function planCrossRewardInjections(lines, bundleRules) {
+  const list = Array.isArray(lines) ? lines : [];
+  const rules = Array.isArray(bundleRules) ? bundleRules : [];
+  /** @type {Array<{ productId: string, quantity: number, promotionId: string }>} */
+  const out = [];
+  for (const rule of rules) {
+    if (rule.scope !== "cross_shop_products") continue;
+    const buyId = rule.buy_shop_product_id != null ? String(rule.buy_shop_product_id) : "";
+    const rewardId =
+      rule.reward_shop_product_id != null ? String(rule.reward_shop_product_id) : "";
+    if (!buyId || !rewardId || buyId === rewardId) continue;
+    const buyQty = Math.max(1, Math.trunc(Number(rule.buy_qty)));
+    const getQty = Math.max(1, Math.trunc(Number(rule.get_qty)));
+    const buyInCart = list
+      .filter((l) => String(l.productId) === buyId)
+      .reduce((s, l) => s + Math.max(0, Math.trunc(Number(l.paidQuantity ?? l.quantity) || 0)), 0);
+    if (buyInCart < buyQty) continue;
+    const needed = Math.floor(buyInCart / buyQty) * getQty;
+    const rewardInCart = list
+      .filter((l) => String(l.productId) === rewardId)
+      .reduce((s, l) => s + Math.max(0, Math.trunc(Number(l.quantity) || 0)), 0);
+    const missing = needed - rewardInCart;
+    if (missing > 0) {
+      out.push({
+        productId: rewardId,
+        quantity: missing,
+        promotionId: String(rule.promotion_id)
+      });
+    }
+  }
+  return out;
+}
+
+/**
  * Purpose: Apply BXGY bundle rules to priced cart lines (after SKU promos).
  * Buy N get M: for each N units the customer pays for, M extra units are included free
  * (display quantity = paid + free; charge = paid units only).

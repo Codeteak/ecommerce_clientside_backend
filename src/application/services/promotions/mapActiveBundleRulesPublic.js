@@ -45,5 +45,9 @@ export function mapActiveBundleRuleRow(r) {
   if (r.buy_shop_product_id != null) out.buy_shop_product_id = r.buy_shop_product_id;
   if (r.reward_shop_product_id != null) out.reward_shop_product_id = r.reward_shop_product_id;
   if (r.reward_percent_bps != null) out.reward_percent_bps = Number(r.reward_percent_bps);
+  const buyName = r.buy_product_name || r.same_product_name;
+  const rewardName = r.reward_product_name;
+  if (buyName) out.buy_product_name = String(buyName);
+  if (rewardName) out.reward_product_name = String(rewardName);
   return out;
 }

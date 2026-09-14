@@ -137,6 +137,40 @@ describe("createPriceStorefrontLines", () => {
     ]);
   });
 
+  it("rejects coupons when Buy X Get Y free units apply", async () => {
+    const price = createPriceStorefrontLines({
+      promotionRepo: basePromotionRepo({
+        listActiveBundleRulesForShop: vi.fn().mockResolvedValue([
+          {
+            promotion_id: "promo-bogo",
+            scope: "same_shop_product",
+            shop_product_id: productId,
+            buy_qty: 1,
+            get_qty: 1,
+            reward_type: "free"
+          }
+        ]),
+        findCouponByCodeForShop: vi.fn().mockResolvedValue({
+          id: "c1",
+          code_normalized: "SAVE10",
+          promotion_id: "promo-coupon",
+          has_coupon_rules: true,
+          has_sku_products: false,
+          min_subtotal_minor: 0
+        })
+      })
+    });
+    const out = await price(fakeClient, {
+      shopId,
+      couponCode: "SAVE10",
+      invalidCouponBehavior: "omit",
+      lines: [{ productId, quantity: 1, listMinor: 1000, offerMinor: null }]
+    });
+    expect(out.couponRejected?.code).toBe("COUPON_NOT_WITH_BUNDLE");
+    expect(out.couponDiscountMinor).toBe(0);
+    expect(out.lines[0].free_quantity).toBe(1);
+  });
+
   it("invalidCouponBehavior omit returns base pricing and couponRejected without second pricing pass", async () => {
     const price = createPriceStorefrontLines({ promotionRepo: basePromotionRepo() });
     const out = await price(fakeClient, {

@@ -301,6 +301,9 @@ export function createStorefrontCatalog({
             ).toString("base64url")
           : null;
       const { promotionsPaused, priceMap, bundleRowsRaw } = await loadListingPromotionsContext(shopId, page);
+      const nameById = new Map(
+        page.map((row) => [String(row.id), String(row.name || "")]).filter(([, n]) => n)
+      );
       const mapped = page.map((row) => {
         const base = mapProductRow(row, { listView: true });
         const entry = priceMap.get(String(row.id));
@@ -313,7 +316,20 @@ export function createStorefrontCatalog({
         );
         return {
           ...priced,
-          bundle_rules: subset.map(listingPromotions.mapActiveBundleRuleRow)
+          bundle_rules: subset.map((r) => {
+            const mappedRule = listingPromotions.mapActiveBundleRuleRow(r);
+            const buyId = mappedRule.buy_shop_product_id
+              ? String(mappedRule.buy_shop_product_id)
+              : mappedRule.shop_product_id
+                ? String(mappedRule.shop_product_id)
+                : "";
+            const getId = mappedRule.reward_shop_product_id
+              ? String(mappedRule.reward_shop_product_id)
+              : "";
+            if (buyId && nameById.get(buyId)) mappedRule.buy_product_name = nameById.get(buyId);
+            if (getId && nameById.get(getId)) mappedRule.reward_product_name = nameById.get(getId);
+            return mappedRule;
+          })
         };
       });
       const grouped = new Map();

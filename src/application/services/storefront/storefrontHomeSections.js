@@ -28,7 +28,7 @@ function priceMinor(value) {
  * @param {Map<string, { promoPriceMinor: number | null }>} priceMap
  * @param {unknown[]} bundleRowsRaw
  */
-export function mapHomeSectionProduct(row, priceMap = null, bundleRowsRaw = []) {
+export function mapHomeSectionProduct(row, priceMap = null, bundleRowsRaw = [], productNameById = null) {
   const globalImageUrl =
     typeof row.global_image_url === "string" && row.global_image_url !== "" ? row.global_image_url : null;
   const imageUrl = globalImageUrl ?? toPublicMediaUrl(row.thumb_storage_key);
@@ -46,9 +46,20 @@ export function mapHomeSectionProduct(row, priceMap = null, bundleRowsRaw = []) 
   const finalMinor = priced.finalMinor;
 
   const categoryId = row.category_id != null ? String(row.category_id) : null;
-  const bundleRules = filterBundleRuleRowsForProduct(bundleRowsRaw, id, categoryId).map(
-    mapActiveBundleRuleRow
-  );
+  const bundleRules = filterBundleRuleRowsForProduct(bundleRowsRaw, id, categoryId).map((r) => {
+    const mapped = mapActiveBundleRuleRow(r);
+    if (productNameById && typeof productNameById.get === "function") {
+      const buyId = mapped.buy_shop_product_id
+        ? String(mapped.buy_shop_product_id)
+        : mapped.shop_product_id
+          ? String(mapped.shop_product_id)
+          : "";
+      const getId = mapped.reward_shop_product_id ? String(mapped.reward_shop_product_id) : "";
+      if (buyId && productNameById.get(buyId)) mapped.buy_product_name = productNameById.get(buyId);
+      if (getId && productNameById.get(getId)) mapped.reward_product_name = productNameById.get(getId);
+    }
+    return mapped;
+  });
 
   return {
     id: row.id,
@@ -80,11 +91,11 @@ export function bxgyLabel(buyQty, getQty, dealMode = "same_sku") {
   const buy = Number.isInteger(buyQty) ? buyQty : 1;
   const get = Number.isInteger(getQty) ? getQty : 1;
   if (dealMode === "cross_sku") {
-    if (buy === 1 && get === 1) return "Buy 1 unlock 1 free (different product)";
-    return `Buy ${buy} unlock ${get} free (different product)`;
+    if (buy === 1 && get === 1) return "Buy this → get that free";
+    return `Buy ${buy} → get ${get} free`;
   }
   if (buy === 1 && get === 1) return "Buy 1 Get 1 Free";
-  return `Buy ${buy} Get ${get}`;
+  return `Buy ${buy} Get ${get} Free`;
 }
 
 /** same_sku = classic BOGO; cross_sku = buy list unlocks different get products. */
@@ -160,7 +171,12 @@ export async function resolveStorefrontHomeSections(catalogRepo, shopId, opts = 
     });
   }
 
-  const products = productRows.map((row) => mapHomeSectionProduct(row, priceMap, bundleRowsRaw));
+  const productNameById = new Map(
+    productRows.map((row) => [String(row.id), String(row.name || "")]).filter(([, n]) => n)
+  );
+  const products = productRows.map((row) =>
+    mapHomeSectionProduct(row, priceMap, bundleRowsRaw, productNameById)
+  );
   const categories = categoryRows.map(mapHomeSectionCategory);
 
   return rows.map((row) => {
