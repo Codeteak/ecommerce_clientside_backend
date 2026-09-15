@@ -69,7 +69,8 @@ export async function buildCheckoutOrderLines({
             quantity: Number(it.quantity),
             listMinor: live?.price_minor_per_unit ?? it.unit_price_minor,
             offerMinor: live?.offer_price_minor_per_unit ?? null,
-            categoryId: live?.global_category_id ?? null
+            categoryId: live?.global_category_id ?? null,
+            soldByWeight: live?.sold_by_weight === true
           };
         })
     });

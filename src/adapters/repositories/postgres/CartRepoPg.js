@@ -14,6 +14,7 @@ import {
   shopProductImageUrlSql,
   shopProductNameSql,
   shopProductSlugSql,
+  shopProductSoldByWeightSql,
   shopProductUnitSizeSql
 } from "./queries/shopProductCatalogSql.js";
 import {
@@ -82,6 +83,7 @@ export class CartRepoPg extends CartRepo {
               ci.unit_label, ci.unit_price_minor, ci.is_custom, ci.custom_note,
               sp.price_minor_per_unit::text AS list_price_minor_per_unit,
               sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
+              ${shopProductSoldByWeightSql} AS sold_by_weight,
               ${shopProductCategoryIdSql} AS global_category_id,
               ${shopProductSlugSql} AS product_slug,
               ${shopProductImageUrlSql} AS global_image_url,
@@ -206,6 +208,7 @@ export class CartRepoPg extends CartRepo {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
       `SELECT sp.id, ${shopProductNameSql} AS name, ${shopProductBaseUnitSql} AS base_unit, ${shopProductUnitSizeSql}::text AS unit_size,
+              ${shopProductSoldByWeightSql} AS sold_by_weight,
               sp.price_minor_per_unit, sp.status, sp.availability
          ${sellableShopProductJoin}
         WHERE sp.shop_id = $1::uuid
@@ -295,6 +298,7 @@ export class CartRepoPg extends CartRepo {
               ${shopProductNameSql} AS name,
               ${shopProductBaseUnitSql} AS base_unit,
               ${shopProductUnitSizeSql}::text AS unit_size,
+              ${shopProductSoldByWeightSql} AS sold_by_weight,
               sp.price_minor_per_unit::text AS price_minor_per_unit,
               sp.status,
               sp.availability
@@ -420,6 +424,7 @@ export class CartRepoPg extends CartRepo {
       `SELECT sp.id,
               sp.price_minor_per_unit::text AS price_minor_per_unit,
               sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
+              ${shopProductSoldByWeightSql} AS sold_by_weight,
               ${shopProductCategoryIdSql} AS global_category_id
          ${sellableShopProductJoin}
         WHERE sp.shop_id = $1::uuid

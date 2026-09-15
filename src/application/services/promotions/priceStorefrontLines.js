@@ -145,7 +145,11 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
 
     for (const line of linesIn) {
       const productId = String(line.productId);
-      const qty = Math.max(0, Math.trunc(Number(line.quantity)));
+      const soldByWeight = line.soldByWeight === true;
+      const rawQty = Number(line.quantity);
+      const qty = soldByWeight
+        ? Math.max(0, Math.round((Number.isFinite(rawQty) ? rawQty : 0) * 10_000) / 10_000)
+        : Math.max(0, Math.trunc(Number.isFinite(rawQty) ? rawQty : 0));
       const promoPriceMinor = priceMap.get(productId)?.promoPriceMinor ?? null;
       const unit = computeStorefrontUnitPricing(line.listMinor, line.offerMinor ?? null, promoPriceMinor);
       const lineTotalMinor = Math.round(qty * unit.finalMinor);

@@ -29,7 +29,7 @@ Implementation: `effectiveReadCacheTtlSec()` in `src/config/env/readCacheTtl.js`
 | `ACCESS_JTI_DB_FALLBACK_ENABLED` | `true` | Protected APIs use DB session validation if access `jti` is missing/unavailable in Redis |
 | `STOREFRONT_CATALOG_CACHE_TTL_SEC` | `60` | Catalog SWR + promotion query cache TTL |
 | `STOREFRONT_PROMO_CACHE_TTL_SEC` | `60` | Alias; falls back to catalog TTL |
-| `SHOP_RESOLVE_CACHE_TTL_SEC` | `300` | Domain/slug → shopId, shop meta |
+| `SHOP_RESOLVE_CACHE_TTL_SEC` | `300` | Domain/slug → shopId, shop meta. Unresolved (null) hits are capped at **15s** so transient misses do not blank the storefront for the full TTL. |
 | `SHOP_SERVICE_AREA_CACHE_TTL_SEC` | `180` | Shop delivery hub row |
 | `STOREFRONT_CATALOG_HTTP_CACHE_SEC` | `0` | `Cache-Control` on catalog GETs |
 | `CATALOG_CACHE_INVALIDATE_TOKEN` | — | Header `X-Catalog-Cache-Invalidate` |

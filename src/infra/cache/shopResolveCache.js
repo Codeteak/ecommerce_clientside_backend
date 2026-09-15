@@ -35,7 +35,15 @@ export function createShopResolveCache({
     if (hit === NULL_MARKER) return null;
     if (hit != null) return hit;
     const value = await fn();
-    await resolveCache.set(key, value ?? NULL_MARKER, ttl);
+    if (value == null) {
+      // Cap negative TTL so transient misses do not blank the storefront for minutes.
+      const negativeTtl = Math.min(ttl, 15);
+      if (negativeTtl > 0) {
+        await resolveCache.set(key, NULL_MARKER, negativeTtl);
+      }
+      return null;
+    }
+    await resolveCache.set(key, value, ttl);
     return value;
   }
 

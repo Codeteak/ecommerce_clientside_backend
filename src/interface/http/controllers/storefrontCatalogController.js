@@ -25,10 +25,6 @@ function setCatalogHttpCache(ctx, res) {
 
 function listCategoriesHandler(ctx) {
   return asyncHandler(async (req, res) => {
-    if (!req.shopId) {
-      res.json({});
-      return;
-    }
     const shopId = shopIdForStorefront(req);
     const parentId = req.query.parent_id ?? undefined;
     const result = await ctx.storefrontCatalog.listCategories(shopId, {
@@ -51,10 +47,6 @@ function listCategoriesHandler(ctx) {
 
 function listProductsHandler(ctx) {
   return asyncHandler(async (req, res) => {
-    if (!req.shopId) {
-      res.json({});
-      return;
-    }
     const shopId = shopIdForStorefront(req);
     const result = await ctx.storefrontCatalog.listProducts(shopId, {
       categoryId: req.query.category_id,
@@ -124,10 +116,6 @@ function getCategoryBySlugHandler(ctx) {
 
 function listHomeSectionsHandler(ctx) {
   return asyncHandler(async (req, res) => {
-    if (!req.shopId) {
-      res.json({ data: { sections: [] } });
-      return;
-    }
     const shopId = shopIdForStorefront(req);
     const result = await ctx.storefrontCatalog.listHomeSections(shopId);
     setCatalogHttpCache(ctx, res);
