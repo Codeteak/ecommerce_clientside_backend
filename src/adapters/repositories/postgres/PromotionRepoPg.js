@@ -1,5 +1,6 @@
 import { PromotionRepo } from "../../../application/ports/repositories/PromotionRepo.js";
 import { setTenantContext } from "../../../infra/db/tenantContext.js";
+import { shopProductThumbJoinSql } from "./queries/shopProductCatalogSql.js";
 
 /** Weekly recurrence (IST DOW); null recurrence_rule keeps starts_at/ends_at-only behavior. */
 const ACTIVE_PROMOTION_RECURRENCE_SQL = `
@@ -413,7 +414,11 @@ export class PromotionRepoPg extends PromotionRepo {
               p.ends_at,
               COALESCE(buy_sp.name, buy_gp.name) AS buy_product_name,
               COALESCE(reward_sp.name, reward_gp.name) AS reward_product_name,
-              COALESCE(same_sp.name, same_gp.name) AS same_product_name
+              COALESCE(same_sp.name, same_gp.name) AS same_product_name,
+              COALESCE(NULLIF(BTRIM(reward_sp.image_url), ''), reward_gp.image_url) AS reward_product_image,
+              reward_pm.storage_key AS reward_thumb_storage_key,
+              COALESCE(NULLIF(BTRIM(buy_sp.image_url), ''), buy_gp.image_url) AS buy_product_image,
+              COALESCE(NULLIF(BTRIM(same_sp.image_url), ''), same_gp.image_url) AS same_product_image
          FROM promotion_bundle_rules br
          JOIN promotions p
            ON p.id = br.promotion_id
@@ -424,6 +429,7 @@ export class PromotionRepoPg extends PromotionRepo {
          LEFT JOIN shop_products reward_sp
            ON reward_sp.id = br.reward_shop_product_id AND reward_sp.shop_id = br.shop_id
          LEFT JOIN global_products reward_gp ON reward_gp.id = reward_sp.global_product_id
+         ${shopProductThumbJoinSql("reward_sp", "reward_pm")}
          LEFT JOIN shop_products same_sp
            ON same_sp.id = br.shop_product_id AND same_sp.shop_id = br.shop_id
          LEFT JOIN global_products same_gp ON same_gp.id = same_sp.global_product_id
@@ -532,7 +538,11 @@ export class PromotionRepoPg extends PromotionRepo {
               p.ends_at,
               COALESCE(buy_sp.name, buy_gp.name) AS buy_product_name,
               COALESCE(reward_sp.name, reward_gp.name) AS reward_product_name,
-              COALESCE(same_sp.name, same_gp.name) AS same_product_name
+              COALESCE(same_sp.name, same_gp.name) AS same_product_name,
+              COALESCE(NULLIF(BTRIM(reward_sp.image_url), ''), reward_gp.image_url) AS reward_product_image,
+              reward_pm.storage_key AS reward_thumb_storage_key,
+              COALESCE(NULLIF(BTRIM(buy_sp.image_url), ''), buy_gp.image_url) AS buy_product_image,
+              COALESCE(NULLIF(BTRIM(same_sp.image_url), ''), same_gp.image_url) AS same_product_image
          FROM promotion_bundle_rules br
          JOIN promotions p
            ON p.id = br.promotion_id
@@ -543,6 +553,7 @@ export class PromotionRepoPg extends PromotionRepo {
          LEFT JOIN shop_products reward_sp
            ON reward_sp.id = br.reward_shop_product_id AND reward_sp.shop_id = br.shop_id
          LEFT JOIN global_products reward_gp ON reward_gp.id = reward_sp.global_product_id
+         ${shopProductThumbJoinSql("reward_sp", "reward_pm")}
          LEFT JOIN shop_products same_sp
            ON same_sp.id = br.shop_product_id AND same_sp.shop_id = br.shop_id
          LEFT JOIN global_products same_gp ON same_gp.id = same_sp.global_product_id

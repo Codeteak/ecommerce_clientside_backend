@@ -5,12 +5,12 @@ export function mountAuthRoutes(r, deps) {
     authLimiter,
     otpRequestLimiter,
     otpVerifyLimiter,
-    requireCustomerJwt,
     validate,
     handlers,
     otpRequestBodySchema,
     otpVerifyBodySchema,
     refreshTokenBodySchema,
+    logoutBodySchema,
     emailOtpRequestBodySchema,
     emailOtpVerifyBodySchema
   } = deps;
@@ -45,5 +45,10 @@ export function mountAuthRoutes(r, deps) {
     validate({ body: emailOtpVerifyBodySchema }),
     handlers.emailOtpVerify
   );
-  r.post("/api/auth/logout", requireCustomerJwt, handlers.logout);
+  r.post(
+    "/api/auth/logout",
+    authLimiter,
+    validate({ body: logoutBodySchema }),
+    handlers.logout
+  );
 }

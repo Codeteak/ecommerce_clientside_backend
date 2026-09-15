@@ -116,6 +116,138 @@ export function isoOrNull(value) {
 }
 
 /**
+ * Pair BXGY rules into customer-facing deals with correct buy/get qty from the engine.
+ */
+export function buildBxgyDealsForSection({
+  buyIds,
+  getIds,
+  sectionBuyQty,
+  sectionGetQty,
+  products,
+  bundleRowsRaw
+}) {
+  const buySet = new Set(asIdList(buyIds).map(String));
+  const getSet = new Set(asIdList(getIds).map(String));
+  const defaultBuyQty =
+    Number.isInteger(sectionBuyQty) && sectionBuyQty > 0 ? sectionBuyQty : 1;
+  const defaultGetQty =
+    Number.isInteger(sectionGetQty) && sectionGetQty > 0 ? sectionGetQty : 1;
+  const productById = new Map(
+    (Array.isArray(products) ? products : []).map((p) => [String(p.id), p])
+  );
+  const deals = [];
+  const seen = new Set();
+
+  const pushDeal = (deal) => {
+    const buyP = deal.buyProducts?.[0];
+    const getP = deal.getProducts?.[0];
+    if (!buyP || !getP) return;
+    const key = `${deal.dealMode}:${buyP.id}:${getP.id}:${deal.buyQty}:${deal.getQty}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    deals.push(deal);
+  };
+
+  for (const r of Array.isArray(bundleRowsRaw) ? bundleRowsRaw : []) {
+    const bq =
+      Number.isInteger(Number(r.buy_qty)) && Number(r.buy_qty) > 0
+        ? Number(r.buy_qty)
+        : defaultBuyQty;
+    const gq =
+      Number.isInteger(Number(r.get_qty)) && Number(r.get_qty) > 0
+        ? Number(r.get_qty)
+        : defaultGetQty;
+
+    if (r.scope === "same_shop_product" && r.shop_product_id) {
+      const id = String(r.shop_product_id);
+      if ((buySet.size > 0 || getSet.size > 0) && !buySet.has(id) && !getSet.has(id)) {
+        continue;
+      }
+      const p = productById.get(id);
+      if (!p) continue;
+      pushDeal({
+        id: `same-${id}-${bq}-${gq}`,
+        dealMode: "same_sku",
+        buyQty: bq,
+        getQty: gq,
+        buyProducts: [p],
+        getProducts: [p],
+        headline: bxgyLabel(bq, gq, "same_sku")
+      });
+      continue;
+    }
+
+    if (r.scope === "cross_shop_products") {
+      const buyId = r.buy_shop_product_id ? String(r.buy_shop_product_id) : "";
+      const getId = r.reward_shop_product_id ? String(r.reward_shop_product_id) : "";
+      if (!buyId || !getId || buyId === getId) continue;
+      if (buySet.size && !buySet.has(buyId)) continue;
+      if (getSet.size && !getSet.has(getId)) continue;
+      const buyP = productById.get(buyId);
+      const getP = productById.get(getId);
+      if (!buyP || !getP) continue;
+      const buyName = buyP.name || "";
+      const getName = getP.name || "";
+      pushDeal({
+        id: `cross-${buyId}-${getId}-${bq}-${gq}`,
+        dealMode: "cross_sku",
+        buyQty: bq,
+        getQty: gq,
+        buyProducts: [buyP],
+        getProducts: [getP],
+        headline:
+          buyName && getName
+            ? bq === 1 && gq === 1
+              ? `Buy ${buyName} → ${getName} free`
+              : `Buy ${bq} ${buyName} → ${gq} ${getName} free`
+            : bxgyLabel(bq, gq, "cross_sku")
+      });
+    }
+  }
+
+  if (deals.length === 0) {
+    const buys = orderByIds(products, buyIds);
+    const gets = orderByIds(products, getIds);
+    const mode = bxgyDealMode(buyIds, getIds);
+    if (mode === "same_sku") {
+      for (const p of buys.length ? buys : gets) {
+        pushDeal({
+          id: `same-fb-${p.id}`,
+          dealMode: "same_sku",
+          buyQty: defaultBuyQty,
+          getQty: defaultGetQty,
+          buyProducts: [p],
+          getProducts: [p],
+          headline: bxgyLabel(defaultBuyQty, defaultGetQty, "same_sku")
+        });
+      }
+    } else if (buys.length && gets.length) {
+      const n = Math.min(buys.length, gets.length);
+      for (let i = 0; i < n; i++) {
+        const b = buys[i];
+        const g = gets[i];
+        pushDeal({
+          id: `cross-fb-${b.id}-${g.id}`,
+          dealMode: "cross_sku",
+          buyQty: defaultBuyQty,
+          getQty: defaultGetQty,
+          buyProducts: [b],
+          getProducts: [g],
+          headline:
+            b.name && g.name
+              ? defaultBuyQty === 1 && defaultGetQty === 1
+                ? `Buy ${b.name} → ${g.name} free`
+                : `Buy ${defaultBuyQty} ${b.name} → ${defaultGetQty} ${g.name} free`
+              : bxgyLabel(defaultBuyQty, defaultGetQty, "cross_sku")
+        });
+      }
+    }
+  }
+
+  return deals;
+}
+
+/**
  * Resolve staff-configured home shelves for storefront (enabled + in-date, products hydrated).
  * @param {import("../../ports/repositories/CatalogRepo.js").CatalogRepo} catalogRepo
  * @param {string} shopId
@@ -193,17 +325,28 @@ export async function resolveStorefrontHomeSections(catalogRepo, shopId, opts = 
       const buyIds = asIdList(row.buy_product_ids);
       const getIds = asIdList(row.get_product_ids);
       const dealMode = bxgyDealMode(buyIds, getIds);
+      const deals = buildBxgyDealsForSection({
+        buyIds,
+        getIds,
+        sectionBuyQty: Number.isInteger(buyQty) ? buyQty : 1,
+        sectionGetQty: Number.isInteger(getQty) ? getQty : 1,
+        products,
+        bundleRowsRaw
+      });
+      const labelQtyBuy = deals[0]?.buyQty ?? (Number.isInteger(buyQty) ? buyQty : 1);
+      const labelQtyGet = deals[0]?.getQty ?? (Number.isInteger(getQty) ? getQty : 1);
       return {
         ...base,
         buyQty: Number.isInteger(buyQty) ? buyQty : null,
         getQty: Number.isInteger(getQty) ? getQty : null,
         dealMode,
-        label: bxgyLabel(buyQty, getQty, dealMode),
+        label: bxgyLabel(labelQtyBuy, labelQtyGet, dealMode),
         promotionId: row.promotion_id ?? null,
         startsAt: isoOrNull(row.starts_at),
         endsAt: isoOrNull(row.ends_at),
         buyProducts: orderByIds(products, buyIds),
-        getProducts: orderByIds(products, getIds)
+        getProducts: orderByIds(products, getIds),
+        deals
       };
     }
     return {

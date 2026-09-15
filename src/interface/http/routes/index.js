@@ -19,6 +19,7 @@ import {
   otpRequestBodySchema,
   otpVerifyBodySchema,
   refreshTokenBodySchema,
+  logoutBodySchema,
   emailOtpRequestBodySchema,
   emailOtpVerifyBodySchema
 } from "../validations/authSchemas.js";
@@ -153,12 +154,12 @@ export function createRoutes(ctx) {
     authLimiter,
     otpRequestLimiter,
     otpVerifyLimiter,
-    requireCustomerJwt: ctx.requireCustomerJwt,
     validate,
     handlers: authHandlers,
     otpRequestBodySchema,
     otpVerifyBodySchema,
     refreshTokenBodySchema,
+    logoutBodySchema,
     emailOtpRequestBodySchema,
     emailOtpVerifyBodySchema
   });

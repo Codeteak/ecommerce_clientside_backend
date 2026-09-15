@@ -1,5 +1,4 @@
-import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, expect } from "vitest";
 import {
   extractYaadroTrackingToken,
   mapYaadroOrderStatusToEcommerce,
@@ -8,45 +7,38 @@ import {
 
 describe("yaadroTrackingStatusSync", () => {
   it("extracts token from tracking URL", () => {
-    assert.equal(
+    expect(
       extractYaadroTrackingToken(
         "https://www.yaadro.shop/track/order/511411/tracking/a172205b-06ca-4d0c-94c3-99499d05b556-1789452131655"
-      ),
-      "a172205b-06ca-4d0c-94c3-99499d05b556-1789452131655"
-    );
+      )
+    ).toBe("a172205b-06ca-4d0c-94c3-99499d05b556-1789452131655");
   });
 
   it("maps Delivered / delivered flag", () => {
-    assert.equal(
-      mapYaadroOrderStatusToEcommerce({ orderStatus: "Delivered" }),
-      "delivered"
-    );
-    assert.equal(
-      mapYaadroOrderStatusToEcommerce({ orderStatus: "Pending", delivered: true }),
-      "delivered"
-    );
+    expect(mapYaadroOrderStatusToEcommerce({ orderStatus: "Delivered" })).toBe("delivered");
+    expect(
+      mapYaadroOrderStatusToEcommerce({ orderStatus: "Pending", delivered: true })
+    ).toBe("delivered");
   });
 
   it("maps assigned / out for delivery", () => {
-    assert.equal(
-      mapYaadroOrderStatusToEcommerce({ orderStatus: "Assigned" }),
+    expect(mapYaadroOrderStatusToEcommerce({ orderStatus: "Assigned" })).toBe(
       "out_for_delivery"
     );
-    assert.equal(
-      mapYaadroOrderStatusToEcommerce({ orderStatus: "Out for Delivery" }),
+    expect(mapYaadroOrderStatusToEcommerce({ orderStatus: "Out for Delivery" })).toBe(
       "out_for_delivery"
     );
   });
 
   it("ignores pending", () => {
-    assert.equal(mapYaadroOrderStatusToEcommerce({ orderStatus: "Pending" }), null);
+    expect(mapYaadroOrderStatusToEcommerce({ orderStatus: "Pending" })).toBeNull();
   });
 
   it("only upgrades forward", () => {
-    assert.equal(shouldUpgradeEcommerceStatus("accepted", "delivered"), true);
-    assert.equal(shouldUpgradeEcommerceStatus("accepted", "out_for_delivery"), true);
-    assert.equal(shouldUpgradeEcommerceStatus("delivered", "accepted"), false);
-    assert.equal(shouldUpgradeEcommerceStatus("accepted", "accepted"), false);
-    assert.equal(shouldUpgradeEcommerceStatus("accepted", null), false);
+    expect(shouldUpgradeEcommerceStatus("accepted", "delivered")).toBe(true);
+    expect(shouldUpgradeEcommerceStatus("accepted", "out_for_delivery")).toBe(true);
+    expect(shouldUpgradeEcommerceStatus("delivered", "accepted")).toBe(false);
+    expect(shouldUpgradeEcommerceStatus("accepted", "accepted")).toBe(false);
+    expect(shouldUpgradeEcommerceStatus("accepted", null)).toBe(false);
   });
 });

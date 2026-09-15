@@ -25,7 +25,7 @@ These values are not always required, but they should be reviewed.
 | Env var | Recommended value | Why |
 |---------|-------------------|-----|
 | `JWT_ACCESS_EXPIRES_IN` | `15m` to `60m` | Short access tokens reduce risk |
-| `JWT_REFRESH_EXPIRES_IN` | Example: `40d` (no spaces; `40 d` is normalized at startup) | Refresh JWT + `auth_refresh_tokens.expires_at` TTL |
+| `JWT_REFRESH_EXPIRES_IN` | Default `30d` (keep FE `NEXT_PUBLIC_AUTH_REFRESH_TOKEN_DAYS` in sync) | Refresh JWT + `auth_refresh_tokens.expires_at` TTL |
 | `STOREFRONT_ENFORCE_SERVICEABILITY` | `true` | Blocks checkout outside delivery area |
 | `SERVICEABILITY_COOKIE_SAMESITE` | `lax` for same-site, `none` for cross-site frontend/API | Controls browser cookie policy for checkout guard |
 | `SERVICEABILITY_COOKIE_SECURE` | `true` when `SERVICEABILITY_COOKIE_SAMESITE=none` | Browsers reject `SameSite=None` without `Secure` |

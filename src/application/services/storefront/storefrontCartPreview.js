@@ -253,8 +253,10 @@ export function createStorefrontCartPreview({
           {
             id: String(p.cartItemId),
             product_id: p.productId,
-            title_snapshot: "Free item",
-            unit_label: null,
+            title_snapshot: p.title_snapshot || "Free item",
+            unit_label: p.unit_label ?? null,
+            image_url: p.image_url ?? null,
+            global_image_url: p.global_image_url ?? p.image_url ?? null,
             billable_quantity: paidQty,
             free_quantity: freeQty > 0 ? freeQty : Math.max(1, Number(p.quantity) || 1),
             list_price_minor: p.list_price_minor,
