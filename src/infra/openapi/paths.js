@@ -366,9 +366,9 @@ export function buildPaths() {
     "/api/auth/logout": {
       post: {
         tags: ["Auth"],
-        summary: "Logout and revoke access token",
+        summary: "Logout and revoke session",
         description:
-          "Revokes the current access token jti (Redis allowlist) and all refresh tokens for the user. Optional `refreshToken` in body revokes that family as well.",
+          "Revokes refresh tokens (and access jti when a Bearer is provided). Accepts either a valid access Bearer and/or `refreshToken` in the body so logout still works after the access JWT expires.",
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: false,
