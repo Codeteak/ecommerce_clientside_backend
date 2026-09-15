@@ -16,10 +16,13 @@ export function createCartPricing({ priceStorefrontLines }) {
       .map((it) => ({
         cartItemId: it.id,
         productId: String(it.product_id),
-        quantity: parseBillableCartQuantity(it.quantity),
+        quantity: parseBillableCartQuantity(it.quantity, {
+          allowFractional: it.sold_by_weight === true
+        }),
         listMinor: it.list_price_minor_per_unit ?? it.unit_price_minor,
         offerMinor: it.offer_price_minor_per_unit,
-        categoryId: it.global_category_id ?? null
+        categoryId: it.global_category_id ?? null,
+        soldByWeight: it.sold_by_weight === true
       }));
 
     const codes = collectNormalizedCouponCodes({ couponCode, couponCodes });

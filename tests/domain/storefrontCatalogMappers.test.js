@@ -99,6 +99,35 @@ describe("storefrontCatalogMappers", () => {
     expect(out.unit_size).toBe("0.5");
   });
 
+  it("maps sold_by_weight for per-kg catalog products", () => {
+    const out = mapStorefrontProductRow({
+      id: "p2",
+      name: "Apple",
+      slug: "apple-loose",
+      price_minor_per_unit: "10000",
+      offer_price_minor_per_unit: null,
+      availability: "in_stock",
+      base_unit: "kg",
+      unit_size: "1",
+      sold_by_weight: true,
+      thumb_media_id: null,
+      thumb_storage_key: null,
+      thumb_content_type: null,
+      product_images: "[]",
+      category_slug: null,
+      category_parent_id: null,
+      category_name: null,
+      category_image_media_id: null,
+      category_image_storage_key: null,
+      category_image_content_type: null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      category_id: "c1"
+    });
+    expect(out.sold_by_weight).toBe(true);
+    expect(out.unit).toBe("kg");
+    expect(out.unit_size).toBe("1");
+  });
+
   it("maps product description from catalog row", () => {
     const out = mapStorefrontProductRow({
       id: "p1",

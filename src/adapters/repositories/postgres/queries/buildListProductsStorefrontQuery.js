@@ -13,6 +13,7 @@ import {
   shopProductLeftJoinGlobal,
   shopProductNameSql,
   shopProductSlugSql,
+  shopProductSoldByWeightSql,
   shopProductUnitSizeSql
 } from "./shopProductCatalogSql.js";
 
@@ -92,6 +93,7 @@ export function buildListProductsStorefrontQuery({
           ${shopProductSlugSql} AS slug,
           ${shopProductBaseUnitSql} AS base_unit,
           ${shopProductUnitSizeSql}::text AS unit_size,
+          ${shopProductSoldByWeightSql} AS sold_by_weight,
           ${shopProductDescriptionSql} AS description,
           sp.status,
           sp.availability,

@@ -82,6 +82,7 @@ export function mapStorefrontProductRow(r, options = {}) {
     availability: r.availability,
     unit: r.base_unit,
     unit_size: r.unit_size != null ? String(r.unit_size) : "1",
+    sold_by_weight: r.sold_by_weight === true,
     thumbnail:
       thumbnailUrl != null
         ? {

@@ -4,10 +4,14 @@ import { AppError } from "../../../../domain/errors/AppError.js";
 export const BUNDLE_REWARD_ID_SUFFIX = ":bundle-reward";
 export const MAX_LINE_QUANTITY = 10;
 
-export function parseBillableCartQuantity(raw) {
+export function parseBillableCartQuantity(raw, { allowFractional = false } = {}) {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return 0;
-  return n;
+  if (allowFractional) {
+    // Match admin sellable unit size: up to 4 decimal places (kg).
+    return Math.round(n * 10_000) / 10_000;
+  }
+  return Math.trunc(n);
 }
 
 export function normalizeCouponCode(code) {
@@ -20,11 +24,14 @@ export function cartError(code, message, statusCode = 400) {
   return new AppError(message, { statusCode, code });
 }
 
-export function assertLineQuantity(qty) {
-  if (!Number.isFinite(qty) || qty <= 0) {
+export function assertLineQuantity(qty, { allowFractional = false } = {}) {
+  const n = allowFractional
+    ? parseBillableCartQuantity(qty, { allowFractional: true })
+    : Number(qty);
+  if (!Number.isFinite(n) || n <= 0) {
     throw new ValidationError("quantity must be positive");
   }
-  if (qty > MAX_LINE_QUANTITY) {
+  if (n > MAX_LINE_QUANTITY) {
     throw cartError(
       "LINE_QUANTITY_CAP",
       `Maximum quantity per line is ${MAX_LINE_QUANTITY}.`

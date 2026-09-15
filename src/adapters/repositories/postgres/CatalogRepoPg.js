@@ -15,6 +15,7 @@ import {
   shopProductSeoDescriptionSql,
   shopProductSeoTitleSql,
   shopProductSlugSql,
+  shopProductSoldByWeightSql,
   shopProductUnitSizeSql
 } from "./queries/shopProductCatalogSql.js";
 
@@ -40,7 +41,7 @@ export class CatalogRepoPg extends CatalogRepo {
       await setTenantContext(client, shopId);
       const { rows } = await client.query(
         `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id, ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit,
-                ${shopProductUnitSizeSql}::text AS unit_size, sp.status,
+                ${shopProductUnitSizeSql}::text AS unit_size, ${shopProductSoldByWeightSql} AS sold_by_weight, sp.status,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.created_at, sp.updated_at,
                 ${shopProductImageUrlSql} AS global_image_url,
@@ -191,7 +192,7 @@ ${shopProductLeftJoinGlobal}
       await setTenantContext(client, shopId);
       const { rows } = await client.query(
         `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id, ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit,
-                ${shopProductUnitSizeSql}::text AS unit_size, sp.status, sp.availability,
+                ${shopProductUnitSizeSql}::text AS unit_size, ${shopProductSoldByWeightSql} AS sold_by_weight, sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.created_at, sp.updated_at,
                 ${shopProductImageUrlSql} AS global_image_url,
@@ -540,6 +541,7 @@ ${shopProductLeftJoinGlobal}
       const { rows: prodRows } = await client.query(
         `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id,
                 ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit, ${shopProductUnitSizeSql}::text AS unit_size,
+                ${shopProductSoldByWeightSql} AS sold_by_weight,
                 ${shopProductDescriptionSql} AS description, ${shopProductSeoTitleSql} AS seo_title, ${shopProductSeoDescriptionSql} AS seo_description,
                 sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
@@ -605,6 +607,7 @@ ${shopProductLeftJoinGlobal}
       const { rows: prodRows } = await client.query(
         `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id,
                 ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit, ${shopProductUnitSizeSql}::text AS unit_size,
+                ${shopProductSoldByWeightSql} AS sold_by_weight,
                 ${shopProductDescriptionSql} AS description, ${shopProductSeoTitleSql} AS seo_title, ${shopProductSeoDescriptionSql} AS seo_description,
                 sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,

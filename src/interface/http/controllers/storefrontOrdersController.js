@@ -2,6 +2,10 @@ import { requireShopId } from "../../../application/services/catalog/catalogShop
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { withClient } from "../../../infra/db/tx.js";
 import { asyncHandler } from "../asyncHandler.js";
+import {
+  syncOrderStatusFromYaadroTracking,
+  syncStorefrontOrdersFromYaadroTracking
+} from "../../../application/services/storefront/yaadroTrackingStatusSync.js";
 
 /**
  * Purpose: This file handles storefront order HTTP endpoints.
@@ -25,7 +29,17 @@ function listHandler(ctx) {
     const limit = req.query.limit;
     const rows = await withClient(async (c) => {
       await ctx.assertCustomerShopAccess(c, shopId, customerId);
-      return ctx.orderRepo.listOrdersForCustomer(c, shopId, String(customerId), { limit });
+      const orders = await ctx.orderRepo.listOrdersForCustomer(c, shopId, String(customerId), {
+        limit
+      });
+      // Pull live Yaadro delivery status into ecommerce so order history matches tracking.
+      await syncStorefrontOrdersFromYaadroTracking({
+        client: c,
+        orderRepo: ctx.orderRepo,
+        shopId,
+        orders
+      });
+      return orders;
     });
     sendPrivateJson(res, { orders: rows });
   });
@@ -37,7 +51,23 @@ function getByIdHandler(ctx) {
     const { customerId } = req.customerAuth;
     const detail = await withClient(async (c) => {
       await ctx.assertCustomerShopAccess(c, shopId, customerId);
-      return ctx.orderRepo.getOrderByIdForCustomer(c, shopId, req.params.id, String(customerId));
+      const found = await ctx.orderRepo.getOrderByIdForCustomer(
+        c,
+        shopId,
+        req.params.id,
+        String(customerId)
+      );
+      if (!found?.order) return found;
+      const next = await syncOrderStatusFromYaadroTracking({
+        client: c,
+        orderRepo: ctx.orderRepo,
+        shopId,
+        orderId: found.order.id,
+        currentStatus: found.order.status,
+        deliveryTrackingUrl: found.order.delivery_tracking_url
+      });
+      if (next) found.order.status = next;
+      return found;
     });
     if (!detail) {
       throw new NotFoundError("Order not found");
