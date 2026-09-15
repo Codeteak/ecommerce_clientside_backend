@@ -13,8 +13,10 @@ import {
   shopProductBaseUnitSql,
   shopProductImageUrlSql,
   shopProductLeftJoinGlobal,
-  shopProductNameSql
+  shopProductNameSql,
+  shopProductThumbJoinSql
 } from "../../../adapters/repositories/postgres/queries/shopProductCatalogSql.js";
+import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
 
 function pricingError(code, message) {
   return new AppError(message, { statusCode: 400, code });
@@ -217,9 +219,11 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
                   sp.global_category_id,
                   ${shopProductNameSql} AS name,
                   ${shopProductImageUrlSql} AS image_url,
+                  pm.storage_key AS thumb_storage_key,
                   ${shopProductBaseUnitSql} AS base_unit
              FROM shop_products sp
              ${shopProductLeftJoinGlobal}
+             ${shopProductThumbJoinSql("sp", "pm")}
             WHERE sp.shop_id = $1::uuid
               AND sp.id = ANY($2::uuid[])
               AND sp.status = 'active'`,
@@ -228,6 +232,7 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
         for (const row of rows) {
           const imageRaw =
             typeof row.image_url === "string" && row.image_url.trim() ? row.image_url.trim() : null;
+          const thumbUrl = toPublicMediaUrl(row.thumb_storage_key);
           injectPricing.set(String(row.id), {
             listMinor: parseMinor(row.price_minor_per_unit),
             offerMinor:
@@ -236,7 +241,7 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
                 : null,
             categoryId: row.global_category_id != null ? String(row.global_category_id) : null,
             name: typeof row.name === "string" && row.name.trim() ? row.name.trim() : null,
-            imageUrl: imageRaw,
+            imageUrl: imageRaw || thumbUrl || null,
             baseUnit: typeof row.base_unit === "string" && row.base_unit.trim() ? row.base_unit.trim() : null
           });
         }
