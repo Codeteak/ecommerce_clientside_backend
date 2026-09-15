@@ -46,8 +46,8 @@ export function mapYaadroOrderStatusToEcommerce(input = {}) {
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ");
   if (!raw) return null;
-  if (raw.includes("deliver")) return "delivered";
   if (raw.includes("cancel")) return "cancelled";
+  // Check OFD before "deliver*" — "out for delivery" contains "deliver".
   if (
     raw.includes("out for delivery") ||
     raw.includes("on the way") ||
@@ -57,6 +57,9 @@ export function mapYaadroOrderStatusToEcommerce(input = {}) {
     raw === "ofd"
   ) {
     return "out_for_delivery";
+  }
+  if (raw === "delivered" || raw.startsWith("delivered") || raw.includes("order delivered")) {
+    return "delivered";
   }
   return null;
 }
