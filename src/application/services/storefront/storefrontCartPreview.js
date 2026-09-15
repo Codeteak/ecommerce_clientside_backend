@@ -242,6 +242,34 @@ export function createStorefrontCartPreview({
       );
     }
 
+    const knownIds = new Set(items.map((it) => String(it.id)));
+    for (const p of priced?.lines || []) {
+      if (!p?.cartItemId || !String(p.cartItemId).startsWith("inject:")) continue;
+      if (knownIds.has(String(p.cartItemId))) continue;
+      const freeQty = Math.max(0, Number(p.free_quantity ?? p.display_quantity ?? p.quantity) || 0);
+      const paidQty = Math.max(0, Number(p.paid_quantity ?? 0) || 0);
+      cartItems.push(
+        formatStorefrontCartItem(
+          {
+            id: String(p.cartItemId),
+            product_id: p.productId,
+            title_snapshot: "Free item",
+            unit_label: null,
+            billable_quantity: paidQty,
+            free_quantity: freeQty > 0 ? freeQty : Math.max(1, Number(p.quantity) || 1),
+            list_price_minor: p.list_price_minor,
+            final_price_minor: p.final_price_minor,
+            line_total_minor: p.line_total_minor,
+            offer_discount_minor: p.offer_discount_minor,
+            promo_discount_minor: p.promo_discount_minor,
+            applied_promotion_ids: p.applied_promotion_ids ?? [],
+            is_bundle_reward: true
+          },
+          p
+        )
+      );
+    }
+
     const displayUnitsTotal = cartItems.reduce(
       (sum, row) => sum + Number(row.quantity ?? 0) + Number(row.offer_quantity ?? 0),
       0

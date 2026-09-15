@@ -137,6 +137,92 @@ export async function buildCheckoutOrderLines({
         unitSizeSnapshot: unitSizeSnapshotFromCartLine(it)
       };
     });
+
+    // Cross BXGY: free reward SKUs injected by pricing must become order lines.
+    const knownCartIds = new Set(items.map((it) => String(it.id)));
+    const injected = priced.lines.filter(
+      (l) =>
+        l.cartItemId &&
+        String(l.cartItemId).startsWith("inject:") &&
+        !knownCartIds.has(String(l.cartItemId))
+    );
+    if (injected.length) {
+      const injectProductIds = [...new Set(injected.map((l) => String(l.productId)))];
+      /** @type {Map<string, { name: string, unitLabel: string | null }>} */
+      const nameById = new Map();
+      // Must use SAVEPOINT: a failed SELECT aborts the whole checkout txn (25P02).
+      // shop_products / global_products use `base_unit`, not `unit_label`.
+      await client.query("SAVEPOINT sp_bxgy_inject_names");
+      try {
+        const { rows } = await client.query(
+          `SELECT sp.id,
+                  COALESCE(sp.name, gp.name) AS name,
+                  COALESCE(sp.base_unit, gp.base_unit) AS unit_label
+             FROM shop_products sp
+             LEFT JOIN global_products gp ON gp.id = sp.global_product_id
+            WHERE sp.shop_id = $1::uuid
+              AND sp.id = ANY($2::uuid[])`,
+          [shopId, injectProductIds]
+        );
+        for (const row of rows) {
+          nameById.set(String(row.id), {
+            name: String(row.name || "").trim() || `Product ${String(row.id).slice(0, 8)}`,
+            unitLabel: row.unit_label != null ? String(row.unit_label) : null
+          });
+        }
+        await client.query("RELEASE SAVEPOINT sp_bxgy_inject_names");
+      } catch {
+        await client.query("ROLLBACK TO SAVEPOINT sp_bxgy_inject_names");
+        await client.query("SAVEPOINT sp_bxgy_inject_names_fallback");
+        try {
+          const { rows } = await client.query(
+            `SELECT sp.id, COALESCE(sp.name, gp.name) AS name
+               FROM shop_products sp
+               LEFT JOIN global_products gp ON gp.id = sp.global_product_id
+              WHERE sp.shop_id = $1::uuid
+                AND sp.id = ANY($2::uuid[])`,
+            [shopId, injectProductIds]
+          );
+          for (const row of rows) {
+            nameById.set(String(row.id), {
+              name: String(row.name || "").trim() || `Product ${String(row.id).slice(0, 8)}`,
+              unitLabel: null
+            });
+          }
+          await client.query("RELEASE SAVEPOINT sp_bxgy_inject_names_fallback");
+        } catch {
+          await client.query("ROLLBACK TO SAVEPOINT sp_bxgy_inject_names_fallback");
+          /* best-effort names — checkout can still proceed without labels */
+        }
+      }
+      for (const p of injected) {
+        const live = nameById.get(String(p.productId));
+        const { quantity, paidQuantity, freeQuantity } = orderLineQuantitiesFromPriced(
+          p,
+          p.display_quantity ?? p.free_quantity ?? p.quantity
+        );
+        const unitPriceMinor = Number(p.final_price_minor);
+        const lineTotalMinor = Number(p.line_total_minor);
+        const listPriceMinor = Number(p.list_price_minor);
+        const compareTotal = Math.round(Number(p.total_price_minor) * Math.max(1, quantity));
+        orderItems.push({
+          productId: p.productId,
+          name: live?.name ?? `Product ${String(p.productId).slice(0, 8)}`,
+          unitLabel: live?.unitLabel ?? null,
+          quantity,
+          paidQuantity,
+          freeQuantity,
+          unitPriceMinor,
+          lineTotalMinor,
+          listPriceMinor,
+          lineDiscountMinor: Math.max(0, compareTotal - lineTotalMinor),
+          appliedPromotionIds: p.applied_promotion_ids ?? [],
+          isCustom: false,
+          customNote: null,
+          unitSizeSnapshot: "1"
+        });
+      }
+    }
   } else {
     orderItems = items.map((it) => {
       const lineTotal = minorFromLine(it.quantity, it.unit_price_minor);

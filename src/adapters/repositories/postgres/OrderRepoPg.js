@@ -46,6 +46,23 @@ export class OrderRepoPg extends OrderRepo {
               url: toPublicMediaUrl(row.image_storage_key)
             }
           : null;
+    const quantity = Number(row.quantity);
+    const qty = Number.isFinite(quantity) ? quantity : 0;
+    const orderedRaw =
+      row.ordered_quantity != null && row.ordered_quantity !== ""
+        ? Number(row.ordered_quantity)
+        : null;
+    const lineTotal = Number(row.line_total_minor);
+    let paid =
+      orderedRaw != null && Number.isFinite(orderedRaw)
+        ? Math.max(0, orderedRaw)
+        : lineTotal === 0 && qty > 0
+          ? 0
+          : qty;
+    if (paid > qty) paid = qty;
+    const free = Math.max(0, qty - paid);
+    const isFreeReward = paid <= 0 && free > 0 && (lineTotal === 0 || !Number.isFinite(lineTotal));
+
     return {
       id: row.id,
       product_id: row.product_id,
@@ -57,6 +74,12 @@ export class OrderRepoPg extends OrderRepo {
       unit_size:
         row.unit_size_snapshot != null ? String(row.unit_size_snapshot) : "1",
       quantity: row.quantity,
+      ordered_quantity: paid,
+      paid_quantity: paid,
+      free_quantity: free,
+      offer_quantity: free,
+      is_bundle_reward: isFreeReward,
+      is_confirmed_free_reward: isFreeReward,
       unit_price_minor_snapshot: row.unit_price_minor_snapshot,
       line_total_minor: row.line_total_minor,
       list_price_minor: row.list_price_minor ?? null,
@@ -285,7 +308,9 @@ export class OrderRepoPg extends OrderRepo {
     const { rows: itemRows } = await client.query(
       `SELECT oi.order_id, oi.id, oi.product_id, oi.product_name_snapshot, oi.unit_label_snapshot,
               oi.unit_size_snapshot::text AS unit_size_snapshot,
-              oi.quantity::text AS quantity, oi.unit_price_minor_snapshot, oi.line_total_minor,
+              oi.quantity::text AS quantity,
+              oi.ordered_quantity::text AS ordered_quantity,
+              oi.unit_price_minor_snapshot, oi.line_total_minor,
               oi.list_price_minor, oi.line_discount_minor, oi.applied_promotion_ids,
               oi.is_custom, oi.custom_note,
               sp.id AS shop_product_id,
@@ -371,9 +396,11 @@ export class OrderRepoPg extends OrderRepo {
     const { rows: items } = await client.query(
       `SELECT oi.id, oi.product_id, oi.product_name_snapshot, oi.unit_label_snapshot,
               oi.unit_size_snapshot::text AS unit_size_snapshot,
-              quantity::text AS quantity, unit_price_minor_snapshot, line_total_minor,
+              oi.quantity::text AS quantity,
+              oi.ordered_quantity::text AS ordered_quantity,
+              oi.unit_price_minor_snapshot, oi.line_total_minor,
               oi.list_price_minor, oi.line_discount_minor, oi.applied_promotion_ids,
-              is_custom, custom_note,
+              oi.is_custom, oi.custom_note,
               sp.id AS shop_product_id,
               ${shopProductSlugSql} AS product_slug,
               ${shopProductImageUrlSql} AS global_image_url,

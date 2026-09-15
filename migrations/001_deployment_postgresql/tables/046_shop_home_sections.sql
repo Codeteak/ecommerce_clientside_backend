@@ -1,7 +1,7 @@
 -- Staff-managed home shelves (shared with admin). Storefront reads enabled rows only.
+-- System defaults (Daily Diary / Festive / Offer Damaka): see 048_shop_home_sections_system_defaults.sql
 
-CREATE TABLE IF NOT EXISTS shop_home_sections (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE TABLE IF NOT EXISTS shop_home_sections (  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('product_shelf', 'event_shelf', 'buy_x_get_y')),
@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS shop_home_sections (
   buy_qty INT,
   get_qty INT,
   promotion_id UUID REFERENCES promotions(id) ON DELETE SET NULL,
+  system_key TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at TIMESTAMPTZ,
@@ -28,6 +29,10 @@ CREATE TABLE IF NOT EXISTS shop_home_sections (
 CREATE INDEX IF NOT EXISTS idx_shop_home_sections_shop_sort
   ON shop_home_sections (shop_id, sort_order)
   WHERE deleted_at IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_shop_home_sections_shop_system_key
+  ON shop_home_sections (shop_id, system_key)
+  WHERE system_key IS NOT NULL AND deleted_at IS NULL;
 
 ALTER TABLE shop_home_sections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shop_home_sections FORCE ROW LEVEL SECURITY;

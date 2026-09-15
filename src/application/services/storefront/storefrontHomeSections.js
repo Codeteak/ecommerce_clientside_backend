@@ -1,5 +1,8 @@
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
-import { buildStorefrontListingUnitPriceMap } from "../promotions/resolveStorefrontSkuUnitPrices.js";
+import {
+  buildStorefrontListingUnitPriceMap,
+  computeStorefrontUnitPricing
+} from "../promotions/resolveStorefrontSkuUnitPrices.js";
 import {
   filterBundleRuleRowsForProduct,
   mapActiveBundleRuleRow
@@ -25,7 +28,7 @@ function priceMinor(value) {
  * @param {Map<string, { promoPriceMinor: number | null }>} priceMap
  * @param {unknown[]} bundleRowsRaw
  */
-export function mapHomeSectionProduct(row, priceMap = null, bundleRowsRaw = []) {
+export function mapHomeSectionProduct(row, priceMap = null, bundleRowsRaw = [], productNameById = null) {
   const globalImageUrl =
     typeof row.global_image_url === "string" && row.global_image_url !== "" ? row.global_image_url : null;
   const imageUrl = globalImageUrl ?? toPublicMediaUrl(row.thumb_storage_key);
@@ -34,19 +37,29 @@ export function mapHomeSectionProduct(row, priceMap = null, bundleRowsRaw = []) 
   const offerMinor = priceMinor(row.offer_price_minor_per_unit);
   const promoEntry = priceMap?.get(id);
   const promoPriceMinor = promoEntry?.promoPriceMinor ?? null;
-  const baseline =
-    offerMinor != null && listMinor != null && offerMinor < listMinor ? offerMinor : listMinor;
-  const finalMinor =
-    promoPriceMinor != null && baseline != null
-      ? Math.min(baseline, promoPriceMinor)
-      : promoPriceMinor != null
-        ? promoPriceMinor
-        : baseline;
+  // Match checkout engine: promo replaces baseline (does not min() with a worse promo).
+  const priced = computeStorefrontUnitPricing(
+    listMinor,
+    offerMinor,
+    promoPriceMinor
+  );
+  const finalMinor = priced.finalMinor;
 
   const categoryId = row.category_id != null ? String(row.category_id) : null;
-  const bundleRules = filterBundleRuleRowsForProduct(bundleRowsRaw, id, categoryId).map(
-    mapActiveBundleRuleRow
-  );
+  const bundleRules = filterBundleRuleRowsForProduct(bundleRowsRaw, id, categoryId).map((r) => {
+    const mapped = mapActiveBundleRuleRow(r);
+    if (productNameById && typeof productNameById.get === "function") {
+      const buyId = mapped.buy_shop_product_id
+        ? String(mapped.buy_shop_product_id)
+        : mapped.shop_product_id
+          ? String(mapped.shop_product_id)
+          : "";
+      const getId = mapped.reward_shop_product_id ? String(mapped.reward_shop_product_id) : "";
+      if (buyId && productNameById.get(buyId)) mapped.buy_product_name = productNameById.get(buyId);
+      if (getId && productNameById.get(getId)) mapped.reward_product_name = productNameById.get(getId);
+    }
+    return mapped;
+  });
 
   return {
     id: row.id,
@@ -74,11 +87,26 @@ export function mapHomeSectionCategory(row) {
   };
 }
 
-export function bxgyLabel(buyQty, getQty) {
+export function bxgyLabel(buyQty, getQty, dealMode = "same_sku") {
   const buy = Number.isInteger(buyQty) ? buyQty : 1;
   const get = Number.isInteger(getQty) ? getQty : 1;
+  if (dealMode === "cross_sku") {
+    if (buy === 1 && get === 1) return "Buy this → get that free";
+    return `Buy ${buy} → get ${get} free`;
+  }
   if (buy === 1 && get === 1) return "Buy 1 Get 1 Free";
-  return `Buy ${buy} Get ${get}`;
+  return `Buy ${buy} Get ${get} Free`;
+}
+
+/** same_sku = classic BOGO; cross_sku = buy list unlocks different get products. */
+export function bxgyDealMode(buyProductIds, getProductIds) {
+  const buys = asIdList(buyProductIds);
+  const gets = asIdList(getProductIds);
+  if (gets.length === 0) return "same_sku";
+  if (buys.length === gets.length && buys.every((id) => gets.includes(id))) {
+    return "same_sku";
+  }
+  return "cross_sku";
 }
 
 export function isoOrNull(value) {
@@ -143,7 +171,12 @@ export async function resolveStorefrontHomeSections(catalogRepo, shopId, opts = 
     });
   }
 
-  const products = productRows.map((row) => mapHomeSectionProduct(row, priceMap, bundleRowsRaw));
+  const productNameById = new Map(
+    productRows.map((row) => [String(row.id), String(row.name || "")]).filter(([, n]) => n)
+  );
+  const products = productRows.map((row) =>
+    mapHomeSectionProduct(row, priceMap, bundleRowsRaw, productNameById)
+  );
   const categories = categoryRows.map(mapHomeSectionCategory);
 
   return rows.map((row) => {
@@ -157,20 +190,26 @@ export async function resolveStorefrontHomeSections(catalogRepo, shopId, opts = 
     if (type === "buy_x_get_y") {
       const buyQty = row.buy_qty == null ? null : Number(row.buy_qty);
       const getQty = row.get_qty == null ? null : Number(row.get_qty);
+      const buyIds = asIdList(row.buy_product_ids);
+      const getIds = asIdList(row.get_product_ids);
+      const dealMode = bxgyDealMode(buyIds, getIds);
       return {
         ...base,
         buyQty: Number.isInteger(buyQty) ? buyQty : null,
         getQty: Number.isInteger(getQty) ? getQty : null,
-        label: bxgyLabel(buyQty, getQty),
+        dealMode,
+        label: bxgyLabel(buyQty, getQty, dealMode),
         promotionId: row.promotion_id ?? null,
-        buyProducts: orderByIds(products, asIdList(row.buy_product_ids)),
-        getProducts: orderByIds(products, asIdList(row.get_product_ids))
+        startsAt: isoOrNull(row.starts_at),
+        endsAt: isoOrNull(row.ends_at),
+        buyProducts: orderByIds(products, buyIds),
+        getProducts: orderByIds(products, getIds)
       };
     }
     return {
       ...base,
-      startsAt: type === "event_shelf" ? isoOrNull(row.starts_at) : null,
-      endsAt: type === "event_shelf" ? isoOrNull(row.ends_at) : null,
+      startsAt: isoOrNull(row.starts_at),
+      endsAt: isoOrNull(row.ends_at),
       categories: orderByIds(categories, asIdList(row.category_ids)),
       products: orderByIds(products, asIdList(row.product_ids))
     };
