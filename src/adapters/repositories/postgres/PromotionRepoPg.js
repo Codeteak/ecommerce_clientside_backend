@@ -519,11 +519,63 @@ export class PromotionRepoPg extends PromotionRepo {
 
   async listActiveBundleRulesForProduct(client, shopId, shopProductId, globalCategoryId) {
     await setTenantContext(client, shopId);
-    const { rows } = await client.query(
-      `SELECT br.promotion_id,
+    const sqlWithCross = `SELECT br.promotion_id,
               br.scope,
               br.shop_product_id,
               br.global_category_id,
+              br.buy_shop_product_id,
+              br.reward_shop_product_id,
+              br.buy_qty,
+              br.get_qty,
+              br.reward_type,
+              br.reward_percent_bps,
+              p.ends_at,
+              COALESCE(buy_sp.name, buy_gp.name) AS buy_product_name,
+              COALESCE(reward_sp.name, reward_gp.name) AS reward_product_name,
+              COALESCE(same_sp.name, same_gp.name) AS same_product_name
+         FROM promotion_bundle_rules br
+         JOIN promotions p
+           ON p.id = br.promotion_id
+          AND p.shop_id = br.shop_id
+         LEFT JOIN shop_products buy_sp
+           ON buy_sp.id = br.buy_shop_product_id AND buy_sp.shop_id = br.shop_id
+         LEFT JOIN global_products buy_gp ON buy_gp.id = buy_sp.global_product_id
+         LEFT JOIN shop_products reward_sp
+           ON reward_sp.id = br.reward_shop_product_id AND reward_sp.shop_id = br.shop_id
+         LEFT JOIN global_products reward_gp ON reward_gp.id = reward_sp.global_product_id
+         LEFT JOIN shop_products same_sp
+           ON same_sp.id = br.shop_product_id AND same_sp.shop_id = br.shop_id
+         LEFT JOIN global_products same_gp ON same_gp.id = same_sp.global_product_id
+        WHERE br.shop_id = $1::uuid
+          AND br.is_deleted = false
+          AND p.is_deleted = false
+          AND p.status = 'active'
+          AND p.starts_at <= now()
+          AND p.ends_at >= now()
+          ${ACTIVE_PROMOTION_RECURRENCE_SQL}
+          AND (
+            (br.scope = 'same_shop_product' AND br.shop_product_id = $2::uuid)
+            OR (
+              br.scope = 'global_category'
+              AND $3::uuid IS NOT NULL
+              AND br.global_category_id = $3::uuid
+            )
+            OR (
+              br.scope = 'cross_shop_products'
+              AND (
+                br.buy_shop_product_id = $2::uuid
+                OR br.reward_shop_product_id = $2::uuid
+              )
+            )
+          )
+        ORDER BY p.priority ASC, p.created_at DESC, br.updated_at DESC
+        LIMIT 50`;
+    const sqlLegacy = `SELECT br.promotion_id,
+              br.scope,
+              br.shop_product_id,
+              br.global_category_id,
+              NULL::uuid AS buy_shop_product_id,
+              NULL::uuid AS reward_shop_product_id,
               br.buy_qty,
               br.get_qty,
               br.reward_type,
@@ -549,9 +601,25 @@ export class PromotionRepoPg extends PromotionRepo {
             )
           )
         ORDER BY br.updated_at DESC
-        LIMIT 50`,
-      [shopId, shopProductId, globalCategoryId]
-    );
-    return rows;
+        LIMIT 50`;
+    try {
+      const { rows } = await client.query(sqlWithCross, [
+        shopId,
+        shopProductId,
+        globalCategoryId
+      ]);
+      return rows;
+    } catch (err) {
+      const msg = String(err?.message ?? err);
+      if (msg.includes("buy_shop_product_id") || msg.includes("reward_shop_product_id")) {
+        const { rows } = await client.query(sqlLegacy, [
+          shopId,
+          shopProductId,
+          globalCategoryId
+        ]);
+        return rows;
+      }
+      throw err;
+    }
   }
 }

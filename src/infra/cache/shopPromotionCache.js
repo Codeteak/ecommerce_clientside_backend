@@ -65,7 +65,7 @@ export function createShopPromotionCache({ catalogCache, promotionRepo, ttlSec =
     listActiveBundleRulesForProduct(client, shopId, shopProductId, globalCategoryId) {
       const pid = String(shopProductId);
       const cat = globalCategoryId != null ? String(globalCategoryId) : "none";
-      return wrapShop(shopId, `bundles:product:${pid}:${cat}`, () =>
+      return wrapShop(shopId, `bundles:product:v2:${pid}:${cat}`, () =>
         promotionRepo.listActiveBundleRulesForProduct(client, shopId, shopProductId, globalCategoryId)
       );
     },
@@ -90,7 +90,8 @@ export function createShopPromotionCache({ catalogCache, promotionRepo, ttlSec =
      * @param {() => Promise<object>} fn
      */
     wrapProductDetailPromo(shopId, productId, fn) {
-      return wrapShop(shopId, `detail:${String(productId).toLowerCase()}`, fn);
+      // v2: includes cross_shop_products BXGY on product detail (was omitted before).
+      return wrapShop(shopId, `detail:v2:${String(productId).toLowerCase()}`, fn);
     }
   };
 }
