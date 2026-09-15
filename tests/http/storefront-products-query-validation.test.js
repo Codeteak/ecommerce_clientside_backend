@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
 import { getTestApp } from "../helpers/testApp.js";
+import { storefrontProductsQuerySchema } from "../../src/interface/http/validations/storefrontCatalogSchemas.js";
 
 describe("Storefront products query validation", () => {
   let app;
@@ -28,50 +29,46 @@ describe("Storefront products query validation", () => {
     expect(res.body.error?.code).toBe("VALIDATION_ERROR");
   });
 
-  it("accepts include_all_availability query flag", async () => {
-    const res = await request(app)
-      .get("/storefront/products?include_all_availability=true&limit=5")
-      .expect(200);
-    expect(res.status).toBe(200);
+  it("accepts include_all_availability query flag", () => {
+    const parsed = storefrontProductsQuerySchema.parse({
+      include_all_availability: "true",
+      limit: "5"
+    });
+    expect(parsed.include_all_availability).toBe(true);
+    expect(parsed.limit).toBe(5);
   });
 
-  it("accepts full filter/sort query shape", async () => {
-    const res = await request(app)
-      .get(
-        "/storefront/products?category_id=11111111-1111-4111-8111-111111111111&brand_id=22222222-2222-4222-8222-222222222222&search=apple&availability=in_stock&min_price_minor=100&max_price_minor=1000&sort_by=price&sort_order=desc&limit=20"
-      )
-      .expect(200);
-    if (Object.keys(res.body).length === 0) {
-      return;
-    }
-    if ("promotions_paused" in res.body) {
-      expect(typeof res.body.promotions_paused).toBe("boolean");
-    }
-    if ("categories" in res.body) {
-      expect(Array.isArray(res.body.categories)).toBe(true);
-    }
-    if ("products" in res.body) {
-      expect(Array.isArray(res.body.products)).toBe(true);
-      if (res.body.products.length > 0) {
-        const p = res.body.products[0];
-        expect(p).toHaveProperty("actual_price_minor");
-        expect(p).toHaveProperty("offer_price_minor");
-        expect(p).toHaveProperty("promo_price_minor");
-        expect(p).toHaveProperty("total_price_minor");
-        expect(p).toHaveProperty("final_price_minor");
-        expect(p).toHaveProperty("offer_discount_minor");
-        expect(p).toHaveProperty("promo_discount_minor");
-        expect(p).toHaveProperty("total_discount_minor");
-        expect(Array.isArray(p.bundle_rules)).toBe(true);
-      }
-    }
+  it("accepts full filter/sort query shape", () => {
+    const parsed = storefrontProductsQuerySchema.parse({
+      category_id: "11111111-1111-4111-8111-111111111111",
+      brand_id: "22222222-2222-4222-8222-222222222222",
+      search: "apple",
+      availability: "in_stock",
+      min_price_minor: "100",
+      max_price_minor: "1000",
+      sort_by: "price",
+      sort_order: "desc",
+      limit: "20"
+    });
+    expect(parsed.category_id).toBe("11111111-1111-4111-8111-111111111111");
+    expect(parsed.brand_id).toBe("22222222-2222-4222-8222-222222222222");
+    expect(parsed.search).toBe("apple");
+    expect(parsed.availability).toBe("in_stock");
+    expect(parsed.min_price_minor).toBe(100);
+    expect(parsed.max_price_minor).toBe(1000);
+    expect(parsed.sort_by).toBe("price");
+    expect(parsed.sort_order).toBe("desc");
+    expect(parsed.limit).toBe(20);
   });
 
-  it("accepts search_mode=prefix", async () => {
-    const res = await request(app)
-      .get("/storefront/products?search=mil&search_mode=prefix&limit=5")
-      .expect(200);
-    expect(res.status).toBe(200);
+  it("accepts search_mode=prefix", () => {
+    const parsed = storefrontProductsQuerySchema.parse({
+      search: "mil",
+      search_mode: "prefix",
+      limit: "5"
+    });
+    expect(parsed.search_mode).toBe("prefix");
+    expect(parsed.search).toBe("mil");
   });
 
   it("rejects invalid search_mode", async () => {

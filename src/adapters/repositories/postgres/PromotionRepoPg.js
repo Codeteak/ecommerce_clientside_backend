@@ -413,7 +413,10 @@ export class PromotionRepoPg extends PromotionRepo {
               p.ends_at,
               COALESCE(buy_sp.name, buy_gp.name) AS buy_product_name,
               COALESCE(reward_sp.name, reward_gp.name) AS reward_product_name,
-              COALESCE(same_sp.name, same_gp.name) AS same_product_name
+              COALESCE(same_sp.name, same_gp.name) AS same_product_name,
+              COALESCE(NULLIF(BTRIM(reward_sp.image_url), ''), reward_gp.image_url) AS reward_product_image,
+              COALESCE(NULLIF(BTRIM(buy_sp.image_url), ''), buy_gp.image_url) AS buy_product_image,
+              COALESCE(NULLIF(BTRIM(same_sp.image_url), ''), same_gp.image_url) AS same_product_image
          FROM promotion_bundle_rules br
          JOIN promotions p
            ON p.id = br.promotion_id
@@ -532,7 +535,10 @@ export class PromotionRepoPg extends PromotionRepo {
               p.ends_at,
               COALESCE(buy_sp.name, buy_gp.name) AS buy_product_name,
               COALESCE(reward_sp.name, reward_gp.name) AS reward_product_name,
-              COALESCE(same_sp.name, same_gp.name) AS same_product_name
+              COALESCE(same_sp.name, same_gp.name) AS same_product_name,
+              COALESCE(NULLIF(BTRIM(reward_sp.image_url), ''), reward_gp.image_url) AS reward_product_image,
+              COALESCE(NULLIF(BTRIM(buy_sp.image_url), ''), buy_gp.image_url) AS buy_product_image,
+              COALESCE(NULLIF(BTRIM(same_sp.image_url), ''), same_gp.image_url) AS same_product_image
          FROM promotion_bundle_rules br
          JOIN promotions p
            ON p.id = br.promotion_id

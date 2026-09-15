@@ -49,5 +49,9 @@ export function mapActiveBundleRuleRow(r) {
   const rewardName = r.reward_product_name;
   if (buyName) out.buy_product_name = String(buyName);
   if (rewardName) out.reward_product_name = String(rewardName);
+  const rewardImage = r.reward_product_image || r.same_product_image;
+  const buyImage = r.buy_product_image || r.same_product_image;
+  if (rewardImage) out.reward_product_image = String(rewardImage).trim();
+  if (buyImage) out.buy_product_image = String(buyImage).trim();
   return out;
 }

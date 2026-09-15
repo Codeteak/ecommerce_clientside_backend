@@ -72,6 +72,82 @@ describe("resolveStorefrontHomeSections", () => {
     expect(sections[1].label).toBe("Buy 1 Get 1 Free");
     expect(sections[1].dealMode).toBe("same_sku");
     expect(sections[1].buyProducts).toHaveLength(1);
+    expect(sections[1].deals?.[0]).toMatchObject({
+      dealMode: "same_sku",
+      buyQty: 1,
+      getQty: 1
+    });
+  });
+
+  it("uses engine buy/get qty on Damaka deals even when section qty is 1/1", async () => {
+    const BUY = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const GET = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const catalogRepo = {
+      listEnabledHomeSectionsStorefront: vi.fn().mockResolvedValue([
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          title: "Offer Damaka",
+          type: "buy_x_get_y",
+          sort_order: 0,
+          starts_at: null,
+          ends_at: null,
+          product_ids: [],
+          category_ids: [],
+          buy_product_ids: [BUY],
+          get_product_ids: [GET],
+          buy_qty: 1,
+          get_qty: 1,
+          promotion_id: null
+        }
+      ]),
+      listSellableProductsByIdsStorefront: vi.fn().mockResolvedValue([
+        {
+          id: BUY,
+          name: "Amul Ghee",
+          slug: "amul-ghee",
+          price_minor_per_unit: "76500",
+          global_image_url: null,
+          thumb_storage_key: null
+        },
+        {
+          id: GET,
+          name: "Upma Mix",
+          slug: "upma",
+          price_minor_per_unit: "12000",
+          global_image_url: null,
+          thumb_storage_key: null
+        }
+      ]),
+      listActiveCategoriesByIdsStorefront: vi.fn().mockResolvedValue([])
+    };
+
+    const sections = await resolveStorefrontHomeSections(catalogRepo, shopId, {
+      loadListingPromotionsContext: async () => ({
+        promotionsPaused: false,
+        priceMap: new Map(),
+        bundleRowsRaw: [
+          {
+            promotion_id: "promo-1",
+            scope: "cross_shop_products",
+            shop_product_id: null,
+            global_category_id: null,
+            buy_shop_product_id: BUY,
+            reward_shop_product_id: GET,
+            buy_qty: 2,
+            get_qty: 1,
+            reward_type: "free"
+          }
+        ]
+      })
+    });
+
+    expect(sections).toHaveLength(1);
+    expect(sections[0].deals?.[0]).toMatchObject({
+      dealMode: "cross_sku",
+      buyQty: 2,
+      getQty: 1
+    });
+    expect(sections[0].label).toMatch(/Buy 2/i);
   });
 });
 

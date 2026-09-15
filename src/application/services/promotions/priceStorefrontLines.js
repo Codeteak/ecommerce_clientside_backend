@@ -9,6 +9,12 @@ import {
   minorToApiString,
   parseMinor
 } from "./resolveStorefrontSkuUnitPrices.js";
+import {
+  shopProductBaseUnitSql,
+  shopProductImageUrlSql,
+  shopProductLeftJoinGlobal,
+  shopProductNameSql
+} from "../../../adapters/repositories/postgres/queries/shopProductCatalogSql.js";
 
 function pricingError(code, message) {
   return new AppError(message, { statusCode: 400, code });
@@ -201,28 +207,37 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
     const injections = planCrossRewardInjections(pricedLines, bundleRulesRaw);
     if (injections.length > 0) {
       const injectIds = [...new Set(injections.map((i) => i.productId))];
-      /** @type {Map<string, { listMinor: number, offerMinor: number | null, categoryId: string | null }>} */
+      /** @type {Map<string, { listMinor: number, offerMinor: number | null, categoryId: string | null, name: string | null, imageUrl: string | null, baseUnit: string | null }>} */
       const injectPricing = new Map();
       try {
         const { rows } = await client.query(
           `SELECT sp.id,
                   sp.price_minor_per_unit,
                   sp.offer_price_minor_per_unit,
-                  sp.global_category_id
+                  sp.global_category_id,
+                  ${shopProductNameSql} AS name,
+                  ${shopProductImageUrlSql} AS image_url,
+                  ${shopProductBaseUnitSql} AS base_unit
              FROM shop_products sp
+             ${shopProductLeftJoinGlobal}
             WHERE sp.shop_id = $1::uuid
               AND sp.id = ANY($2::uuid[])
               AND sp.status = 'active'`,
           [shopId, injectIds]
         );
         for (const row of rows) {
+          const imageRaw =
+            typeof row.image_url === "string" && row.image_url.trim() ? row.image_url.trim() : null;
           injectPricing.set(String(row.id), {
             listMinor: parseMinor(row.price_minor_per_unit),
             offerMinor:
               row.offer_price_minor_per_unit != null
                 ? parseMinor(row.offer_price_minor_per_unit)
                 : null,
-            categoryId: row.global_category_id != null ? String(row.global_category_id) : null
+            categoryId: row.global_category_id != null ? String(row.global_category_id) : null,
+            name: typeof row.name === "string" && row.name.trim() ? row.name.trim() : null,
+            imageUrl: imageRaw,
+            baseUnit: typeof row.base_unit === "string" && row.base_unit.trim() ? row.base_unit.trim() : null
           });
         }
       } catch {
@@ -248,7 +263,10 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
           promoDiscountMinor: unit.promoDiscountMinor,
           totalDiscountMinor: unit.totalDiscountMinor,
           appliedPromotionIds: [],
-          injectedBundleReward: true
+          injectedBundleReward: true,
+          titleSnapshot: live.name || "Free item",
+          imageUrl: live.imageUrl,
+          unitLabel: live.baseUnit
         });
       }
     }
@@ -546,7 +564,11 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
           offer_discount_minor: minorToApiString(l.offerDiscountMinor),
           promo_discount_minor: minorToApiString(l.promoDiscountMinor),
           total_discount_minor: minorToApiString(l.totalDiscountMinor),
-          applied_promotion_ids: [...l.appliedPromotionIds]
+          applied_promotion_ids: [...l.appliedPromotionIds],
+          ...(l.injectedBundleReward === true ? { injected_bundle_reward: true } : {}),
+          ...(l.titleSnapshot ? { title_snapshot: l.titleSnapshot } : {}),
+          ...(l.imageUrl ? { image_url: l.imageUrl, global_image_url: l.imageUrl } : {}),
+          ...(l.unitLabel ? { unit_label: l.unitLabel } : {})
         };
       }),
       subtotalBeforeBundleMinor: subtotalBeforeCoupon,
