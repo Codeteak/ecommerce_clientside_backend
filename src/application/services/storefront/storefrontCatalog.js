@@ -222,6 +222,7 @@ export function createStorefrontCatalog({
         offset,
         availability,
         includeAllAvailability,
+        includeDescendants,
         minPriceMinor,
         maxPriceMinor,
         sortBy,
@@ -253,6 +254,7 @@ export function createStorefrontCatalog({
       const resolvedSearchMode = searchMode === "prefix" ? "prefix" : "contains";
       const qPattern = resolveCatalogSearchPattern(search ?? null, resolvedSearchMode);
       const resolvedLayout = layout === "flat" ? "flat" : "grouped";
+      const withDescendants = includeDescendants === true;
       const cacheDecision = shouldCacheProductList({
         search,
         qPattern,
@@ -268,7 +270,7 @@ export function createStorefrontCatalog({
         maxOffset: productListCachePolicy.maxOffset,
         searchMinChars: productListCachePolicy.searchMinChars
       });
-      const key = `products:list:v9:${categoryId ?? "all"}:${brandId ?? "all"}:${resolvedSearchMode}:${qPattern ?? "q"}:${listAvailability ?? "any"}:${minPriceMinor ?? "min"}:${maxPriceMinor ?? "max"}:${resolvedSortBy}:${resolvedSortOrder}:${lim}:cur:${cursor ?? "none"}:off:${offsetValue ?? "none"}`;
+      const key = `products:list:v10:${categoryId ?? "all"}:${withDescendants ? "desc" : "node"}:${brandId ?? "all"}:${resolvedSearchMode}:${qPattern ?? "q"}:${listAvailability ?? "any"}:${minPriceMinor ?? "min"}:${maxPriceMinor ?? "max"}:${resolvedSortBy}:${resolvedSortOrder}:${lim}:cur:${cursor ?? "none"}:off:${offsetValue ?? "none"}`;
       const loadProducts = async () => {
         const rows = await catalogRepo.listProductsStorefront(shopId, {
           categoryId: categoryId ?? null,
@@ -282,7 +284,8 @@ export function createStorefrontCatalog({
           minPriceMinor: Number.isInteger(minPriceMinor) ? minPriceMinor : null,
           maxPriceMinor: Number.isInteger(maxPriceMinor) ? maxPriceMinor : null,
           sortBy: resolvedSortBy,
-          sortOrder: resolvedSortOrder
+          sortOrder: resolvedSortOrder,
+          includeDescendants: withDescendants
         });
         return rows;
       };

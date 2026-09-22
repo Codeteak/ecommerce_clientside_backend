@@ -76,6 +76,8 @@ export const storefrontProductsQuerySchema = z.object({
   include_all_statuses: booleanOpt,
   /** When true, do not default availability to in_stock (list all active rows). */
   include_all_availability: booleanOpt,
+  /** When true with category_id, include products in child categories too. */
+  include_descendants: booleanOpt,
   layout: z.preprocess(
     (v) => (v === "" || v == null ? undefined : v),
     z.enum(["grouped", "flat"]).optional()

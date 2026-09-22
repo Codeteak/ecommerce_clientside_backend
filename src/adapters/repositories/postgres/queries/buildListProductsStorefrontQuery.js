@@ -36,7 +36,8 @@ export function buildListProductsStorefrontQuery({
   cursorCreatedAt,
   cursorId,
   sortOrder,
-  orderBySql
+  orderBySql,
+  includeDescendants = false
 }) {
   const categoryAvailabilitySql = availabilityPredicate("sp2", availability);
   const values = [shopId, categoryId, brandId, qPattern, availability, minPriceMinor, maxPriceMinor, limit];
@@ -77,7 +78,10 @@ export function buildListProductsStorefrontQuery({
       ) AS has_direct
     ),
     effective_categories AS (
-      SELECT $2::uuid AS id
+      ${
+        includeDescendants
+          ? `SELECT cd.id FROM category_descendants cd WHERE $2::uuid IS NOT NULL`
+          : `SELECT $2::uuid AS id
        WHERE $2::uuid IS NOT NULL
          AND (SELECT has_direct FROM category_direct_products)
       UNION ALL
@@ -85,7 +89,8 @@ export function buildListProductsStorefrontQuery({
         FROM category_descendants cd
        WHERE $2::uuid IS NOT NULL
          AND NOT (SELECT has_direct FROM category_direct_products)
-         AND cd.id <> $2::uuid
+         AND cd.id <> $2::uuid`
+      }
     )
     SELECT sp.id,
           ${shopProductCategoryIdSql} AS category_id,
@@ -105,7 +110,6 @@ export function buildListProductsStorefrontQuery({
           thumb.media_asset_id AS thumb_media_id,
           thumb.storage_key AS thumb_storage_key,
           thumb.content_type AS thumb_content_type,
-          pgal.product_images AS product_images,
           c.parent_id AS category_parent_id,
           c.name AS category_name,
           c.slug AS category_slug,
@@ -135,41 +139,6 @@ export function buildListProductsStorefrontQuery({
         ORDER BY ci.sort_order ASC
         LIMIT 1
      ) thumb ON true
-     LEFT JOIN LATERAL (
-       WITH chosen_images AS (
-         SELECT spi.media_asset_id, spi.sort_order
-           FROM shop_product_images spi
-          WHERE spi.shop_product_id = sp.id
-         UNION ALL
-         SELECT gpi.media_asset_id, gpi.sort_order
-           FROM global_product_images gpi
-          WHERE gpi.global_product_id = sp.global_product_id
-            AND NOT EXISTS (
-              SELECT 1
-                FROM shop_product_images spi2
-               WHERE spi2.shop_product_id = sp.id
-            )
-       )
-       SELECT COALESCE(
-         json_agg(
-           json_build_object(
-             'media_asset_id', ci.media_asset_id,
-             'sort_order', ci.sort_order,
-             'storage_key', ma.storage_key,
-             'content_type', ma.content_type
-           )
-           ORDER BY ci.sort_order ASC
-         ),
-         '[]'::json
-       ) AS product_images
-       FROM (
-         SELECT ci.media_asset_id, ci.sort_order
-           FROM chosen_images ci
-          ORDER BY ci.sort_order ASC
-          LIMIT 1
-       ) ci
-       JOIN media_assets ma ON ma.id = ci.media_asset_id
-     ) pgal ON true
      LEFT JOIN global_categories c ON c.id = ${shopProductCategoryIdSql}
      ${categoryImageLateralJoinSql({ lateralAlias: "cimg", mediaAlias: "cma" })}
     WHERE sp.shop_id = $1::uuid

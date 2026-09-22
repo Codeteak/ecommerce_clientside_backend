@@ -48,6 +48,17 @@ export function mapStorefrontProductRow(r, options = {}) {
       productImages = [];
     }
   }
+  // List queries are thumb-only (no product_images column); synthesize one entry from thumb.
+  if (productImages.length === 0 && r.thumb_storage_key) {
+    productImages = [
+      {
+        media_asset_id: r.thumb_media_id ?? null,
+        sort_order: 0,
+        storage_key: r.thumb_storage_key,
+        content_type: r.thumb_content_type ?? null
+      }
+    ];
+  }
   if (productImages.length === 0 && globalImageUrl) {
     productImages = [
       {
