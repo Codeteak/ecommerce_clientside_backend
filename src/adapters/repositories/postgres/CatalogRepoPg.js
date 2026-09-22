@@ -466,7 +466,8 @@ ${shopProductLeftJoinGlobal}
       minPriceMinor,
       maxPriceMinor,
       sortBy,
-      sortOrder
+      sortOrder,
+      includeDescendants
     } = params;
     const client = await pool.connect();
     try {
@@ -485,7 +486,8 @@ ${shopProductLeftJoinGlobal}
         cursorCreatedAt,
         cursorId,
         sortOrder,
-        orderBySql
+        orderBySql,
+        includeDescendants: includeDescendants === true
       });
       const { rows } = await client.query(query);
       return rows;
