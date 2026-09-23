@@ -26,7 +26,7 @@ Implementation: `effectiveReadCacheTtlSec()` in `src/config/env/readCacheTtl.js`
 |----------|---------|---------|
 | `REDIS_URL` | (empty dev) | Required in production |
 | `CACHE_ON` | `true` | Master switch for **read** caches (see above) |
-| `ACCESS_JTI_DB_FALLBACK_ENABLED` | `true` | Protected APIs use DB session validation if access `jti` is missing/unavailable in Redis |
+| `ACCESS_JTI_DB_FALLBACK_ENABLED` | `true` | Protected APIs use DB session validation if Redis is unavailable (`redis_unavailable` / `redis_not_configured`). Missing/revoked JTIs never fall back. |
 | `STOREFRONT_CATALOG_CACHE_TTL_SEC` | `60` | Catalog SWR + promotion query cache TTL |
 | `STOREFRONT_PROMO_CACHE_TTL_SEC` | `60` | Alias; falls back to catalog TTL |
 | `SHOP_RESOLVE_CACHE_TTL_SEC` | `300` | Domain/slug → shopId, shop meta. Unresolved (null) hits are capped at **15s** so transient misses do not blank the storefront for the full TTL. |
@@ -137,7 +137,9 @@ Prometheus counters: `cache_{layer}_{operation}_total` where `layer` is `catalog
 
 ## Auth fallback
 
-Access JWTs are normally allowlisted in Redis as `access:jti:{jti}`. If Redis is down or keys were cleared,
-`ACCESS_JTI_DB_FALLBACK_ENABLED=true` lets protected APIs continue after validating the user/customer in
-PostgreSQL via `isCustomerSessionValid`. This fallback applies only to authenticated API access; it does
+Access JWTs are normally allowlisted in Redis as `access:jti:{jti}`. If Redis is down
+(`redis_unavailable` / `redis_not_configured`), `ACCESS_JTI_DB_FALLBACK_ENABLED=true` lets protected
+APIs continue after validating the user/customer in PostgreSQL via `isCustomerSessionValid`.
+A missing or revoked JTI (`jti_missing`) never falls back — otherwise logout would leave the access
+token usable until JWT expiry. This fallback applies only to authenticated API access; it does
 not cache cart, checkout, orders, or profile responses.

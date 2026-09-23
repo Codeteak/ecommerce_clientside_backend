@@ -89,6 +89,45 @@ describe("OrderRepoPg mapOrderItemRow", () => {
     expect(out.image?.url === null || typeof out.image?.url === "string").toBe(true);
   });
 
+  it("keeps ordered kilograms when the picker bills 255 g or 248 g", () => {
+    const repo = new OrderRepoPg();
+    const over = repo.mapOrderItemRow({
+      ...baseRow,
+      quantity: "0.255",
+      ordered_quantity: "0.25",
+      unit_price_minor_snapshot: 10000,
+      line_total_minor: 2550
+    });
+    expect(over.quantity).toBe("0.255");
+    expect(over.ordered_quantity).toBe(0.25);
+    expect(over.paid_quantity).toBe(0.255);
+    expect(over.free_quantity).toBe(0);
+
+    const under = repo.mapOrderItemRow({
+      ...baseRow,
+      quantity: "0.248",
+      ordered_quantity: "0.25",
+      unit_price_minor_snapshot: 10000,
+      line_total_minor: 2480
+    });
+    expect(under.ordered_quantity).toBe(0.25);
+    expect(under.paid_quantity).toBe(0.248);
+    expect(under.free_quantity).toBe(0);
+  });
+
+  it("still treats a whole extra unit as a free bundle unit", () => {
+    const repo = new OrderRepoPg();
+    const out = repo.mapOrderItemRow({
+      ...baseRow,
+      quantity: "3",
+      ordered_quantity: "2",
+      line_total_minor: 200
+    });
+    expect(out.paid_quantity).toBe(2);
+    expect(out.free_quantity).toBe(1);
+    expect(out.ordered_quantity).toBe(2);
+  });
+
   it("resolves relative global image_url via public storage base", () => {
     const repo = new OrderRepoPg();
     const out = repo.mapOrderItemRow({

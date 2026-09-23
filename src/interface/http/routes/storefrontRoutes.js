@@ -151,6 +151,7 @@ export function mountStorefrontRoutes(r, deps) {
       authLimiter,
       cartMutateLimiter,
       requireCustomerJwt,
+      requireCustomerShopAccess,
       locationGuard,
       validate({ body: storefrontCheckoutBodySchema }),
       storefrontCheckout.post
@@ -177,6 +178,12 @@ export function mountStorefrontRoutes(r, deps) {
       addressMutateLimiter,
       validate({ body: storefrontAddressPatchSchema }),
       storefrontAccount.patchAddress
+    );
+    r.delete(
+      `${prefix}/address`,
+      requireCustomerJwt,
+      addressMutateLimiter,
+      storefrontAccount.deleteAddress
     );
     r.post(
       `${prefix}/phone/change/request-otp`,

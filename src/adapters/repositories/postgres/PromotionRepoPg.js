@@ -1,4 +1,5 @@
 import { PromotionRepo } from "../../../application/ports/repositories/PromotionRepo.js";
+import { AppError } from "../../../domain/errors/AppError.js";
 import { setTenantContext } from "../../../infra/db/tenantContext.js";
 import { shopProductThumbJoinSql } from "./queries/shopProductCatalogSql.js";
 
@@ -283,6 +284,55 @@ export class PromotionRepoPg extends PromotionRepo {
   async insertPromotionRedemption(client, payload) {
     const { shopId, orderId, customerId, promotionId, couponId, discountMinor } = payload;
     await setTenantContext(client, shopId);
+
+    if (couponId) {
+      const { rows: couponRows } = await client.query(
+        `SELECT id,
+                max_redemptions_total,
+                max_redemptions_per_customer
+           FROM promotion_coupons
+          WHERE shop_id = $1::uuid
+            AND id = $2::uuid
+            AND is_deleted = false
+          FOR UPDATE`,
+        [shopId, couponId]
+      );
+      const coupon = couponRows[0];
+      if (!coupon) {
+        throw new AppError("Coupon cannot be applied to this order.", {
+          statusCode: 400,
+          code: "COUPON_NOT_FOUND"
+        });
+      }
+
+      const { rows: countRows } = await client.query(
+        `SELECT count(*)::int AS total_redemptions,
+                count(*) FILTER (WHERE customer_id = $3)::int AS customer_redemptions
+           FROM promotion_redemptions
+          WHERE shop_id = $1::uuid
+            AND coupon_id = $2::uuid`,
+        [shopId, couponId, String(customerId)]
+      );
+      const counts = countRows[0] || { total_redemptions: 0, customer_redemptions: 0 };
+      const totalLimit = coupon.max_redemptions_total;
+      const perCustomerLimit = coupon.max_redemptions_per_customer;
+      if (typeof totalLimit === "number" && Number(counts.total_redemptions) >= totalLimit) {
+        throw new AppError("This coupon has reached its redemption limit.", {
+          statusCode: 400,
+          code: "COUPON_EXHAUSTED"
+        });
+      }
+      if (
+        typeof perCustomerLimit === "number" &&
+        Number(counts.customer_redemptions) >= perCustomerLimit
+      ) {
+        throw new AppError("You have already used this coupon the maximum number of times.", {
+          statusCode: 400,
+          code: "COUPON_EXHAUSTED"
+        });
+      }
+    }
+
     await client.query(
       `INSERT INTO promotion_redemptions (
          shop_id, order_id, customer_id, promotion_id, coupon_id, discount_minor

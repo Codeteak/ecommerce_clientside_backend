@@ -35,7 +35,7 @@ export function checkoutError(code, message) {
 
 export function customerAddressSnapshot(addr) {
   if (!addr) return null;
-  const parts = [addr.line1, addr.line2, addr.landmark, addr.city, addr.state, addr.postalCode, addr.country]
+  const parts = [addr.line1, addr.line2, addr.landmark, addr.city]
     .map((x) => (x != null && String(x).trim() !== "" ? String(x).trim() : null))
     .filter(Boolean);
   if (parts.length) return parts.join(", ");
@@ -50,13 +50,19 @@ export function normalizeCouponCode(code) {
 }
 
 export function assertValidIdempotencyKey(rawIdem) {
-  if (rawIdem && (rawIdem.length < 8 || rawIdem.length > 128)) {
+  if (!rawIdem) {
     throw checkoutError(
-      "INVALID_IDEMPOTENCY_KEY",
-      "Idempotency-Key header must be between 8 and 128 characters when provided."
+      "IDEMPOTENCY_KEY_REQUIRED",
+      "Idempotency-Key header is required to place an order safely."
     );
   }
-  if (rawIdem && /[\x00-\x1f\x7f]/.test(rawIdem)) {
+  if (rawIdem.length < 8 || rawIdem.length > 128) {
+    throw checkoutError(
+      "INVALID_IDEMPOTENCY_KEY",
+      "Idempotency-Key header must be between 8 and 128 characters."
+    );
+  }
+  if (/[\x00-\x1f\x7f]/.test(rawIdem)) {
     throw checkoutError(
       "INVALID_IDEMPOTENCY_KEY",
       "Idempotency-Key must not contain control characters."

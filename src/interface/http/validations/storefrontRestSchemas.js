@@ -95,17 +95,35 @@ const addressFields = {
   line2: z.string().max(200).optional().nullable(),
   landmark: z.string().max(200).optional().nullable(),
   city: z.string().max(120).optional().nullable(),
-  state: z.string().max(120).optional().nullable(),
-  postalCode: z.string().max(32).optional().nullable(),
-  country: z.string().max(120).optional().nullable(),
   lat: z.number().min(-90).max(90).optional().nullable(),
   lng: z.number().min(-180).max(180).optional().nullable(),
   raw: z.string().max(2000).optional().nullable()
 };
 
-export const storefrontAddressPostSchema = z.object(addressFields);
+const REMOVED_ADDRESS_KEYS = ["state", "postalCode", "postal_code", "country", "zipCode", "zip_code"];
 
-export const storefrontAddressPatchSchema = z.object(addressFields).partial();
+function rejectRemovedAddressKeys(schema) {
+  return schema.superRefine((val, ctx) => {
+    if (!val || typeof val !== "object") return;
+    for (const key of REMOVED_ADDRESS_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(val, key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${key} is no longer supported`,
+          path: [key]
+        });
+      }
+    }
+  });
+}
+
+export const storefrontAddressPostSchema = rejectRemovedAddressKeys(
+  z.object(addressFields).strict()
+);
+
+export const storefrontAddressPatchSchema = rejectRemovedAddressKeys(
+  z.object(addressFields).partial().strict()
+);
 
 export const storefrontCheckoutBodySchema = z.object({
   notes: z.string().max(2000).optional().nullable(),

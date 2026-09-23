@@ -14,6 +14,45 @@ export function parseBillableCartQuantity(raw, { allowFractional = false } = {})
   return Math.trunc(n);
 }
 
+/**
+ * Normalize a checkout line quantity after catalog lock.
+ * Weight products may be fractional; piece products must be whole numbers.
+ * @param {number} rawQty
+ * @param {boolean} soldByWeight
+ * @returns {number}
+ */
+export function normalizeCheckoutLineQuantity(rawQty, soldByWeight) {
+  if (soldByWeight) {
+    const quantity = parseBillableCartQuantity(rawQty, { allowFractional: true });
+    if (quantity <= 0) {
+      throw cartError("INVALID_QUANTITY", "Quantity must be positive.");
+    }
+    if (quantity > MAX_LINE_QUANTITY) {
+      throw cartError(
+        "LINE_QUANTITY_CAP",
+        `Maximum quantity per line is ${MAX_LINE_QUANTITY}.`
+      );
+    }
+    return quantity;
+  }
+  if (!Number.isFinite(rawQty) || rawQty <= 0) {
+    throw cartError("INVALID_QUANTITY", "Quantity must be positive.");
+  }
+  if (!Number.isInteger(rawQty)) {
+    throw cartError(
+      "INVALID_QUANTITY",
+      "Quantity must be a whole number for this product."
+    );
+  }
+  if (rawQty > MAX_LINE_QUANTITY) {
+    throw cartError(
+      "LINE_QUANTITY_CAP",
+      `Maximum quantity per line is ${MAX_LINE_QUANTITY}.`
+    );
+  }
+  return rawQty;
+}
+
 export function normalizeCouponCode(code) {
   if (typeof code !== "string") return null;
   const trimmed = code.trim();

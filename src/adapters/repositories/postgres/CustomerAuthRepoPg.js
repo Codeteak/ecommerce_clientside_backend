@@ -37,9 +37,6 @@ const ADDRESS_API_TO_DB = {
   line2: "line2",
   landmark: "landmark",
   city: "city",
-  state: "state",
-  postalCode: "postal_code",
-  country: "country",
   lat: "lat",
   lng: "lng",
   raw: "raw"
@@ -394,9 +391,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
       line2: null,
       landmark: null,
       city: null,
-      state: null,
-      postal_code: null,
-      country: null,
       lat: null,
       lng: null,
       raw: null
@@ -418,9 +412,6 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
           line2: parsed.line2,
           landmark: parsed.landmark,
           city: parsed.city,
-          state: parsed.state,
-          postal_code: parsed.postalCode,
-          country: parsed.country,
           lat: parsed.lat,
           lng: parsed.lng,
           raw: parsed.raw
@@ -470,6 +461,34 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     }
   }
 
+  /**
+   * Unlink the customer's address and delete the row.
+   * @returns {Promise<boolean>} true if an address was cleared, false if none linked
+   */
+  async clearCustomerAddress(client, { customerId, userId }) {
+    const custRes = await client.query(
+      `SELECT id, address_id
+         FROM customers
+        WHERE id = $1 AND user_id = $2
+        FOR UPDATE`,
+      [customerId, userId]
+    );
+    const c = custRes.rows[0];
+    if (!c) {
+      throw new NotFoundError("Profile not found");
+    }
+    const addrId = c.address_id;
+    if (!addrId) {
+      return false;
+    }
+    await client.query(
+      `UPDATE customers SET address_id = NULL, updated_at = now() WHERE id = $1`,
+      [customerId]
+    );
+    await client.query(`DELETE FROM addresses WHERE id = $1`, [addrId]);
+    return true;
+  }
+
   async insertUser(client, { email = null, phone = null, password_hash = null }) {
     const { rows } = await client.query(
       `INSERT INTO users (email, phone, password_hash)
@@ -481,6 +500,14 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
   }
 
   async insertOtpChallenge(client, { phone, shopId, codeHash, expiresAtIso }) {
+    await client.query(
+      `UPDATE customer_otp_challenges
+          SET consumed_at = now()
+        WHERE ${phoneMatchesStorage("phone", 1)}
+          AND shop_id = $2::uuid
+          AND consumed_at IS NULL`,
+      [phone, shopId]
+    );
     const { rows } = await client.query(
       `INSERT INTO customer_otp_challenges (phone, shop_id, code_hash, expires_at)
        VALUES ($1, $2::uuid, $3, $4::timestamptz)
@@ -563,6 +590,14 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
   }
 
   async insertEmailOtpChallenge(client, { email, shopId, codeHash, expiresAtIso }) {
+    await client.query(
+      `UPDATE customer_email_otp_challenges
+          SET consumed_at = now()
+        WHERE lower(email) = lower($1)
+          AND shop_id = $2::uuid
+          AND consumed_at IS NULL`,
+      [email, shopId]
+    );
     const { rows } = await client.query(
       `INSERT INTO customer_email_otp_challenges (email, shop_id, code_hash, expires_at)
        VALUES (lower($1), $2::uuid, $3, $4::timestamptz)

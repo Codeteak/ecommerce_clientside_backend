@@ -38,6 +38,34 @@ describe("createPriceStorefrontLines", () => {
     expect(out.lines[0].final_price_minor).toBe("800");
   });
 
+  it("charges pack count times unit size times price per kg", async () => {
+    const price = createPriceStorefrontLines({ promotionRepo: basePromotionRepo() });
+    const oneStep = await price(fakeClient, {
+      shopId,
+      lines: [{ productId, quantity: 1, listMinor: 10000, offerMinor: null, unitSize: 0.25 }]
+    });
+    expect(oneStep.subtotalMinor).toBe(2500);
+    expect(oneStep.lines[0].final_price_minor).toBe("10000");
+    expect(oneStep.lines[0].line_total_minor).toBe("2500");
+
+    const doubleStep = await price(fakeClient, {
+      shopId,
+      lines: [{ productId, quantity: 2, listMinor: 10000, offerMinor: null, unitSize: 0.25 }]
+    });
+    expect(doubleStep.subtotalMinor).toBe(5000);
+    expect(doubleStep.lines[0].line_total_minor).toBe("5000");
+  });
+
+  it("bills 255 g at the same per-kg price", async () => {
+    const price = createPriceStorefrontLines({ promotionRepo: basePromotionRepo() });
+    const out = await price(fakeClient, {
+      shopId,
+      lines: [{ productId, quantity: 0.255, listMinor: 10000, offerMinor: null, unitSize: 1, soldByWeight: true }]
+    });
+    expect(out.subtotalMinor).toBe(2550);
+    expect(out.lines[0].final_price_minor).toBe("10000");
+  });
+
   it("applies SKU promo overlay winner", async () => {
     const price = createPriceStorefrontLines({
       promotionRepo: basePromotionRepo({
@@ -383,5 +411,86 @@ describe("createPriceStorefrontLines", () => {
     expect(out.couponRejected).toMatchObject({ code: "COUPON_NOT_FOUND" });
     expect(out.couponCodesNormalized).toEqual(["GOOD"]);
     expect(out.couponDiscountMinor).toBe(25);
+  });
+
+  it("does not inject cross BXGY free SKU when reward is not sellable (out of stock)", async () => {
+    const buyId = productId;
+    const rewardId = "22222222-2222-4222-8222-222222222222";
+    const client = {
+      query: vi.fn().mockResolvedValue({ rows: [] })
+    };
+    const price = createPriceStorefrontLines({
+      promotionRepo: basePromotionRepo({
+        listActiveBundleRulesForShop: vi.fn().mockResolvedValue([
+          {
+            promotion_id: "promo-cross",
+            scope: "cross_shop_products",
+            buy_shop_product_id: buyId,
+            reward_shop_product_id: rewardId,
+            buy_qty: 1,
+            get_qty: 1,
+            reward_type: "free"
+          }
+        ])
+      })
+    });
+
+    const out = await price(client, {
+      shopId,
+      lines: [{ productId: buyId, quantity: 1, listMinor: 1000, offerMinor: null }]
+    });
+
+    expect(client.query).toHaveBeenCalled();
+    expect(String(client.query.mock.calls[0][0])).toMatch(/availability = 'in_stock'/);
+    expect(out.lines.some((l) => String(l.productId) === rewardId)).toBe(false);
+    expect(out.lines).toHaveLength(1);
+  });
+
+  it("injects cross BXGY free SKU when reward is sellable", async () => {
+    const buyId = productId;
+    const rewardId = "22222222-2222-4222-8222-222222222222";
+    const client = {
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            id: rewardId,
+            price_minor_per_unit: "500",
+            offer_price_minor_per_unit: null,
+            global_category_id: null,
+            name: "Free snack",
+            image_url: null,
+            thumb_storage_key: null,
+            base_unit: "pcs"
+          }
+        ]
+      })
+    };
+    const price = createPriceStorefrontLines({
+      promotionRepo: basePromotionRepo({
+        listActiveBundleRulesForShop: vi.fn().mockResolvedValue([
+          {
+            promotion_id: "promo-cross",
+            scope: "cross_shop_products",
+            buy_shop_product_id: buyId,
+            reward_shop_product_id: rewardId,
+            buy_qty: 1,
+            get_qty: 1,
+            reward_type: "free"
+          }
+        ])
+      })
+    });
+
+    const out = await price(client, {
+      shopId,
+      lines: [{ productId: buyId, quantity: 1, listMinor: 1000, offerMinor: null }]
+    });
+
+    const freeLine = out.lines.find((l) => String(l.productId) === rewardId);
+    expect(freeLine).toBeTruthy();
+    expect(freeLine.injected_bundle_reward).toBe(true);
+    expect(freeLine.paid_quantity).toBe(0);
+    expect(freeLine.free_quantity).toBe(1);
+    expect(Number(freeLine.line_total_minor)).toBe(0);
   });
 });

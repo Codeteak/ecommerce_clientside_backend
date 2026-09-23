@@ -131,7 +131,8 @@ export function createStorefrontCartPreview({
       listMinor: it.list_price_minor_per_unit ?? it.unit_price_minor,
       offerMinor: it.offer_price_minor_per_unit,
       categoryId: it.global_category_id ?? null,
-      soldByWeight: it.sold_by_weight === true
+      soldByWeight: it.sold_by_weight === true,
+      unitSize: it.unit_size_snapshot ?? it.unit_size ?? 1
     }));
 
     const priced = await priceStorefrontLines(client, {

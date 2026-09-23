@@ -25,6 +25,7 @@ function checkoutInput(extra = {}) {
     customerId: "cust-1",
     userId: "user-1",
     items: CLIENT_ITEMS,
+    idempotencyKey: "checkout-test-key-01",
     ...extra
   };
 }
@@ -226,7 +227,14 @@ describe("checkoutStorefront validations", () => {
       total_minor: 120
     });
     expect(d.checkShopServiceArea).toHaveBeenCalledTimes(1);
-    expect(d.orderRepo.insertCheckoutIdempotency).not.toHaveBeenCalled();
+    expect(d.orderRepo.insertCheckoutIdempotency).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        idempotencyKey: "checkout-test-key-01",
+        orderId: "order-1",
+        cartId: null
+      })
+    );
   });
 
   it("checkouts from client cart items without a stored cart", async () => {
@@ -247,12 +255,9 @@ describe("checkoutStorefront validations", () => {
     const run = createCheckoutStorefront(d);
     const out = await run(
       {},
-      {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1",
+      checkoutInput({
         items: [{ productId: "11111111-1111-4111-8111-111111111111", quantity: 1 }]
-      }
+      })
     );
     expect(out).toMatchObject({ orderId: "order-1", total_minor: 120 });
     expect(d.cartRepo.validateClientLinesForCheckout).toHaveBeenCalledTimes(1);
@@ -260,7 +265,7 @@ describe("checkoutStorefront validations", () => {
     // Session cart is looked up after order so Redis can be cleared even for client-line checkout.
     expect(d.cartRepo.findCartByShopAndCustomerId).toHaveBeenCalled();
     expect(d.cartRepo.deleteCart).not.toHaveBeenCalled();
-    expect(d.orderRepo.insertCheckoutIdempotency).not.toHaveBeenCalled();
+    expect(d.orderRepo.insertCheckoutIdempotency).toHaveBeenCalled();
   });
 
   it("clears Redis session cart after client-line checkout when one exists", async () => {
@@ -280,12 +285,9 @@ describe("checkoutStorefront validations", () => {
     const run = createCheckoutStorefront(d);
     await run(
       {},
-      {
-        shopId: "00000000-0000-4000-8000-000000000001",
-        customerId: "cust-1",
-        userId: "user-1",
+      checkoutInput({
         items: [{ productId: "11111111-1111-4111-8111-111111111111", quantity: 1 }]
-      }
+      })
     );
     expect(d.cartRepo.deleteCartItemsForCart).toHaveBeenCalledWith(
       {},
@@ -311,6 +313,15 @@ describe("checkoutStorefront validations", () => {
         cartId: null
       })
     );
+  });
+
+  it("rejects missing Idempotency-Key", async () => {
+    const d = deps();
+    const run = createCheckoutStorefront(d);
+    await expect(run({}, checkoutInput({ idempotencyKey: "" }))).rejects.toMatchObject({
+      code: "IDEMPOTENCY_KEY_REQUIRED"
+    });
+    expect(d.orderRepo.acquireCheckoutIdempotencyLock).not.toHaveBeenCalled();
   });
 
   it("rejects idempotency keys outside 8–128 characters", async () => {
@@ -530,15 +541,7 @@ describe("checkoutStorefront validations", () => {
     const d = deps();
     const run = createCheckoutStorefront({ ...d, priceStorefrontLines: vi.fn() });
     await expect(
-      run(
-        {},
-        {
-          shopId: "00000000-0000-4000-8000-000000000001",
-          customerId: "cust-1",
-          userId: "user-1",
-          couponCode: "SAVE10"
-        }
-      )
+      run({}, checkoutInput({ items: undefined, couponCode: "SAVE10" }))
     ).rejects.toMatchObject({ code: "CART_EMPTY" });
     expect(d.cartRepo.validateClientLinesForCheckout).not.toHaveBeenCalled();
   });

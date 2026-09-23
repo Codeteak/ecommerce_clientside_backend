@@ -53,14 +53,30 @@ export class OrderRepoPg extends OrderRepo {
         ? Number(row.ordered_quantity)
         : null;
     const lineTotal = Number(row.line_total_minor);
-    let paid =
-      orderedRaw != null && Number.isFinite(orderedRaw)
-        ? Math.max(0, orderedRaw)
-        : lineTotal === 0 && qty > 0
-          ? 0
-          : qty;
-    if (paid > qty) paid = qty;
-    const free = Math.max(0, qty - paid);
+    const orderedKg =
+      orderedRaw != null && Number.isFinite(orderedRaw) ? Math.max(0, orderedRaw) : null;
+    const gap = orderedKg != null ? Math.abs(qty - orderedKg) : 0;
+    const scaleAdjusted =
+      orderedKg != null &&
+      lineTotal > 0 &&
+      gap > 1e-6 &&
+      Math.abs(gap - Math.round(gap)) > 1e-4;
+    let paid;
+    let orderedQuantity;
+    if (scaleAdjusted) {
+      paid = qty;
+      orderedQuantity = orderedKg;
+    } else {
+      paid =
+        orderedKg != null
+          ? orderedKg
+          : lineTotal === 0 && qty > 0
+            ? 0
+            : qty;
+      if (paid > qty) paid = qty;
+      orderedQuantity = paid;
+    }
+    const free = scaleAdjusted ? 0 : Math.max(0, qty - paid);
     const isFreeReward = paid <= 0 && free > 0 && (lineTotal === 0 || !Number.isFinite(lineTotal));
 
     return {
@@ -74,7 +90,7 @@ export class OrderRepoPg extends OrderRepo {
       unit_size:
         row.unit_size_snapshot != null ? String(row.unit_size_snapshot) : "1",
       quantity: row.quantity,
-      ordered_quantity: paid,
+      ordered_quantity: orderedQuantity,
       paid_quantity: paid,
       free_quantity: free,
       offer_quantity: free,

@@ -6,6 +6,9 @@ import { patchRequestContext } from "../../../infra/logging/requestContext.js";
 
 const SESSION_ENDED_MESSAGE = "Your session has expired. Please sign in again.";
 
+/** DB fallback is only for Redis outage — never for missing/revoked JTIs (logout). */
+const JTI_DB_FALLBACK_REASONS = new Set(["redis_unavailable", "redis_not_configured"]);
+
 function setCustomerAuth(req, auth) {
   req.customerAuth = auth;
   patchRequestContext({
@@ -62,9 +65,11 @@ export function createRequireCustomerJwt({
               ? await accessTokenRegistry.getAccessJtiStatus(jti)
               : { active: await accessTokenRegistry.isAccessJtiActive(jti), reason: "legacy" };
           if (!status.active) {
-            const canFallback = allowJtiDbFallback && !skipDbSessionCheck;
+            const reason = status.reason || "inactive_jti";
+            const canFallback =
+              allowJtiDbFallback && !skipDbSessionCheck && JTI_DB_FALLBACK_REASONS.has(reason);
             if (canFallback) {
-              jtiFallbackReason = status.reason || "inactive_jti";
+              jtiFallbackReason = reason;
               logApiWarn("api.auth.jti_db_fallback", req, {
                 code: "ACCESS_JTI_DB_FALLBACK",
                 reason: jtiFallbackReason,
@@ -74,7 +79,7 @@ export function createRequireCustomerJwt({
             } else {
               logApiWarn("api.auth.rejected", req, {
                 code: "UNAUTHORIZED",
-                reason: status.reason || "revoked_access_jti",
+                reason: reason === "jti_missing" ? "revoked_or_missing_access_jti" : reason,
                 userId,
                 customerId
               });

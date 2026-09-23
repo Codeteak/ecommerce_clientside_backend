@@ -1,4 +1,5 @@
 import { requireShopId } from "../../../application/services/catalog/catalogShopId.js";
+import { AppError } from "../../../domain/errors/AppError.js";
 import { withClient, withTx } from "../../../infra/db/tx.js";
 import { asyncHandler } from "../asyncHandler.js";
 
@@ -67,6 +68,24 @@ function patchAddressHandler(ctx) {
   });
 }
 
+function deleteAddressHandler(ctx) {
+  return asyncHandler(async (req, res) => {
+    const shopId = requireShopId(req.shopId);
+    const { userId, customerId } = req.customerAuth;
+    await withClient((c) => ctx.assertCustomerShopAccess(c, shopId, customerId));
+    const cleared = await withTx((c) =>
+      ctx.authRepo.clearCustomerAddress(c, { customerId, userId })
+    );
+    if (!cleared) {
+      throw new AppError("No address is linked to this account", {
+        statusCode: 404,
+        code: "ADDRESS_NOT_FOUND"
+      });
+    }
+    res.status(204).send();
+  });
+}
+
 function requestPhoneChangeOtpHandler(ctx) {
   return asyncHandler(async (req, res) => {
     const shopId = requireShopId(req.shopId);
@@ -109,6 +128,7 @@ export const storefrontAccountController = {
   getAddress: (ctx) => getAddressHandler(ctx),
   postAddress: (ctx) => postAddressHandler(ctx),
   patchAddress: (ctx) => patchAddressHandler(ctx),
+  deleteAddress: (ctx) => deleteAddressHandler(ctx),
   requestPhoneChangeOtp: (ctx) => requestPhoneChangeOtpHandler(ctx),
   verifyPhoneChangeOtp: (ctx) => verifyPhoneChangeOtpHandler(ctx),
 
@@ -118,6 +138,7 @@ export const storefrontAccountController = {
       getAddress: getAddressHandler(ctx),
       postAddress: postAddressHandler(ctx),
       patchAddress: patchAddressHandler(ctx),
+      deleteAddress: deleteAddressHandler(ctx),
       requestPhoneChangeOtp: requestPhoneChangeOtpHandler(ctx),
       verifyPhoneChangeOtp: verifyPhoneChangeOtpHandler(ctx)
     };
