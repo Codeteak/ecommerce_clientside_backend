@@ -23,7 +23,8 @@ export function createCartPricing({ priceStorefrontLines }) {
         offerMinor: it.offer_price_minor_per_unit,
         categoryId: it.global_category_id ?? null,
         soldByWeight: it.sold_by_weight === true,
-        unitSize: it.unit_size_snapshot ?? it.unit_size ?? 1
+        unitSize: it.unit_size_snapshot ?? it.unit_size ?? 1,
+        unitLabel: it.unit_label ?? it.unit_label_snapshot ?? it.base_unit ?? null
       }));
 
     const codes = collectNormalizedCouponCodes({ couponCode, couponCodes });

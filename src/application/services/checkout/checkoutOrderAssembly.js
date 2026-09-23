@@ -120,7 +120,8 @@ export async function buildCheckoutOrderLines({
             offerMinor: live?.offer_price_minor_per_unit ?? null,
             categoryId: live?.global_category_id ?? null,
             soldByWeight: live?.sold_by_weight === true,
-            unitSize: live?.sold_by_weight === true ? 1 : (it.unit_size_snapshot ?? live?.unit_size ?? 1)
+            unitSize: live?.sold_by_weight === true ? 1 : (it.unit_size_snapshot ?? live?.unit_size ?? 1),
+            unitLabel: live?.base_unit ?? it.unit_label ?? it.unit_label_snapshot ?? null
           };
         })
     });

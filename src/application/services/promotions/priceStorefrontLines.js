@@ -23,12 +23,26 @@ function pricingError(code, message) {
   return new AppError(message, { statusCode: 400, code });
 }
 
-/** Packs × this factor × price per base unit. Sold-by-weight already prices per kg/g, so the factor stays 1. */
+/** Packs × this factor × price per base unit. Sold-by-weight already prices per kg, so factor stays 1.
+ * Gram-scale unit_size (e.g. 725 with unit g/kg) is normalized to kg so ₹165 does not become ₹119625.
+ */
 function sellableUnitFactor(line) {
-  if (line?.soldByWeight === true) return 1;
-  const raw = line?.unitSize ?? line?.unitSizeSnapshot ?? line?.unit_size_snapshot;
+  if (line?.soldByWeight === true || line?.sold_by_weight === true) return 1;
+  const raw = line?.unitSize ?? line?.unitSizeSnapshot ?? line?.unit_size_snapshot ?? line?.unit_size;
   const n = typeof raw === "string" ? Number(raw) : typeof raw === "number" ? raw : NaN;
-  return Number.isFinite(n) && n > 0 ? n : 1;
+  if (!Number.isFinite(n) || !(n > 0)) return 1;
+  const unit = String(
+    line?.unitLabel ?? line?.unit_label ?? line?.base_unit ?? line?.baseUnit ?? line?.unit ?? ""
+  )
+    .trim()
+    .toLowerCase();
+  if (unit === "g" || unit === "gm" || unit === "gram" || unit === "grams") {
+    return Math.round((n / 1000) * 10000) / 10000;
+  }
+  if (unit === "kg" || unit === "kgs" || unit === "kilogram" || unit === "kilograms" || !unit) {
+    if (n > 20) return Math.round((n / 1000) * 10000) / 10000;
+  }
+  return n;
 }
 
 function normalizeCouponCode(code) {
