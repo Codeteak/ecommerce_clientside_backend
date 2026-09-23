@@ -188,9 +188,12 @@ Use when the customer web app should refresh prices without a manual reload.
 - Set `STOREFRONT_CATALOG_REALTIME_TOKEN` to a long random secret (different from staff JWT and `REALTIME_CONNECT_TOKEN`).
 - Expose the same value to the customer frontend as `NEXT_PUBLIC_STOREFRONT_CATALOG_REALTIME_TOKEN`.
 - Set `NEXT_PUBLIC_CATALOG_REALTIME_ENABLED=true` on the customer frontend when realtime is live.
+- Set `REALTIME_ENABLED=true` on the customer API (otherwise `/socket.io` is not attached and browsers fail to connect).
+- Ensure `CORS_ORIGIN` includes every shop origin that opens a Socket.IO connection (e.g. tenant domains).
 - Storefront sockets join `shop:{shopId}:catalog` only — they do **not** receive `order.placed`.
 - Admin catalog changes already call `POST /storefront/catalog/cache/invalidate`; that bumps Redis and emits `catalog.invalidated`.
-- The load balancer / tunnel must allow WebSocket upgrade to `/socket.io` on the customer API origin.
+- The load balancer / Cloudflare must allow WebSocket upgrade **and** HTTP long-polling to `/socket.io` on the customer API origin (`customer.yaadro.online`).
+- The customer web prefers polling first, then upgrades to WebSocket; if the socket still cannot connect it falls back to HTTP catalog revision polling (prices still refresh).
 
 ## 12. Search
 
