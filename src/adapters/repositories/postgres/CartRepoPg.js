@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { CartRepo } from "../../../application/ports/repositories/CartRepo.js";
 import { AppError } from "../../../domain/errors/AppError.js";
-import { MAX_LINE_QUANTITY } from "../../../application/services/storefront/cart/cartLineRules.js";
+import { MAX_LINE_QUANTITY, normalizeCheckoutLineQuantity } from "../../../application/services/storefront/cart/cartLineRules.js";
 import { setTenantContext } from "../../../infra/db/tenantContext.js";
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
 import {
@@ -402,10 +402,12 @@ export class CartRepoPg extends CartRepo {
 
     return uniqueProductIds.map((productId) => {
       const p = lockedById.get(String(productId));
+      const soldByWeight = p.sold_by_weight === true;
+      const quantity = normalizeCheckoutLineQuantity(qtyByProduct.get(productId), soldByWeight);
       return {
         id: randomUUID(),
         product_id: productId,
-        quantity: String(qtyByProduct.get(productId)),
+        quantity: String(quantity),
         unit_price_minor: Number(p.price_minor_per_unit),
         unit_size_snapshot: String(p.unit_size ?? "1"),
         title_snapshot: p.name,

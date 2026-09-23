@@ -165,10 +165,9 @@ Logout behavior:
 
 Redis fallback:
 
-- `ACCESS_JTI_DB_FALLBACK_ENABLED=true` lets protected APIs fall back to PostgreSQL if Redis is down or the `jti` key is missing.
-- This keeps users online after a cache flush.
-- Tradeoff: a manually logged-out access token can work until the short access JWT expires.
-- Set `ACCESS_JTI_DB_FALLBACK_ENABLED=false` if you want strict fail-closed behavior.
+- `ACCESS_JTI_DB_FALLBACK_ENABLED=true` lets protected APIs fall back to PostgreSQL if Redis is down (`redis_unavailable` / `redis_not_configured`).
+- A missing/revoked JTI after logout is still rejected (logout sticks).
+- Set `ACCESS_JTI_DB_FALLBACK_ENABLED=false` if you want strict fail-closed behavior even when Redis is unavailable.
 
 ## 11. Realtime Picker App
 

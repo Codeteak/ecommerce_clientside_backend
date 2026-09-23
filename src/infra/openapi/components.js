@@ -43,9 +43,9 @@ export const parameters = {
   IdempotencyKey: {
     name: "Idempotency-Key",
     in: "header",
-    required: false,
+    required: true,
     description:
-      "Optional. Send the same value on retries so duplicate checkouts are not created (8–128 characters).",
+      "Required. Send the same value on retries so duplicate checkouts are not created (8–128 characters).",
     schema: { type: "string", minLength: 8, maxLength: 128 }
   },
   OrdersLimit: {
@@ -217,9 +217,6 @@ export const schemas = {
           line2: { type: "string", maxLength: 500, nullable: true },
           landmark: { type: "string", maxLength: 500, nullable: true },
           city: { type: "string", maxLength: 200, nullable: true },
-          state: { type: "string", maxLength: 200, nullable: true },
-          postalCode: { type: "string", maxLength: 32, nullable: true },
-          country: { type: "string", maxLength: 200, nullable: true },
           lat: { type: "number", minimum: -90, maximum: 90, nullable: true },
           lng: { type: "number", minimum: -180, maximum: 180, nullable: true },
           raw: { type: "string", maxLength: 8000, nullable: true }
@@ -265,9 +262,6 @@ export const schemas = {
       line2: { type: "string", nullable: true },
       landmark: { type: "string", nullable: true },
       city: { type: "string", nullable: true },
-      state: { type: "string", nullable: true },
-      postalCode: { type: "string", nullable: true },
-      country: { type: "string", nullable: true },
       lat: { type: "number", nullable: true },
       lng: { type: "number", nullable: true },
       raw: { type: "string", nullable: true }
@@ -276,14 +270,12 @@ export const schemas = {
   AddressPostRequest: {
     type: "object",
     required: ["line1"],
+    additionalProperties: false,
     properties: {
       line1: { type: "string", minLength: 1, maxLength: 200 },
       line2: { type: "string", maxLength: 200, nullable: true },
       landmark: { type: "string", maxLength: 200, nullable: true },
       city: { type: "string", maxLength: 120, nullable: true },
-      state: { type: "string", maxLength: 120, nullable: true },
-      postalCode: { type: "string", maxLength: 32, nullable: true },
-      country: { type: "string", maxLength: 120, nullable: true },
       lat: { type: "number", minimum: -90, maximum: 90, nullable: true },
       lng: { type: "number", minimum: -180, maximum: 180, nullable: true },
       raw: { type: "string", maxLength: 2000, nullable: true }
@@ -347,6 +339,7 @@ export const schemas = {
   },
   CheckoutBody: {
     type: "object",
+    required: ["items"],
     properties: {
       notes: { type: "string", maxLength: 2000, nullable: true },
       couponCode: {
@@ -361,7 +354,7 @@ export const schemas = {
         minItems: 1,
         maxItems: 100,
         description:
-          "Client cart lines (productId + quantity). Catalog locks and live prices at checkout; client prices are ignored. When omitted, the server session cart is used.",
+          "Client cart lines (productId + quantity). Catalog locks and live prices at checkout; client prices are ignored. Required — send the device cart lines.",
         items: {
           type: "object",
           required: ["productId", "quantity"],

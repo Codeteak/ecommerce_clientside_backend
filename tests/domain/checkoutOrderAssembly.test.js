@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { buildCheckoutOrderLines } from "../../src/application/services/checkout/checkoutOrderAssembly.js";
+import {
+  buildCheckoutOrderLines,
+  collapseWeightStepOrderItem
+} from "../../src/application/services/checkout/checkoutOrderAssembly.js";
 
 describe("buildCheckoutOrderLines unit_size snapshot", () => {
   it("copies unit_size_snapshot from cart lines into order items", async () => {
@@ -55,6 +58,57 @@ describe("buildCheckoutOrderLines unit_size snapshot", () => {
     });
 
     expect(orderItems[0].unitSizeSnapshot).toBe("1");
+  });
+
+  it("writes a 250 g step as 0.25 kg with unit size 1 and the per-kg price", async () => {
+    const { orderItems } = await buildCheckoutOrderLines({
+      cartRepo: null,
+      client: null,
+      shopId: "shop",
+      custKey: "cust",
+      items: [
+        {
+          id: "line-1",
+          product_id: "apple",
+          title_snapshot: "Apple",
+          unit_label: "kg",
+          unit_size_snapshot: "0.25",
+          quantity: "2",
+          unit_price_minor: 10000,
+          is_custom: false,
+          custom_note: null
+        }
+      ],
+      couponCode: null,
+      priceStorefrontLines: null
+    });
+
+    expect(orderItems[0].quantity).toBe(0.5);
+    expect(orderItems[0].paidQuantity).toBe(0.5);
+    expect(orderItems[0].unitLabel).toBe("kg");
+    expect(orderItems[0].unitSizeSnapshot).toBe("1");
+    expect(orderItems[0].unitPriceMinor).toBe(10000);
+    expect(orderItems[0].lineTotalMinor).toBe(5000);
+  });
+});
+
+describe("collapseWeightStepOrderItem", () => {
+  it("keeps an already priced 250 g line and does not double the step", () => {
+    const item = collapseWeightStepOrderItem({
+      isCustom: false,
+      freeQuantity: 0,
+      unitLabel: "kg",
+      unitSizeSnapshot: "0.25",
+      quantity: 1,
+      paidQuantity: 1,
+      unitPriceMinor: 10000,
+      listPriceMinor: 10000,
+      lineTotalMinor: 2500
+    });
+    expect(item.quantity).toBe(0.25);
+    expect(item.unitSizeSnapshot).toBe("1");
+    expect(item.unitPriceMinor).toBe(10000);
+    expect(item.lineTotalMinor).toBe(2500);
   });
 });
 

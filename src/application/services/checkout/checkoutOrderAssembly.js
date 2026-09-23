@@ -4,6 +4,55 @@ function unitSizeSnapshotFromCartLine(it) {
   return String(it.unit_size_snapshot ?? "1");
 }
 
+function isMassUnit(unit) {
+  const u = String(unit || "").trim().toLowerCase();
+  return u === "kg" || u === "g" || u === "gm" || u === "gram" || u === "grams";
+}
+
+/**
+ * Persist a weight step as billed kilograms with unit size 1 so later
+ * `quantity × unit size × price per kg` does not apply the step twice.
+ * `quantity` and `paidQuantity` start equal to the ordered kilograms.
+ * @param {Record<string, unknown>} item
+ */
+export function collapseWeightStepOrderItem(item) {
+  if (!item || item.isCustom) return item;
+  if (Number(item.freeQuantity) > 0) return item;
+  const unit = String(item.unitLabel || "").trim().toLowerCase();
+  if (!isMassUnit(unit)) return item;
+  const size = Number(item.unitSizeSnapshot);
+  if (!Number.isFinite(size) || size <= 0 || Math.abs(size - 1) < 1e-9) return item;
+
+  const packs = Number(item.paidQuantity ?? item.quantity);
+  if (!Number.isFinite(packs) || packs <= 0) return item;
+  const perUnit = Number(item.unitPriceMinor);
+  const billedKg = unit === "kg" ? packs * size : (packs * size) / 1000;
+  const kg = Math.round(billedKg * 10000) / 10000;
+  if (!(kg > 0)) return item;
+
+  const priceScale = unit === "kg" ? 1 : 1000;
+  const pricePerKg = Math.round(perUnit * priceScale);
+  const listPerKg = Math.round(Number(item.listPriceMinor ?? perUnit) * priceScale);
+  const withoutStep = Math.round(packs * perUnit);
+  const withStep = Math.round(packs * size * perUnit);
+  const rawTotal = Number(item.lineTotalMinor);
+  const lineTotalMinor =
+    Math.abs(rawTotal - withoutStep) <= 1 && Math.abs(withStep - withoutStep) > 1
+      ? withStep
+      : rawTotal;
+
+  return {
+    ...item,
+    quantity: kg,
+    paidQuantity: kg,
+    unitLabel: "kg",
+    unitSizeSnapshot: "1",
+    unitPriceMinor: pricePerKg,
+    listPriceMinor: listPerKg,
+    lineTotalMinor
+  };
+}
+
 export async function loadLiveProductPricingMap(cartRepo, client, shopId, items) {
   const productIds = [
     ...new Set(items.filter((it) => !it.is_custom && it.product_id).map((it) => String(it.product_id)))
@@ -70,7 +119,8 @@ export async function buildCheckoutOrderLines({
             listMinor: live?.price_minor_per_unit ?? it.unit_price_minor,
             offerMinor: live?.offer_price_minor_per_unit ?? null,
             categoryId: live?.global_category_id ?? null,
-            soldByWeight: live?.sold_by_weight === true
+            soldByWeight: live?.sold_by_weight === true,
+            unitSize: live?.sold_by_weight === true ? 1 : (it.unit_size_snapshot ?? live?.unit_size ?? 1)
           };
         })
     });
@@ -116,8 +166,13 @@ export async function buildCheckoutOrderLines({
       const unitPriceMinor = p ? Number(p.final_price_minor) : Number(it.unit_price_minor);
       const lineTotalMinor = p ? Number(p.line_total_minor) : minorFromLine(it.quantity, it.unit_price_minor);
       const listPriceMinor = p ? Number(p.list_price_minor) : Number(it.unit_price_minor);
+      const live = liveByProduct.get(String(it.product_id));
+      const stepSize =
+        live?.sold_by_weight === true
+          ? 1
+          : Number(unitSizeSnapshotFromCartLine(it)) || 1;
       const compareTotal = p
-        ? Math.round(Number(p.total_price_minor) * quantity)
+        ? Math.round(Number(p.total_price_minor) * quantity * (stepSize > 0 ? stepSize : 1))
         : lineTotalMinor;
       const lineDiscountMinor = Math.max(0, compareTotal - lineTotalMinor);
       return {
@@ -246,6 +301,8 @@ export async function buildCheckoutOrderLines({
       };
     });
   }
+
+  orderItems = orderItems.map((item) => collapseWeightStepOrderItem(item));
 
   return {
     subtotal,

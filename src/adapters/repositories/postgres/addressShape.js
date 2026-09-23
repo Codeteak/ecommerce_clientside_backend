@@ -1,19 +1,17 @@
 /**
  * Live `addresses` table is lean: id, raw, lat, lng.
  * Structured fields (line1, city, …) are stored inside `raw` as JSON when possible.
+ * Legacy keys state / postal_code / country in old raw JSON are ignored on read.
  */
 
-const STRUCTURED_KEYS = ["line1", "line2", "landmark", "city", "state", "postal_code", "country"];
+const STRUCTURED_KEYS = ["line1", "line2", "landmark", "city"];
 
 function emptyStructured() {
   return {
     line1: null,
     line2: null,
     landmark: null,
-    city: null,
-    state: null,
-    postal_code: null,
-    country: null
+    city: null
   };
 }
 
@@ -24,9 +22,6 @@ function fromRawObject(obj) {
   out.line2 = obj.line2 ?? obj.line_2 ?? null;
   out.landmark = obj.landmark ?? null;
   out.city = obj.city ?? null;
-  out.state = obj.state ?? null;
-  out.postal_code = obj.postal_code ?? obj.postalCode ?? null;
-  out.country = obj.country ?? null;
   return out;
 }
 
@@ -56,9 +51,6 @@ export function parseAddressRow(row, id) {
     line2: structured.line2,
     landmark: structured.landmark,
     city: structured.city,
-    state: structured.state,
-    postalCode: structured.postal_code,
-    country: structured.country,
     lat: row.lat ?? null,
     lng: row.lng ?? null,
     raw: rawText ?? null

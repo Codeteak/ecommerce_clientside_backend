@@ -48,11 +48,11 @@ describe("requireCustomerJwt session cache", () => {
     );
   });
 
-  it("falls back to DB session validation when access jti is missing and fallback is enabled", async () => {
+  it("falls back to DB session validation when Redis is unavailable and fallback is enabled", async () => {
     const accessTokenRegistry = {
       getAccessJtiStatus: vi.fn().mockResolvedValue({
         active: false,
-        reason: "jti_missing"
+        reason: "redis_unavailable"
       })
     };
     const authRepo = {
@@ -80,6 +80,40 @@ describe("requireCustomerJwt session cache", () => {
     expect(authRepo.isCustomerSessionValid).toHaveBeenCalledWith("u-1", "c-1");
     expect(next).toHaveBeenCalled();
     expect(req.customerAuth).toMatchObject({ userId: "u-1", customerId: "c-1" });
+  });
+
+  it("rejects missing/revoked access jti even when DB fallback is enabled (logout must stick)", async () => {
+    const accessTokenRegistry = {
+      getAccessJtiStatus: vi.fn().mockResolvedValue({
+        active: false,
+        reason: "jti_missing"
+      })
+    };
+    const authRepo = {
+      isCustomerSessionValid: vi.fn().mockResolvedValue(true)
+    };
+    const middleware = createRequireCustomerJwt({
+      authRepo,
+      accessTokenRegistry,
+      skipDbSessionCheck: false,
+      allowJtiDbFallback: true,
+      shouldUseSessionCache: () => false
+    })();
+
+    const req = {
+      headers: { authorization: "Bearer test-token" },
+      method: "GET",
+      path: "/storefront/cart"
+    };
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    await middleware(req, res, next);
+
+    expect(authRepo.isCustomerSessionValid).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 401, code: "UNAUTHORIZED" })
+    );
   });
 
   it("rejects inactive access jti when fallback is disabled", async () => {

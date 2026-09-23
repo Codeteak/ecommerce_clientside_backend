@@ -151,9 +151,20 @@ export function createStorefrontListingPromotions({ promotionRepo, shopPromotion
       const promotionsPaused = rawSettings?.promotions_paused === true;
       const defaultOverlapMode =
         rawSettings?.default_overlap_mode === "best_for_customer" ? "best_for_customer" : "priority";
-      const overlays = promotionsPaused
-        ? []
-        : await promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, [row.id]);
+      // Overlays + bundles are independent once we know pause state — run in parallel.
+      const [overlays, bundleRows] = promotionsPaused
+        ? [[], []]
+        : await Promise.all([
+            promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, [
+              row.id
+            ]),
+            promoReads.listActiveBundleRulesForProduct(
+              client,
+              shopId,
+              row.id,
+              row.category_id ?? null
+            )
+          ]);
       const priceMap = buildStorefrontListingUnitPriceMap({
         promotionsPaused,
         defaultOverlapMode,
@@ -162,9 +173,6 @@ export function createStorefrontListingPromotions({ promotionRepo, shopPromotion
       });
       const entry = priceMap.get(idStr);
       const priced = withStorefrontDetailPricing(base, row, entry?.promoPriceMinor ?? null);
-      const bundleRows = promotionsPaused
-        ? []
-        : await promoReads.listActiveBundleRulesForProduct(client, shopId, row.id, row.category_id ?? null);
       return {
         ...priced,
         bundle_rules: bundleRows.map(mapActiveBundleRuleRow)

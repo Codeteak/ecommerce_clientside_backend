@@ -135,6 +135,12 @@ export class CustomerAuthRepo {
     throw new Error("Not implemented");
   }
 
+  async clearCustomerAddress(_client, _args) {
+    void _client;
+    void _args;
+    throw new Error("Not implemented");
+  }
+
   async insertUser(_client, _row) {
     void _client;
     void _row;

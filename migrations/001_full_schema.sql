@@ -511,6 +511,7 @@ CREATE TABLE IF NOT EXISTS global_products (
   inferred BOOLEAN NOT NULL DEFAULT false,
   seo_title TEXT,
   seo_description TEXT,
+  name_key TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -2264,3 +2265,151 @@ $$;
 ALTER FUNCTION app.find_product_gallery_asset_ids_by_name_and_shop(uuid, text) SET row_security = off;
 REVOKE ALL ON FUNCTION app.find_product_gallery_asset_ids_by_name_and_shop(uuid, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.find_product_gallery_asset_ids_by_name_and_shop(uuid, text) TO PUBLIC;
+
+-- 044_product_image_name_key.sql
+-- Exact image-library key. Same definition as admin migration 021_product_image_name_key.sql.
+ALTER TABLE global_products
+  ADD COLUMN IF NOT EXISTS name_key TEXT;
+
+ALTER TABLE shop_products
+  ADD COLUMN IF NOT EXISTS name_key TEXT;
+
+COMMENT ON COLUMN global_products.name_key IS
+  'Exact image-library key derived from name. Not a barcode.';
+COMMENT ON COLUMN shop_products.name_key IS
+  'Exact image-library key derived from the shop product name. Not the shop barcode.';
+
+CREATE INDEX IF NOT EXISTS idx_global_products_name_key
+  ON global_products (name_key)
+  WHERE name_key IS NOT NULL AND name_key <> '';
+
+CREATE INDEX IF NOT EXISTS idx_shop_products_name_key
+  ON shop_products (name_key)
+  WHERE name_key IS NOT NULL AND name_key <> '';
+
+CREATE OR REPLACE FUNCTION app.product_name_key(p_name text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+  WITH cleaned AS (
+    SELECT regexp_replace(lower(btrim(COALESCE(p_name, ''))), '\s+', ' ', 'g') AS n
+  ),
+  parts AS (
+    SELECT
+      n,
+      CASE WHEN n = '' THEN '' ELSE regexp_replace(n, '^.* ', '') END AS last
+    FROM cleaned
+  )
+  SELECT CASE
+    WHEN n = '' THEN NULL
+    WHEN length(last) > 3 AND right(last, 1) = 's' AND right(last, 2) <> 'ss' THEN
+      CASE
+        WHEN position(' ' IN n) = 0 THEN left(last, length(last) - 1)
+        ELSE left(n, length(n) - length(last)) || left(last, length(last) - 1)
+      END
+    ELSE n
+  END
+  FROM parts;
+$$;
+
+CREATE OR REPLACE FUNCTION app.find_shared_catalog_gallery_asset_ids_by_name_key(p_name text)
+RETURNS uuid[]
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
+DECLARE
+  v_key text := app.product_name_key(p_name);
+  v_ids uuid[];
+BEGIN
+  IF v_key IS NULL OR length(v_key) < 2 THEN
+    RETURN ARRAY[]::uuid[];
+  END IF;
+
+  SELECT COALESCE(array_agg(z.media_asset_id ORDER BY z.min_ord, z.media_asset_id), ARRAY[]::uuid[])
+  INTO v_ids
+  FROM (
+    SELECT y.media_asset_id, y.min_ord
+    FROM (
+      SELECT x.media_asset_id, MIN(x.sort_order) AS min_ord
+      FROM (
+        SELECT gpi.media_asset_id, gpi.sort_order
+        FROM global_product_images gpi
+        INNER JOIN global_products gp ON gp.id = gpi.global_product_id
+        WHERE gp.name_key = v_key
+        UNION ALL
+        SELECT spi.media_asset_id, spi.sort_order
+        FROM shop_product_images spi
+        INNER JOIN shop_products sp ON sp.id = spi.shop_product_id
+        WHERE sp.name_key = v_key
+      ) x
+      GROUP BY x.media_asset_id
+    ) y
+    ORDER BY y.min_ord, y.media_asset_id
+    LIMIT 6
+  ) z;
+
+  RETURN COALESCE(v_ids, ARRAY[]::uuid[]);
+END;
+$$;
+
+DO $$
+DECLARE
+  tbl_owner name;
+BEGIN
+  SELECT pg_catalog.pg_get_userbyid(c.relowner)::name INTO STRICT tbl_owner
+  FROM pg_catalog.pg_class c
+  JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public'
+    AND c.relname = 'shop_products'
+    AND c.relkind = 'r'
+  LIMIT 1;
+  EXECUTE format(
+    'ALTER FUNCTION app.find_shared_catalog_gallery_asset_ids_by_name_key(text) OWNER TO %I',
+    tbl_owner
+  );
+EXCEPTION
+  WHEN OTHERS THEN
+    EXECUTE 'ALTER FUNCTION app.find_shared_catalog_gallery_asset_ids_by_name_key(text) OWNER TO postgres';
+END $$;
+
+ALTER FUNCTION app.find_shared_catalog_gallery_asset_ids_by_name_key(text) SET row_security = off;
+REVOKE ALL ON FUNCTION app.find_shared_catalog_gallery_asset_ids_by_name_key(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.find_shared_catalog_gallery_asset_ids_by_name_key(text) TO PUBLIC;
+
+CREATE OR REPLACE FUNCTION app.backfill_product_name_keys()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
+BEGIN
+  UPDATE global_products
+  SET name_key = app.product_name_key(name)
+  WHERE name_key IS DISTINCT FROM app.product_name_key(name);
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'shop_products'
+      AND column_name = 'name'
+  ) THEN
+    EXECUTE $upd$
+      UPDATE shop_products
+      SET name_key = app.product_name_key(name)
+      WHERE name IS NOT NULL
+        AND name_key IS DISTINCT FROM app.product_name_key(name)
+    $upd$;
+  END IF;
+END;
+$$;
+
+SELECT app.backfill_product_name_keys();
+
+DROP FUNCTION app.backfill_product_name_keys();

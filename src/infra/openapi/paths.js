@@ -1033,7 +1033,7 @@ export function buildPaths() {
         tags: ["Storefront checkout"],
         summary: "Place order",
         description:
-          "Send `Idempotency-Key` (optional) on the client to make retries safe (same key returns the same order). Send `items` (`productId` + `quantity`) from the device cart; catalog validates and re-prices. Optional `couponCode` applies cart-level coupon discount; SKU and bundle promos are automatic.",
+          "Send `Idempotency-Key` (required) so retries return the same order instead of creating duplicates. Send `items` (`productId` + `quantity`) from the device cart; catalog validates and re-prices. Optional `couponCode` applies cart-level coupon discount; SKU and bundle promos are automatic.",
         security: [{ bearerAuth: [] }],
         parameters: [...shopParams, P.IdempotencyKey],
         requestBody: {
@@ -1124,6 +1124,17 @@ export function buildPaths() {
           "204": { description: "No content" },
           "400": jsonErr,
           "401": jsonErr
+        }
+      },
+      delete: {
+        tags: ["Storefront account"],
+        summary: "Delete linked address",
+        security: [{ bearerAuth: [] }],
+        parameters: [...shopParams],
+        responses: {
+          "204": { description: "No content" },
+          "401": jsonErr,
+          "404": jsonErr
         }
       }
     },

@@ -16,10 +16,19 @@ import {
   shopProductNameSql,
   shopProductThumbJoinSql
 } from "../../../adapters/repositories/postgres/queries/shopProductCatalogSql.js";
+import { sellableAtPurchasePredicates } from "../../../adapters/repositories/postgres/queries/sellableShopProductSql.js";
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
 
 function pricingError(code, message) {
   return new AppError(message, { statusCode: 400, code });
+}
+
+/** Packs × this factor × price per base unit. Sold-by-weight already prices per kg/g, so the factor stays 1. */
+function sellableUnitFactor(line) {
+  if (line?.soldByWeight === true) return 1;
+  const raw = line?.unitSize ?? line?.unitSizeSnapshot ?? line?.unit_size_snapshot;
+  const n = typeof raw === "string" ? Number(raw) : typeof raw === "number" ? raw : NaN;
+  return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
 function normalizeCouponCode(code) {
@@ -158,10 +167,11 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
       const qty = soldByWeight
         ? Math.max(0, Math.round((Number.isFinite(rawQty) ? rawQty : 0) * 10_000) / 10_000)
         : Math.max(0, Math.trunc(Number.isFinite(rawQty) ? rawQty : 0));
+      const sellableFactor = sellableUnitFactor(line);
       const promoPriceMinor = priceMap.get(productId)?.promoPriceMinor ?? null;
       const unit = computeStorefrontUnitPricing(line.listMinor, line.offerMinor ?? null, promoPriceMinor);
-      const lineTotalMinor = Math.round(qty * unit.finalMinor);
-      const compareLineTotal = Math.round(qty * unit.compareAtMinor);
+      const lineTotalMinor = Math.round(qty * sellableFactor * unit.finalMinor);
+      const compareLineTotal = Math.round(qty * sellableFactor * unit.compareAtMinor);
       const lineDiscountMinor = Math.max(0, compareLineTotal - lineTotalMinor);
 
       subtotalBeforeCoupon += lineTotalMinor;
@@ -179,7 +189,7 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
           if (!appliedPromotionIds.includes(promotionId)) {
             appliedPromotionIds.push(promotionId);
           }
-          const discountMinor = Math.max(0, Math.round(qty * unit.promoDiscountMinor));
+          const discountMinor = Math.max(0, Math.round(qty * sellableFactor * unit.promoDiscountMinor));
           if (discountMinor > 0) {
             appliedPromotionDiscounts.set(
               promotionId,
@@ -194,6 +204,7 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
         productId,
         categoryId: line.categoryId ?? null,
         quantity: qty,
+        sellableFactor,
         unitFinalMinor: unit.finalMinor,
         lineTotalMinor,
         listMinor: unit.listMinor,
@@ -226,7 +237,7 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
              ${shopProductThumbJoinSql("sp", "pm")}
             WHERE sp.shop_id = $1::uuid
               AND sp.id = ANY($2::uuid[])
-              AND sp.status = 'active'`,
+              AND ${sellableAtPurchasePredicates}`,
           [shopId, injectIds]
         );
         for (const row of rows) {

@@ -124,15 +124,21 @@ export function evaluateBundleDiscounts(lines, bundleRules, opts) {
 /**
  * @param {PricedLine[]} lines
  */
+function lineSellableFactor(line) {
+  const n = Number(line?.sellableFactor);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
 function refreshLinePayableTotals(lines) {
   for (const line of lines) {
     const paid = Math.max(0, line.paidQuantity ?? line.quantity);
     const free = Math.max(0, line.freeQuantity ?? 0);
+    const factor = lineSellableFactor(line);
     line.paidQuantity = paid;
     line.freeQuantity = free;
     line.displayQuantity = paid + free;
-    line.linePayableMinor = Math.max(0, Math.round(paid * line.unitFinalMinor));
-    line.bundleDiscountMinor = Math.max(0, Math.round(free * line.unitFinalMinor));
+    line.linePayableMinor = Math.max(0, Math.round(paid * line.unitFinalMinor * factor));
+    line.bundleDiscountMinor = Math.max(0, Math.round(free * line.unitFinalMinor * factor));
   }
 }
 
@@ -220,7 +226,7 @@ function applyBundleRuleToLines(lines, rule) {
       const freeQty = Math.min(paid, freeLeft);
       if (freeQty <= 0) continue;
       freeLeft -= freeQty;
-      const unitDiscount = discountForFreeUnits(line.unitFinalMinor, freeQty, rule);
+      const unitDiscount = discountForFreeUnits(line.unitFinalMinor, freeQty, rule, lineSellableFactor(line));
       line.freeQuantity = (line.freeQuantity ?? 0) + freeQty;
       line.paidQuantity = Math.max(0, paid - freeQty);
       if (!line.appliedPromotionIds.includes(pid)) line.appliedPromotionIds.push(pid);
@@ -238,7 +244,7 @@ function applyBundleRuleToLines(lines, rule) {
       const paid = Math.max(0, line.paidQuantity ?? line.quantity);
       const freeQty = Math.floor(paid / buyQty) * getQty;
       if (freeQty <= 0) continue;
-      const unitDiscount = discountForFreeUnits(line.unitFinalMinor, freeQty, rule);
+      const unitDiscount = discountForFreeUnits(line.unitFinalMinor, freeQty, rule, lineSellableFactor(line));
       line.freeQuantity = (line.freeQuantity ?? 0) + freeQty;
       line.bundleDiscountMinor = (line.bundleDiscountMinor ?? 0) + unitDiscount;
       if (!line.appliedPromotionIds.includes(pid)) {
@@ -270,7 +276,10 @@ function allocateFreeUnitsAcrossLines(matched, totalFree, rule, promotionId) {
   for (const line of matched) {
     const paid = Math.max(0, line.paidQuantity ?? line.quantity);
     for (let i = 0; i < paid; i += 1) {
-      slots.push({ line, unitPrice: Math.max(0, Math.trunc(line.unitFinalMinor)) });
+      slots.push({
+        line,
+        unitPrice: Math.max(0, Math.round(Math.trunc(line.unitFinalMinor) * lineSellableFactor(line)))
+      });
     }
   }
   slots.sort((a, b) => a.unitPrice - b.unitPrice);
@@ -286,7 +295,7 @@ function allocateFreeUnitsAcrossLines(matched, totalFree, rule, promotionId) {
 
   let ruleDiscount = 0;
   for (const [line, freeQty] of freeByLine) {
-    const unitDiscount = discountForFreeUnits(line.unitFinalMinor, freeQty, rule);
+    const unitDiscount = discountForFreeUnits(line.unitFinalMinor, freeQty, rule, lineSellableFactor(line));
     line.freeQuantity = (line.freeQuantity ?? 0) + freeQty;
     line.bundleDiscountMinor = (line.bundleDiscountMinor ?? 0) + unitDiscount;
     ruleDiscount += unitDiscount;
@@ -305,10 +314,11 @@ function allocateFreeUnitsAcrossLines(matched, totalFree, rule, promotionId) {
  * @param {number} freeQty
  * @param {BundleRuleRow} rule
  */
-function discountForFreeUnits(unitFinalMinor, freeQty, rule) {
+function discountForFreeUnits(unitFinalMinor, freeQty, rule, factor = 1) {
   const unit = Math.max(0, Math.trunc(unitFinalMinor));
   const free = Math.max(0, Math.trunc(freeQty));
-  const base = unit * free;
+  const step = Number.isFinite(factor) && factor > 0 ? factor : 1;
+  const base = Math.round(unit * free * step);
   if (rule.reward_type === "free") {
     return base;
   }
