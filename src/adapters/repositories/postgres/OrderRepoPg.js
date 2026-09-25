@@ -396,6 +396,7 @@ export class OrderRepoPg extends OrderRepo {
     await setTenantContext(client, shopId);
     const { rows: o } = await client.query(
       `SELECT o.id, o.shop_id, o.customer_id, o.order_number, o.status, o.payment_method,
+              o.customer_name, o.customer_phone, o.customer_address,
               o.subtotal_minor, o.delivery_fee_minor, o.total_minor, 'INR'::text AS currency, o.notes,
               o.promotion_discount_total_minor, o.coupon_code_normalized, o.applied_promotion_ids,
               ${COUPON_DISCOUNT_SELECT("o")},
