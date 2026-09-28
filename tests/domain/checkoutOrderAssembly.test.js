@@ -110,6 +110,107 @@ describe("collapseWeightStepOrderItem", () => {
     expect(item.unitPriceMinor).toBe(10000);
     expect(item.lineTotalMinor).toBe(2500);
   });
+
+  it("does not treat sold-by-weight kg quantity as pack count × catalog step", () => {
+    // Apple ₹412/kg, min 100 g: cart stores qty=0.1 kg, unit_size_snapshot must stay 1.
+    // If catalog step 0.1 leaked into snapshot, collapse used to bill 0.01 kg.
+    const item = collapseWeightStepOrderItem({
+      isCustom: false,
+      freeQuantity: 0,
+      soldByWeight: true,
+      unitLabel: "kg",
+      unitSizeSnapshot: "0.1",
+      quantity: 0.1,
+      paidQuantity: 0.1,
+      unitPriceMinor: 41200,
+      listPriceMinor: 41200,
+      lineTotalMinor: 4120
+    });
+    expect(item.quantity).toBe(0.1);
+    expect(item.paidQuantity).toBe(0.1);
+    expect(item.lineTotalMinor).toBe(4120);
+  });
+
+  it("leaves SBW 200 g (0.2 kg) and ₹82.40 untouched", () => {
+    const item = collapseWeightStepOrderItem({
+      isCustom: false,
+      freeQuantity: 0,
+      soldByWeight: true,
+      unitLabel: "kg",
+      unitSizeSnapshot: "1",
+      quantity: 0.2,
+      paidQuantity: 0.2,
+      unitPriceMinor: 41200,
+      listPriceMinor: 41200,
+      lineTotalMinor: 8240
+    });
+    expect(item.quantity).toBe(0.2);
+    expect(item.lineTotalMinor).toBe(8240);
+    expect(item.unitSizeSnapshot).toBe("1");
+  });
+});
+
+describe("buildCheckoutOrderLines sold-by-weight", () => {
+  it("keeps 100 g as 0.1 kg at ₹41.20 when catalog step would otherwise double-apply", async () => {
+    const { orderItems, subtotal } = await buildCheckoutOrderLines({
+      cartRepo: null,
+      client: null,
+      shopId: "shop",
+      custKey: "cust",
+      items: [
+        {
+          id: "line-1",
+          product_id: "apple",
+          title_snapshot: "Apple",
+          unit_label: "kg",
+          // Mistaken catalog step on the line (pre-fix checkout path).
+          unit_size_snapshot: "0.1",
+          sold_by_weight: true,
+          quantity: "0.1",
+          unit_price_minor: 41200,
+          is_custom: false,
+          custom_note: null
+        }
+      ],
+      couponCode: null,
+      priceStorefrontLines: null
+    });
+
+    expect(orderItems[0].quantity).toBe(0.1);
+    expect(orderItems[0].paidQuantity).toBe(0.1);
+    expect(orderItems[0].unitSizeSnapshot).toBe("1");
+    expect(orderItems[0].unitPriceMinor).toBe(41200);
+    expect(orderItems[0].lineTotalMinor).toBe(4120);
+    expect(subtotal).toBe(4120);
+  });
+
+  it("prices 200 g as ₹82.40", async () => {
+    const { orderItems } = await buildCheckoutOrderLines({
+      cartRepo: null,
+      client: null,
+      shopId: "shop",
+      custKey: "cust",
+      items: [
+        {
+          id: "line-1",
+          product_id: "apple",
+          title_snapshot: "Apple",
+          unit_label: "kg",
+          unit_size_snapshot: "1",
+          sold_by_weight: true,
+          quantity: "0.2",
+          unit_price_minor: 41200,
+          is_custom: false,
+          custom_note: null
+        }
+      ],
+      couponCode: null,
+      priceStorefrontLines: null
+    });
+
+    expect(orderItems[0].quantity).toBe(0.2);
+    expect(orderItems[0].lineTotalMinor).toBe(8240);
+  });
 });
 
 describe("buildCheckoutOrderLines cross BXGY inject names", () => {

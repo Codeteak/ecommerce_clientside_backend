@@ -15,6 +15,7 @@ import { createAppContext } from "./composition.js";
 import { getOpenApiDocument } from "../infra/openapi/openapiDocument.js";
 import { requestMetricsMiddleware } from "../infra/metrics/requestMetrics.js";
 import { requestContextMiddleware } from "../infra/logging/requestContext.js";
+import { createCorsOriginDelegate } from "../infra/http/corsOrigin.js";
 
 export function createExpressApp(ctx) {
   const isNoisePath = (url) =>
@@ -146,7 +147,7 @@ export function createExpressApp(ctx) {
 
   app.use(
     cors({
-      origin: env.CORS_ORIGIN,
+      origin: createCorsOriginDelegate(env.CORS_ORIGIN, env.STOREFRONT_ROOT_DOMAIN),
       credentials: true,
       allowedHeaders: [
         "content-type",

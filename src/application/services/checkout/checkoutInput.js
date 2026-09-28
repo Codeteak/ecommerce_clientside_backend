@@ -16,11 +16,21 @@ export function orderLineQuantitiesFromPriced(pricedLine, cartQty) {
   if (!pricedLine) {
     return { quantity: cart, paidQuantity: cart, freeQuantity: 0 };
   }
-  const paid = Math.max(0, Number(pricedLine.paid_quantity ?? pricedLine.quantity ?? cart));
+  // Prefer explicit paid; do not treat 0 as "missing" via ?? — but 0 with a
+  // positive cart qty is the Math.trunc(fractional kg) bug, so restore cart.
+  let paid = Number(pricedLine.paid_quantity);
+  if (!Number.isFinite(paid) || paid < 0) {
+    paid = Number(pricedLine.quantity ?? cart);
+  }
+  if (!(paid > 0) && Number.isFinite(cart) && cart > 0) {
+    paid = cart;
+  }
+  paid = Math.max(0, paid);
   const free = Math.max(0, Number(pricedLine.free_quantity ?? 0));
+  const displayRaw = Number(pricedLine.display_quantity ?? 0);
   const display = Math.max(
     paid + free,
-    Number(pricedLine.display_quantity ?? 0) || paid + free
+    Number.isFinite(displayRaw) && displayRaw > 0 ? displayRaw : paid + free
   );
   return {
     quantity: display,

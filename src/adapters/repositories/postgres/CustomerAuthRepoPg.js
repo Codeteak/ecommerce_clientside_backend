@@ -234,6 +234,21 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return withCustomerFlags(rows[0]);
   }
 
+  async findDisplayNameForUser(client, userId) {
+    const { rows } = await client.query(
+      `SELECT display_name
+         FROM customers
+        WHERE user_id = $1::uuid
+          AND display_name IS NOT NULL
+          AND btrim(display_name) <> ''
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC
+        LIMIT 1`,
+      [userId]
+    );
+    const name = rows[0]?.display_name != null ? String(rows[0].display_name).trim() : "";
+    return name || null;
+  }
+
   async getCustomerCreatedAtById(client, customerId) {
     const { rows } = await client.query(
       `SELECT created_at

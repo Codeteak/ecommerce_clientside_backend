@@ -1,6 +1,9 @@
 import { checkoutError, minorFromLine, orderLineQuantitiesFromPriced } from "./checkoutInput.js";
 
 function unitSizeSnapshotFromCartLine(it) {
+  // Sold-by-weight lines already store quantity in kg; never snapshot the
+  // catalog step as a billable factor (that double-applies the step in collapse).
+  if (it?.sold_by_weight === true || it?.soldByWeight === true) return "1";
   return String(it.unit_size_snapshot ?? "1");
 }
 
@@ -18,6 +21,8 @@ function isMassUnit(unit) {
 export function collapseWeightStepOrderItem(item) {
   if (!item || item.isCustom) return item;
   if (Number(item.freeQuantity) > 0) return item;
+  // Sold-by-weight: quantity is already billed kilograms with unit size 1.
+  if (item.soldByWeight === true || item.sold_by_weight === true) return item;
   const unit = String(item.unitLabel || "").trim().toLowerCase();
   if (!isMassUnit(unit)) return item;
   const size = Number(item.unitSizeSnapshot);
@@ -168,10 +173,8 @@ export async function buildCheckoutOrderLines({
       const lineTotalMinor = p ? Number(p.line_total_minor) : minorFromLine(it.quantity, it.unit_price_minor);
       const listPriceMinor = p ? Number(p.list_price_minor) : Number(it.unit_price_minor);
       const live = liveByProduct.get(String(it.product_id));
-      const stepSize =
-        live?.sold_by_weight === true
-          ? 1
-          : Number(unitSizeSnapshotFromCartLine(it)) || 1;
+      const soldByWeight = live?.sold_by_weight === true || it.sold_by_weight === true;
+      const stepSize = soldByWeight ? 1 : Number(unitSizeSnapshotFromCartLine(it)) || 1;
       const compareTotal = p
         ? Math.round(Number(p.total_price_minor) * quantity * (stepSize > 0 ? stepSize : 1))
         : lineTotalMinor;
@@ -190,7 +193,8 @@ export async function buildCheckoutOrderLines({
         appliedPromotionIds: p?.applied_promotion_ids ?? [],
         isCustom: it.is_custom,
         customNote: it.custom_note,
-        unitSizeSnapshot: unitSizeSnapshotFromCartLine(it)
+        soldByWeight,
+        unitSizeSnapshot: soldByWeight ? "1" : unitSizeSnapshotFromCartLine(it)
       };
     });
 
@@ -284,6 +288,7 @@ export async function buildCheckoutOrderLines({
       const lineTotal = minorFromLine(it.quantity, it.unit_price_minor);
       subtotal += lineTotal;
       const qty = Number(it.quantity);
+      const soldByWeight = it.sold_by_weight === true || it.soldByWeight === true;
       return {
         productId: it.product_id,
         name: it.title_snapshot,
@@ -298,7 +303,8 @@ export async function buildCheckoutOrderLines({
         appliedPromotionIds: [],
         isCustom: it.is_custom,
         customNote: it.custom_note,
-        unitSizeSnapshot: unitSizeSnapshotFromCartLine(it)
+        soldByWeight,
+        unitSizeSnapshot: soldByWeight ? "1" : unitSizeSnapshotFromCartLine(it)
       };
     });
   }
