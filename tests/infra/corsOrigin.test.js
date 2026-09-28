@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { createCorsOriginDelegate } from "../../src/infra/http/corsOrigin.js";
 
 function allow(delegate, origin) {
@@ -17,20 +16,20 @@ describe("createCorsOriginDelegate", () => {
       ["https://yaadro.shop", "https://marketfresh.in"],
       "yaadro.online"
     );
-    assert.equal(await allow(d, "https://yaadro.shop"), true);
-    assert.equal(await allow(d, "https://evil.example"), false);
+    expect(await allow(d, "https://yaadro.shop")).toBe(true);
+    expect(await allow(d, "https://evil.example")).toBe(false);
   });
 
   it("allows storefront root-domain subdomains", async () => {
     const d = createCorsOriginDelegate("https://yaadro.shop", "yaadro.online");
-    assert.equal(await allow(d, "https://greens.yaadro.online"), true);
-    assert.equal(await allow(d, "https://www.greens.yaadro.online"), true);
-    assert.equal(await allow(d, "https://yaadro.online"), true);
-    assert.equal(await allow(d, "https://notyaadro.online"), false);
+    expect(await allow(d, "https://greens.yaadro.online")).toBe(true);
+    expect(await allow(d, "https://www.greens.yaadro.online")).toBe(true);
+    expect(await allow(d, "https://yaadro.online")).toBe(true);
+    expect(await allow(d, "https://notyaadro.online")).toBe(false);
   });
 
   it("allows missing origin", async () => {
     const d = createCorsOriginDelegate("https://yaadro.shop", "yaadro.online");
-    assert.equal(await allow(d, undefined), true);
+    expect(await allow(d, undefined)).toBe(true);
   });
 });
