@@ -125,6 +125,7 @@ export function createStorefrontListingPromotions({ promotionRepo, shopPromotion
           : null,
       unit: product.base_unit,
       unit_size: product.unit_size != null ? String(product.unit_size) : "1",
+      sold_by_weight: product.sold_by_weight === true,
       availability: product.availability,
       category_id: product.category_id,
       images
