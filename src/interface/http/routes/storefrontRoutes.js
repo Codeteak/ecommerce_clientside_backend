@@ -19,6 +19,8 @@ export function mountStorefrontRoutes(r, deps) {
   const {
     authLimiter,
     cartMutateLimiter,
+    locationCheckLimiter,
+    checkoutLimiter,
     profileMutateLimiter,
     addressMutateLimiter,
     couponsListLimiter,
@@ -74,7 +76,7 @@ export function mountStorefrontRoutes(r, deps) {
   function mountForPrefix(prefix) {
     r.post(
       `${prefix}/location/check`,
-      authLimiter,
+      locationCheckLimiter || authLimiter,
       validate({ body: storefrontLocationBodySchema }),
       storefrontCtl.checkLocation
     );
@@ -148,8 +150,7 @@ export function mountStorefrontRoutes(r, deps) {
 
     r.post(
       `${prefix}/checkout`,
-      authLimiter,
-      cartMutateLimiter,
+      checkoutLimiter || cartMutateLimiter,
       requireCustomerJwt,
       requireCustomerShopAccess,
       locationGuard,
