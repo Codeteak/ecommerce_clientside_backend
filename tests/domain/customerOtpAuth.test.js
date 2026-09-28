@@ -102,7 +102,10 @@ describe("customer OTP auth", () => {
     const run = createRequestCustomerOtp({ authRepo, smsSender: { sendOtp: vi.fn() } });
 
     await expect(run({}, { phone: "+919999999999", shopId })).rejects.toMatchObject({
-      code: "VALIDATION_ERROR"
+      code: "VALIDATION_ERROR",
+      details: expect.objectContaining({
+        reason: "resend_cooldown"
+      })
     });
   });
 

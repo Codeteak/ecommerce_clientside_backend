@@ -364,7 +364,14 @@ export class CartRepoPg extends CartRepo {
       line.unit_price_minor = Number(p.price_minor_per_unit);
       if (p.name) line.title_snapshot = p.name;
       if (p.base_unit) line.unit_label = p.base_unit;
-      if (p.unit_size != null) line.unit_size_snapshot = String(p.unit_size);
+      // Sold-by-weight qty is already kilograms; catalog unit_size is the order
+      // step only. Persist factor 1 so collapseWeightStepOrderItem does not
+      // treat kg qty as pack count × step.
+      if (p.sold_by_weight === true) {
+        line.unit_size_snapshot = "1";
+      } else if (p.unit_size != null) {
+        line.unit_size_snapshot = String(p.unit_size);
+      }
     }
 
     return lines;
@@ -409,11 +416,13 @@ export class CartRepoPg extends CartRepo {
         product_id: productId,
         quantity: String(quantity),
         unit_price_minor: Number(p.price_minor_per_unit),
-        unit_size_snapshot: String(p.unit_size ?? "1"),
+        // SBW: qty is kg; catalog unit_size is the purchasable step, not a bill factor.
+        unit_size_snapshot: soldByWeight ? "1" : String(p.unit_size ?? "1"),
         title_snapshot: p.name,
         unit_label: p.base_unit,
         is_custom: false,
-        custom_note: null
+        custom_note: null,
+        sold_by_weight: soldByWeight
       };
     });
   }

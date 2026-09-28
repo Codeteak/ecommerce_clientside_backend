@@ -2,7 +2,11 @@ import { OrderRepo } from "../../../application/ports/repositories/OrderRepo.js"
 import { mapStorefrontOrderRow } from "../../../application/services/storefront/formatStorefrontOrderResponse.js";
 import { setTenantContext } from "../../../infra/db/tenantContext.js";
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
-import { shopProductImageUrlSql, shopProductSlugSql } from "./queries/shopProductCatalogSql.js";
+import {
+  shopProductImageUrlSql,
+  shopProductSlugSql,
+  shopProductSoldByWeightSql
+} from "./queries/shopProductCatalogSql.js";
 
 /** Coupon-only discount from promotion_redemptions; `ordersAlias` must match the orders table alias in the outer query. */
 const COUPON_DISCOUNT_SELECT = (ordersAlias) => `
@@ -89,6 +93,7 @@ export class OrderRepoPg extends OrderRepo {
         row.unit_size_snapshot != null ? String(row.unit_size_snapshot) : "1",
       unit_size:
         row.unit_size_snapshot != null ? String(row.unit_size_snapshot) : "1",
+      sold_by_weight: row.sold_by_weight === true,
       quantity: row.quantity,
       ordered_quantity: orderedQuantity,
       paid_quantity: paid,
@@ -324,6 +329,7 @@ export class OrderRepoPg extends OrderRepo {
     const { rows: itemRows } = await client.query(
       `SELECT oi.order_id, oi.id, oi.product_id, oi.product_name_snapshot, oi.unit_label_snapshot,
               oi.unit_size_snapshot::text AS unit_size_snapshot,
+              ${shopProductSoldByWeightSql} AS sold_by_weight,
               oi.quantity::text AS quantity,
               oi.ordered_quantity::text AS ordered_quantity,
               oi.unit_price_minor_snapshot, oi.line_total_minor,
@@ -413,6 +419,7 @@ export class OrderRepoPg extends OrderRepo {
     const { rows: items } = await client.query(
       `SELECT oi.id, oi.product_id, oi.product_name_snapshot, oi.unit_label_snapshot,
               oi.unit_size_snapshot::text AS unit_size_snapshot,
+              ${shopProductSoldByWeightSql} AS sold_by_weight,
               oi.quantity::text AS quantity,
               oi.ordered_quantity::text AS ordered_quantity,
               oi.unit_price_minor_snapshot, oi.line_total_minor,

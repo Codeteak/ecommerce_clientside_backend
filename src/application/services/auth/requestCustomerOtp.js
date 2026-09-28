@@ -1,9 +1,9 @@
-import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { logger } from "../../../config/logger.js";
 import { randomInt } from "node:crypto";
 import { hashOtpCode } from "../../../infra/security/otpHasher.js";
 import { assertShopAllowsCustomers } from "./shopPolicy.js";
+import { assertOtpRequestAllowed } from "./assertOtpRequestAllowed.js";
 import {
   formatCustomerPhoneForSms,
   normalizeCustomerPhoneForStorage
@@ -33,18 +33,17 @@ export function createRequestCustomerOtp({
 
     const now = new Date();
     const latest = await authRepo.findLatestOtpChallenge(client, phone, shopId);
-    if (latest && !latest.consumed_at) {
-      const waitUntil = new Date(new Date(latest.created_at).getTime() + otpResendSeconds * 1000);
-      if (waitUntil > now) {
-        throw new ValidationError("OTP already sent recently. Please wait and try again.");
-      }
-    }
-
     const windowSinceIso = new Date(now.getTime() - otpRequestWindowSeconds * 1000).toISOString();
     const sentCount = await authRepo.countOtpChallengesSince(client, phone, shopId, windowSinceIso);
-    if (sentCount >= otpMaxRequestsPerWindow) {
-      throw new ValidationError("Too many OTP requests. Try again later.");
-    }
+
+    assertOtpRequestAllowed({
+      now,
+      latestChallenge: latest,
+      sentCountInWindow: sentCount,
+      otpResendSeconds,
+      otpRequestWindowSeconds,
+      otpMaxRequestsPerWindow
+    });
 
     const code = randomSixDigitCode();
     const codeHash = await hashOtpCode(code);

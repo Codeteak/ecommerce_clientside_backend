@@ -74,6 +74,25 @@ export function planCrossRewardInjections(lines, bundleRules) {
  */
 
 /**
+ * Paid units for BXGY bookkeeping. Piece products are whole numbers; sold-by-weight
+ * (and any already-fractional qty) must keep up to 4 decimal kg — Math.trunc(0.4)=0
+ * previously wiped custom-weight lines so checkout stored quantity 0 → UNAVAILABLE.
+ * @param {number} quantity
+ * @param {{ soldByWeight?: boolean, sold_by_weight?: boolean } | null | undefined} [line]
+ */
+function billablePaidQuantity(quantity, line) {
+  const raw = Number(quantity);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  const soldByWeight =
+    line?.soldByWeight === true || line?.sold_by_weight === true;
+  const fractional = Math.abs(raw - Math.trunc(raw)) > 1e-9;
+  if (soldByWeight || fractional) {
+    return Math.round(raw * 10_000) / 10_000;
+  }
+  return Math.trunc(raw);
+}
+
+/**
  * @param {PricedLine[]} lines
  * @param {BundleRuleRow[]} bundleRules
  * @param {{ allowCombineAutoCampaigns: boolean }} opts
@@ -86,7 +105,7 @@ export function evaluateBundleDiscounts(lines, bundleRules, opts) {
   }
 
   for (const line of lines) {
-    line.paidQuantity = Math.max(0, Math.trunc(line.quantity));
+    line.paidQuantity = Math.max(0, billablePaidQuantity(line.quantity, line));
     line.freeQuantity = 0;
     line.displayQuantity = line.paidQuantity;
     line.bundleDiscountMinor = 0;

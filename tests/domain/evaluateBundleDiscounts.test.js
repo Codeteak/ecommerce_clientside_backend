@@ -211,4 +211,31 @@ describe("evaluateBundleDiscounts", () => {
     );
     expect(plan).toEqual([]);
   });
+
+  it("sold-by-weight fractional kg keeps paidQuantity (does not Math.trunc to 0)", () => {
+    const lines = [
+      {
+        productId: "carrot",
+        quantity: 0.4,
+        soldByWeight: true,
+        unitFinalMinor: 5500,
+        lineTotalMinor: 2200,
+        appliedPromotionIds: []
+      },
+      {
+        productId: "orange",
+        quantity: 0.3,
+        soldByWeight: true,
+        unitFinalMinor: 25000,
+        lineTotalMinor: 7500,
+        appliedPromotionIds: []
+      }
+    ];
+    evaluateBundleDiscounts(lines, [], { allowCombineAutoCampaigns: true });
+    expect(lines[0].paidQuantity).toBe(0.4);
+    expect(lines[0].displayQuantity).toBe(0.4);
+    expect(lines[0].linePayableMinor).toBe(2200);
+    expect(lines[1].paidQuantity).toBe(0.3);
+    expect(lines[1].linePayableMinor).toBe(7500);
+  });
 });

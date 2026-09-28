@@ -4,6 +4,7 @@ import { randomInt } from "node:crypto";
 import { hashOtpCode } from "../../../infra/security/otpHasher.js";
 import { logger } from "../../../config/logger.js";
 import { assertShopAllowsCustomers } from "../auth/shopPolicy.js";
+import { assertOtpRequestAllowed } from "../auth/assertOtpRequestAllowed.js";
 import {
   formatCustomerPhoneForSms,
   normalizeCustomerPhoneForStorage
@@ -53,18 +54,17 @@ export function createRequestPhoneChangeOtp({
 
     const now = new Date();
     const latest = await authRepo.findLatestOtpChallenge(client, newPhone, shopId);
-    if (latest && !latest.consumed_at) {
-      const waitUntil = new Date(new Date(latest.created_at).getTime() + otpResendSeconds * 1000);
-      if (waitUntil > now) {
-        throw new ValidationError("OTP already sent recently. Please wait and try again.");
-      }
-    }
-
     const windowSinceIso = new Date(now.getTime() - otpRequestWindowSeconds * 1000).toISOString();
     const sentCount = await authRepo.countOtpChallengesSince(client, newPhone, shopId, windowSinceIso);
-    if (sentCount >= otpMaxRequestsPerWindow) {
-      throw new ValidationError("Too many OTP requests. Try again later.");
-    }
+
+    assertOtpRequestAllowed({
+      now,
+      latestChallenge: latest,
+      sentCountInWindow: sentCount,
+      otpResendSeconds,
+      otpRequestWindowSeconds,
+      otpMaxRequestsPerWindow
+    });
 
     const code = randomSixDigitCode();
     const codeHash = await hashOtpCode(code);

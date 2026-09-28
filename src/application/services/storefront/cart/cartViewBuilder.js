@@ -62,7 +62,9 @@ export function createCartViewBuilder({
         limit: 20
       });
       const ruleLines = items.map((it) => {
-        const qty = parseBillableCartQuantity(it.quantity);
+        const qty = parseBillableCartQuantity(it.quantity, {
+          allowFractional: it.sold_by_weight === true
+        });
         const unit = Number(it.list_price_minor_per_unit ?? it.unit_price_minor ?? 0);
         return {
           lineTotalMinor: Math.round(unit * qty),
@@ -110,7 +112,9 @@ export function createCartViewBuilder({
         continue;
       }
 
-      const billableQty = parseBillableCartQuantity(it.quantity);
+      const billableQty = parseBillableCartQuantity(it.quantity, {
+        allowFractional: it.sold_by_weight === true
+      });
       const offerQty = p.free_quantity ?? 0;
       const bundlePromotionIds = Array.isArray(p.applied_promotion_ids) ? p.applied_promotion_ids : [];
 

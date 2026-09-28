@@ -86,6 +86,16 @@ export class CustomerAuthRepo {
     throw new Error("Not implemented");
   }
 
+  /**
+   * Any non-empty display_name for this user across shops (newest first).
+   * @returns {Promise<string | null>}
+   */
+  async findDisplayNameForUser(_client, _userId) {
+    void _client;
+    void _userId;
+    throw new Error("Not implemented");
+  }
+
   /** @returns {Promise<{ created_at: string } | null>} */
   async getCustomerCreatedAtById(_client, _customerId) {
     void _client;

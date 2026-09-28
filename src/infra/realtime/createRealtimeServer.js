@@ -2,6 +2,7 @@ import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { verifyStaffAccessToken } from "../auth/jwt.js";
 import { env } from "../../config/env.js";
+import { createCorsOriginDelegate } from "../http/corsOrigin.js";
 
 export function shopRoom(shopId) {
   return `shop:${shopId}`;
@@ -51,17 +52,10 @@ async function attachRedisAdapter(io, redis, logger) {
  * - Staff/picker: staff JWT or REALTIME_CONNECT_TOKEN → shop room (order.placed)
  */
 export async function createRealtimeServer(httpServer, { redis, logger }) {
-  const allowedOrigins = Array.isArray(env.CORS_ORIGIN)
-    ? env.CORS_ORIGIN
-    : String(env.CORS_ORIGIN || "")
-        .split(",")
-        .map((o) => o.trim())
-        .filter(Boolean);
-
   const io = new Server(httpServer, {
     path: "/socket.io",
     cors: {
-      origin: allowedOrigins.length > 0 ? allowedOrigins : false,
+      origin: createCorsOriginDelegate(env.CORS_ORIGIN, env.STOREFRONT_ROOT_DOMAIN),
       credentials: true
     }
   });

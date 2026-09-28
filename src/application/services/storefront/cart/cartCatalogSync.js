@@ -69,11 +69,16 @@ export function createCartCatalogSync({ cartRepo }) {
       const listPrice = Number(p.price_minor_per_unit);
       const prevUnit = Number(it.unit_price_minor);
       const priceUpdated = prevUnit !== listPrice;
-      const qty = parseBillableCartQuantity(it.quantity);
+      const soldByWeight = p.sold_by_weight === true;
+      const qty = parseBillableCartQuantity(it.quantity, {
+        allowFractional: soldByWeight
+      });
 
-      assertLineQuantity(qty);
+      assertLineQuantity(qty, { allowFractional: soldByWeight });
 
-      const liveUnitSize = String(p.unit_size ?? "1");
+      // SBW: keep unit_size_snapshot at 1 (qty is kg). Catalog unit_size is the
+      // purchasable step only and must not overwrite the bill factor.
+      const liveUnitSize = soldByWeight ? "1" : String(p.unit_size ?? "1");
       const storedUnitSize = String(it.unit_size_snapshot ?? "1");
       const unitSizeUpdated = storedUnitSize !== liveUnitSize;
 

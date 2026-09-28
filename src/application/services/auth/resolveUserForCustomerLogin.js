@@ -109,9 +109,14 @@ export async function ensureCustomerForUser(authRepo, client, userId, displayNam
     throw new Error("shopId is required to create a customer profile");
   }
 
+  let nameToInsert = displayName != null && String(displayName).trim() ? String(displayName).trim() : null;
+  if (!nameToInsert && typeof authRepo.findDisplayNameForUser === "function") {
+    nameToInsert = await authRepo.findDisplayNameForUser(client, userId);
+  }
+
   await authRepo.insertCustomer(client, {
     user_id: userId,
-    display_name: displayName,
+    display_name: nameToInsert,
     shop_id: shopId
   });
   customer = await authRepo.getCustomerByUserId(client, userId, shopId);
