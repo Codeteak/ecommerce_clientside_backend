@@ -98,6 +98,25 @@ export function createRoutes(ctx) {
     message: "Too many cart updates. Try again later."
   });
 
+  // Map / address flows call location/check often — must NOT share authLimiter
+  // (60 / 15 min) or checkout gets 429 after a few pin moves.
+  const locationCheckLimiter = createLimiter({
+    storeId: "location-check",
+    windowMs: 60 * 1000,
+    maxTest: 10_000,
+    maxProd: 120,
+    message: "Too many location checks. Try again in a moment."
+  });
+
+  const checkoutLimiter = createLimiter({
+    storeId: "checkout",
+    windowMs: 60 * 1000,
+    maxTest: 10_000,
+    maxProd: 40,
+    message: "Too many checkout attempts. Try again in a moment.",
+    keyGenerator: (req) => String(req.customerAuth?.userId || req.ip)
+  });
+
   const profileMutateLimiter = createLimiter({
     storeId: "profile-mutate",
     windowMs: 15 * 60 * 1000,
@@ -175,6 +194,8 @@ export function createRoutes(ctx) {
   mountStorefrontRoutes(r, {
     authLimiter,
     cartMutateLimiter,
+    locationCheckLimiter,
+    checkoutLimiter,
     profileMutateLimiter,
     addressMutateLimiter,
     couponsListLimiter,
