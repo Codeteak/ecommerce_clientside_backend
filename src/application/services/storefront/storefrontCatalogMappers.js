@@ -93,6 +93,10 @@ export function mapStorefrontProductRow(r, options = {}) {
     availability: r.availability,
     unit: r.base_unit,
     unit_size: r.unit_size != null ? String(r.unit_size) : "1",
+    stock_quantity:
+      r.stock_quantity != null && String(r.stock_quantity).trim() !== ""
+        ? String(r.stock_quantity)
+        : null,
     sold_by_weight: r.sold_by_weight === true,
     thumbnail:
       thumbnailUrl != null

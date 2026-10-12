@@ -1,3 +1,4 @@
+import { COUPONS_ONLY } from "./couponsOnly.js";
 import { mapActiveBundleRuleRow } from "./mapActiveBundleRulesPublic.js";
 
 /**
@@ -52,7 +53,7 @@ export function withCategoryListingOffers(input) {
     bundleRowsRaw
   } = input;
   const id = String(category.id);
-  if (promotionsPaused) {
+  if (promotionsPaused || COUPONS_ONLY) {
     return {
       ...category,
       offers: {

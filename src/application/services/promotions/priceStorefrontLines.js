@@ -1,5 +1,6 @@
 import { AppError } from "../../../domain/errors/AppError.js";
 import { buildCouponEligibility } from "./couponEligibility.js";
+import { COUPONS_ONLY } from "./couponsOnly.js";
 import { evaluateAutoCartRules } from "./evaluateAutoCartRules.js";
 import { evaluateBundleDiscounts, planCrossRewardInjections } from "./evaluateBundleDiscounts.js";
 import { evaluateCartPromotionRules } from "./evaluatePromotionRules.js";
@@ -132,17 +133,24 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
 
     const productIds = [...new Set(linesIn.map((l) => String(l.productId)).filter(Boolean))];
 
-    const [overlays, bundleRulesRaw, autoCartRulesRaw] = await Promise.all([
-      promotionsPaused || !productIds.length
-        ? []
-        : promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, productIds),
-      promotionsPaused ? [] : promoReads.listActiveBundleRulesForShop(client, shopId),
-      promotionsPaused
-        ? []
-        : typeof promoReads.listActiveAutoCartRulesForShop === "function"
-          ? promoReads.listActiveAutoCartRulesForShop(client, shopId)
-          : promotionRepo.listActiveAutoCartRulesForShop(client, shopId)
-    ]);
+    // Product sales, Buy X Get Y, and automatic cart discounts stay in this file.
+    // COUPONS_ONLY skips them; coupon evaluation below is unchanged.
+    let overlays = [];
+    let bundleRulesRaw = [];
+    let autoCartRulesRaw = [];
+    if (!COUPONS_ONLY) {
+      [overlays, bundleRulesRaw, autoCartRulesRaw] = await Promise.all([
+        promotionsPaused || !productIds.length
+          ? []
+          : promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, productIds),
+        promotionsPaused ? [] : promoReads.listActiveBundleRulesForShop(client, shopId),
+        promotionsPaused
+          ? []
+          : typeof promoReads.listActiveAutoCartRulesForShop === "function"
+            ? promoReads.listActiveAutoCartRulesForShop(client, shopId)
+            : promotionRepo.listActiveAutoCartRulesForShop(client, shopId)
+      ]);
+    }
 
     /** @type {Map<string, unknown[]>} */
     const overlaysByProductId = new Map();

@@ -66,7 +66,7 @@ describe("createPriceStorefrontLines", () => {
     expect(out.lines[0].final_price_minor).toBe("10000");
   });
 
-  it("applies SKU promo overlay winner", async () => {
+  it("ignores SKU promo overlays while coupons-only is on", async () => {
     const price = createPriceStorefrontLines({
       promotionRepo: basePromotionRepo({
         listActivePromotionProductOverlaysForShopProducts: vi.fn().mockResolvedValue([
@@ -85,11 +85,9 @@ describe("createPriceStorefrontLines", () => {
       shopId,
       lines: [{ productId, quantity: 1, listMinor: 1000, offerMinor: null }]
     });
-    expect(out.subtotalMinor).toBe(500);
-    expect(out.appliedPromotionIds).toContain("promo-sku");
-    expect(out.appliedPromotionDiscounts).toEqual([
-      { promotionId: "promo-sku", discountMinor: 500 }
-    ]);
+    expect(out.subtotalMinor).toBe(1000);
+    expect(out.appliedPromotionIds).not.toContain("promo-sku");
+    expect(out.appliedPromotionDiscounts).toEqual([]);
   });
 
   it("rejects empty cart with coupon code", async () => {
@@ -135,7 +133,7 @@ describe("createPriceStorefrontLines", () => {
     expect(out.coupon?.code).toBe("SAVE10");
   });
 
-  it("buy 2 get 1: qty 2 in cart returns display 3 and subtotal for 2 paid units", async () => {
+  it("does not add a free unit for buy 2 get 1 while coupons-only is on", async () => {
     const price = createPriceStorefrontLines({
       promotionRepo: basePromotionRepo({
         listActiveBundleRulesForShop: vi.fn().mockResolvedValue([
@@ -154,18 +152,14 @@ describe("createPriceStorefrontLines", () => {
       shopId,
       lines: [{ productId, quantity: 2, listMinor: 5000, offerMinor: 4500 }]
     });
-    expect(out.lines[0].paid_quantity).toBe(2);
-    expect(out.lines[0].free_quantity).toBe(1);
+    expect(out.lines[0].free_quantity ?? 0).toBe(0);
     expect(out.lines[0].quantity).toBe(2);
-    expect(out.lines[0].display_quantity).toBe(3);
     expect(out.subtotalMinor).toBe(9000);
     expect(out.lines[0].line_total_minor).toBe("9000");
-    expect(out.appliedPromotionDiscounts).toEqual([
-      { promotionId: "promo-bogo", discountMinor: 4500 }
-    ]);
+    expect(out.appliedPromotionDiscounts).toEqual([]);
   });
 
-  it("rejects coupons when Buy X Get Y free units apply", async () => {
+  it("does not block a coupon because of a paused Buy X Get Y rule", async () => {
     const price = createPriceStorefrontLines({
       promotionRepo: basePromotionRepo({
         listActiveBundleRulesForShop: vi.fn().mockResolvedValue([
@@ -184,7 +178,8 @@ describe("createPriceStorefrontLines", () => {
           promotion_id: "promo-coupon",
           has_coupon_rules: true,
           has_sku_products: false,
-          min_subtotal_minor: 0
+          min_subtotal_minor: 0,
+          promotion_rules: [{ rule_kind: "cart_percent_off", percent_bps: 1000 }]
         })
       })
     });
@@ -194,9 +189,9 @@ describe("createPriceStorefrontLines", () => {
       invalidCouponBehavior: "omit",
       lines: [{ productId, quantity: 1, listMinor: 1000, offerMinor: null }]
     });
-    expect(out.couponRejected?.code).toBe("COUPON_NOT_WITH_BUNDLE");
-    expect(out.couponDiscountMinor).toBe(0);
-    expect(out.lines[0].free_quantity).toBe(1);
+    expect(out.couponRejected?.code).not.toBe("COUPON_NOT_WITH_BUNDLE");
+    expect(out.couponDiscountMinor).toBe(100);
+    expect(out.lines[0].free_quantity ?? 0).toBe(0);
   });
 
   it("invalidCouponBehavior omit returns base pricing and couponRejected without second pricing pass", async () => {
@@ -226,7 +221,7 @@ describe("createPriceStorefrontLines", () => {
     ).rejects.toMatchObject({ code: "COUPON_NOT_FOUND" });
   });
 
-  it("applies automatic cart percent off without a coupon", async () => {
+  it("ignores automatic cart discounts while coupons-only is on", async () => {
     const price = createPriceStorefrontLines({
       promotionRepo: basePromotionRepo({
         listActiveAutoCartRulesForShop: vi.fn().mockResolvedValue([
@@ -245,9 +240,9 @@ describe("createPriceStorefrontLines", () => {
       shopId,
       lines: [{ productId, quantity: 1, listMinor: 1000, offerMinor: null }]
     });
-    expect(out.autoCartDiscountMinor).toBe(100);
-    expect(out.subtotalMinor).toBe(900);
-    expect(out.appliedPromotionIds).toContain("promo-auto");
+    expect(out.autoCartDiscountMinor).toBe(0);
+    expect(out.subtotalMinor).toBe(1000);
+    expect(out.appliedPromotionIds).not.toContain("promo-auto");
   });
 
   it("applies multiple coupons sequentially reducing remaining subtotal", async () => {
@@ -440,13 +435,12 @@ describe("createPriceStorefrontLines", () => {
       lines: [{ productId: buyId, quantity: 1, listMinor: 1000, offerMinor: null }]
     });
 
-    expect(client.query).toHaveBeenCalled();
-    expect(String(client.query.mock.calls[0][0])).toMatch(/availability = 'in_stock'/);
+    expect(client.query).not.toHaveBeenCalled();
     expect(out.lines.some((l) => String(l.productId) === rewardId)).toBe(false);
     expect(out.lines).toHaveLength(1);
   });
 
-  it("injects cross BXGY free SKU when reward is sellable", async () => {
+  it("does not inject a cross BXGY free SKU while coupons-only is on", async () => {
     const buyId = productId;
     const rewardId = "22222222-2222-4222-8222-222222222222";
     const client = {
@@ -487,10 +481,7 @@ describe("createPriceStorefrontLines", () => {
     });
 
     const freeLine = out.lines.find((l) => String(l.productId) === rewardId);
-    expect(freeLine).toBeTruthy();
-    expect(freeLine.injected_bundle_reward).toBe(true);
-    expect(freeLine.paid_quantity).toBe(0);
-    expect(freeLine.free_quantity).toBe(1);
-    expect(Number(freeLine.line_total_minor)).toBe(0);
+    expect(freeLine).toBeUndefined();
+    expect(out.lines).toHaveLength(1);
   });
 });

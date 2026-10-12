@@ -74,6 +74,10 @@ export function mapHomeSectionProduct(row, priceMap = null, bundleRowsRaw = [], 
     offerPriceMinor: offerMinor != null ? String(Math.trunc(offerMinor)) : null,
     promoPriceMinor: promoPriceMinor != null ? String(Math.trunc(promoPriceMinor)) : null,
     finalPriceMinor: finalMinor != null ? String(Math.trunc(finalMinor)) : null,
+    stock_quantity:
+      row.stock_quantity != null && String(row.stock_quantity).trim() !== ""
+        ? String(row.stock_quantity)
+        : null,
     bundleRules
   };
 }

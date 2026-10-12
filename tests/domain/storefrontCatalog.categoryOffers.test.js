@@ -73,17 +73,17 @@ describe("storefrontCatalog category offers", () => {
 
     const out = await service.listCategories(shopId, { parentId: null });
 
-    expect(promotionRepo.listActiveCategoryPromotionSignals).toHaveBeenCalled();
-    expect(promotionRepo.listActiveBundleRulesForShop).toHaveBeenCalled();
+    expect(promotionRepo.listActiveCategoryPromotionSignals).not.toHaveBeenCalled();
+    expect(promotionRepo.listActiveBundleRulesForShop).not.toHaveBeenCalled();
     expect(out.shop_name).toBe("Market Fresh");
     expect(out.shop_image).toBeNull();
     expect(out.categories).toHaveLength(1);
     expect(out.categories[0].offers).toEqual({
-      has_sku_promo: true,
-      has_bundle: true,
-      has_category_discount: true
+      has_sku_promo: false,
+      has_bundle: false,
+      has_category_discount: false
     });
-    expect(out.categories[0].bundle_rules).toHaveLength(1);
-    expect(out.categories[0].category_discount_rules).toHaveLength(1);
+    expect(out.categories[0].bundle_rules).toHaveLength(0);
+    expect(out.categories[0].category_discount_rules).toHaveLength(0);
   });
 });

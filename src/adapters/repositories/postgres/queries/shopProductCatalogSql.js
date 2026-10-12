@@ -9,6 +9,8 @@ export const shopProductNameSql = `COALESCE(sp.name, gp.name)`;
 export const shopProductSlugSql = `COALESCE(sp.slug, gp.slug)`;
 export const shopProductBaseUnitSql = `COALESCE(sp.base_unit, gp.base_unit)`;
 export const shopProductUnitSizeSql = `COALESCE(sp.unit_size, gp.unit_size)`;
+/** On-hand count. Lives only on shop_products (not global_products). */
+export const shopProductStockQuantitySql = `sp.stock_quantity::text`;
 export const shopProductSoldByWeightSql = `COALESCE(sp.sold_by_weight, false)`;
 export const shopProductDescriptionSql = `COALESCE(sp.description, gp.description)`;
 export const shopProductSeoTitleSql = `COALESCE(sp.seo_title, gp.seo_title)`;

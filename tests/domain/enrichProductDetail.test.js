@@ -34,90 +34,32 @@ function detailData(overrides = {}) {
   };
 }
 
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
 describe("enrichProductDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("runs overlay and bundle reads in parallel after settings", async () => {
-    const overlaysGate = deferred();
-    const bundlesGate = deferred();
-    let overlaysStarted = false;
-    let bundlesStarted = false;
-
+  it("skips overlay and bundle reads while coupons-only is on", async () => {
     const promotionRepo = {
       getShopPromotionSettings: vi.fn().mockResolvedValue({
         promotions_paused: false,
         default_overlap_mode: "priority"
       }),
-      listActivePromotionProductOverlaysForShopProducts: vi.fn(async () => {
-        overlaysStarted = true;
-        return overlaysGate.promise;
-      }),
-      listActiveBundleRulesForProduct: vi.fn(async () => {
-        bundlesStarted = true;
-        return bundlesGate.promise;
-      })
+      listActivePromotionProductOverlaysForShopProducts: vi.fn(),
+      listActiveBundleRulesForProduct: vi.fn()
     };
 
     const { enrichProductDetail } = createStorefrontListingPromotions({
       promotionRepo
     });
 
-    const pending = enrichProductDetail({}, shopId, detailData());
-
-    // Both promo reads must be in flight before either settles.
-    await vi.waitFor(() => {
-      expect(overlaysStarted).toBe(true);
-      expect(bundlesStarted).toBe(true);
-    });
-
-    overlaysGate.resolve([]);
-    bundlesGate.resolve([
-      {
-        promotion_id: "promo-bundle",
-        scope: "same_shop_product",
-        shop_product_id: productId,
-        global_category_id: null,
-        buy_qty: 2,
-        get_qty: 1,
-        reward_type: "free",
-        reward_percent_bps: null,
-        ends_at: null
-      }
-    ]);
-
-    const out = await pending;
+    const out = await enrichProductDetail({}, shopId, detailData());
 
     expect(promotionRepo.getShopPromotionSettings).toHaveBeenCalledWith({}, shopId);
-    expect(promotionRepo.listActivePromotionProductOverlaysForShopProducts).toHaveBeenCalledWith(
-      {},
-      shopId,
-      [productId]
-    );
-    expect(promotionRepo.listActiveBundleRulesForProduct).toHaveBeenCalledWith(
-      {},
-      shopId,
-      productId,
-      categoryId
-    );
+    expect(promotionRepo.listActivePromotionProductOverlaysForShopProducts).not.toHaveBeenCalled();
+    expect(promotionRepo.listActiveBundleRulesForProduct).not.toHaveBeenCalled();
     expect(out.id).toBe(productId);
-    expect(out.bundle_rules).toHaveLength(1);
-    expect(out.bundle_rules[0]).toMatchObject({
-      promotion_id: "promo-bundle",
-      buy_qty: 2,
-      get_qty: 1
-    });
+    expect(out.bundle_rules).toHaveLength(0);
     expect(out.final_price_minor).toBeDefined();
   });
 
@@ -195,8 +137,8 @@ describe("enrichProductDetail", () => {
 
     const out = await enrichProductDetail({}, shopId, detailData());
 
-    expect(out.promo_price_minor).toBe("40000");
-    expect(out.final_price_minor).toBe("40000");
+    expect(out.promo_price_minor).toBeNull();
+    expect(out.final_price_minor).toBe("50000");
     expect(out.bundle_rules).toEqual([]);
   });
 });
