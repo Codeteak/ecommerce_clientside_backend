@@ -78,7 +78,7 @@ describe("resolveStorefrontSkuUnitPrices", () => {
       products,
       overlays
     });
-    expect(mapOn.get("sp1").promoPriceMinor).toBe(50);
+    expect(mapOn.get("sp1").promoPriceMinor).toBeNull();
 
     const mapOff = buildStorefrontListingUnitPriceMap({
       promotionsPaused: true,

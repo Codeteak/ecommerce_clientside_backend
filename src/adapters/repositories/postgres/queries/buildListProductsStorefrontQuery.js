@@ -14,6 +14,7 @@ import {
   shopProductNameSql,
   shopProductSlugSql,
   shopProductSoldByWeightSql,
+  shopProductStockQuantitySql,
   shopProductUnitSizeSql
 } from "./shopProductCatalogSql.js";
 
@@ -98,6 +99,7 @@ export function buildListProductsStorefrontQuery({
           ${shopProductSlugSql} AS slug,
           ${shopProductBaseUnitSql} AS base_unit,
           ${shopProductUnitSizeSql}::text AS unit_size,
+          ${shopProductStockQuantitySql} AS stock_quantity,
           ${shopProductSoldByWeightSql} AS sold_by_weight,
           ${shopProductDescriptionSql} AS description,
           sp.status,

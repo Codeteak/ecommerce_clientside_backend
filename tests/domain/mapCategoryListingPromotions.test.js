@@ -59,15 +59,12 @@ describe("mapCategoryListingPromotions", () => {
       bundleRowsRaw
     });
     expect(out.offers).toEqual({
-      has_sku_promo: true,
-      has_bundle: true,
-      has_category_discount: true
+      has_sku_promo: false,
+      has_bundle: false,
+      has_category_discount: false
     });
-    expect(out.bundle_rules).toHaveLength(1);
-    expect(out.category_discount_rules[0]).toMatchObject({
-      kind: "category_percent_off",
-      percent_bps: 1000
-    });
+    expect(out.bundle_rules).toHaveLength(0);
+    expect(out.category_discount_rules).toEqual([]);
   });
 
   it("withCategoryListingOffers clears offers when promotions paused", () => {

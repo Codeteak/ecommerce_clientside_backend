@@ -16,6 +16,7 @@ import {
   shopProductSeoTitleSql,
   shopProductSlugSql,
   shopProductSoldByWeightSql,
+  shopProductStockQuantitySql,
   shopProductUnitSizeSql
 } from "./queries/shopProductCatalogSql.js";
 
@@ -41,7 +42,7 @@ export class CatalogRepoPg extends CatalogRepo {
       await setTenantContext(client, shopId);
       const { rows } = await client.query(
         `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id, ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit,
-                ${shopProductUnitSizeSql}::text AS unit_size, ${shopProductSoldByWeightSql} AS sold_by_weight, sp.status,
+                ${shopProductUnitSizeSql}::text AS unit_size, ${shopProductStockQuantitySql} AS stock_quantity, ${shopProductSoldByWeightSql} AS sold_by_weight, sp.status,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.created_at, sp.updated_at,
                 ${shopProductImageUrlSql} AS global_image_url,
@@ -192,7 +193,7 @@ ${shopProductLeftJoinGlobal}
       await setTenantContext(client, shopId);
       const { rows } = await client.query(
         `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id, ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit,
-                ${shopProductUnitSizeSql}::text AS unit_size, ${shopProductSoldByWeightSql} AS sold_by_weight, sp.status, sp.availability,
+                ${shopProductUnitSizeSql}::text AS unit_size, ${shopProductStockQuantitySql} AS stock_quantity, ${shopProductSoldByWeightSql} AS sold_by_weight, sp.status, sp.availability,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.created_at, sp.updated_at,
                 ${shopProductImageUrlSql} AS global_image_url,
@@ -542,7 +543,7 @@ ${shopProductLeftJoinGlobal}
       await setTenantContext(client, shopId);
       const { rows: prodRows } = await client.query(
         `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id,
-                ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit, ${shopProductUnitSizeSql}::text AS unit_size,
+                ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit, ${shopProductUnitSizeSql}::text AS unit_size, ${shopProductStockQuantitySql} AS stock_quantity,
                 ${shopProductSoldByWeightSql} AS sold_by_weight,
                 ${shopProductDescriptionSql} AS description, ${shopProductSeoTitleSql} AS seo_title, ${shopProductSeoDescriptionSql} AS seo_description,
                 sp.status, sp.availability,
@@ -608,7 +609,7 @@ ${shopProductLeftJoinGlobal}
       await setTenantContext(client, shopId);
       const { rows: prodRows } = await client.query(
         `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id,
-                ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit, ${shopProductUnitSizeSql}::text AS unit_size,
+                ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit, ${shopProductUnitSizeSql}::text AS unit_size, ${shopProductStockQuantitySql} AS stock_quantity,
                 ${shopProductSoldByWeightSql} AS sold_by_weight,
                 ${shopProductDescriptionSql} AS description, ${shopProductSeoTitleSql} AS seo_title, ${shopProductSeoDescriptionSql} AS seo_description,
                 sp.status, sp.availability,
@@ -694,6 +695,7 @@ ${shopProductLeftJoinGlobal}
       const { rows } = await client.query(
         `SELECT sp.id, ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug,
                 ${shopProductCategoryIdSql} AS category_id,
+                ${shopProductStockQuantitySql} AS stock_quantity,
                 sp.price_minor_per_unit::text AS price_minor_per_unit,
                 sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
                 ${shopProductImageUrlSql} AS global_image_url,

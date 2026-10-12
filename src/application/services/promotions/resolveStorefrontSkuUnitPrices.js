@@ -4,6 +4,8 @@
  * final_price_minor (payable unit), offer_discount_minor, promo_discount_minor, total_discount_minor.
  */
 
+import { COUPONS_ONLY } from "./couponsOnly.js";
+
 /** @param {unknown} v */
 export function parseMinor(v) {
   if (v == null || v === "") return null;
@@ -147,7 +149,7 @@ export function buildStorefrontListingUnitPriceMap(input) {
   for (const row of products) {
     const id = String(row.id);
 
-    if (promotionsPaused) {
+    if (promotionsPaused || COUPONS_ONLY) {
       out.set(id, { promoPriceMinor: null });
       continue;
     }

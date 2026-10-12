@@ -97,6 +97,34 @@ describe("storefrontCatalogMappers", () => {
     });
     expect(out.unit).toBe("L");
     expect(out.unit_size).toBe("0.5");
+    expect(out.stock_quantity).toBeNull();
+  });
+
+  it("maps stock_quantity from shop_products", () => {
+    const out = mapStorefrontProductRow({
+      id: "p1",
+      name: "Milk",
+      slug: "milk",
+      price_minor_per_unit: "100",
+      offer_price_minor_per_unit: "90",
+      availability: "in_stock",
+      base_unit: "L",
+      unit_size: "1",
+      stock_quantity: "12.000",
+      thumb_media_id: null,
+      thumb_storage_key: null,
+      thumb_content_type: null,
+      product_images: "[]",
+      category_slug: null,
+      category_parent_id: null,
+      category_name: null,
+      category_image_media_id: null,
+      category_image_storage_key: null,
+      category_image_content_type: null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      category_id: "c1"
+    });
+    expect(out.stock_quantity).toBe("12.000");
   });
 
   it("maps sold_by_weight for per-kg catalog products", () => {

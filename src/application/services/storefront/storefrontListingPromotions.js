@@ -7,6 +7,7 @@ import {
   filterBundleRuleRowsForProduct,
   mapActiveBundleRuleRow
 } from "../promotions/mapActiveBundleRulesPublic.js";
+import { COUPONS_ONLY } from "../promotions/couponsOnly.js";
 
 /**
  * @param {Array<{ global_category_id: string }>} rules
@@ -64,12 +65,14 @@ export function createStorefrontListingPromotions({ promotionRepo, shopPromotion
       const defaultOverlapMode =
         rawSettings?.default_overlap_mode === "best_for_customer" ? "best_for_customer" : "priority";
       const ids = pageRows.map((r) => r.id);
-      const overlays = promotionsPaused
-        ? []
-        : await promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, ids);
-      const bundleRowsRaw = promotionsPaused
-        ? []
-        : await promoReads.listActiveBundleRulesForShop(client, shopId);
+      const overlays =
+        promotionsPaused || COUPONS_ONLY
+          ? []
+          : await promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, ids);
+      const bundleRowsRaw =
+        promotionsPaused || COUPONS_ONLY
+          ? []
+          : await promoReads.listActiveBundleRulesForShop(client, shopId);
       return {
         promotionsPaused,
         priceMap: buildStorefrontListingUnitPriceMap({
@@ -125,6 +128,10 @@ export function createStorefrontListingPromotions({ promotionRepo, shopPromotion
           : null,
       unit: product.base_unit,
       unit_size: product.unit_size != null ? String(product.unit_size) : "1",
+      stock_quantity:
+        product.stock_quantity != null && String(product.stock_quantity).trim() !== ""
+          ? String(product.stock_quantity)
+          : null,
       sold_by_weight: product.sold_by_weight === true,
       availability: product.availability,
       category_id: product.category_id,
@@ -153,9 +160,10 @@ export function createStorefrontListingPromotions({ promotionRepo, shopPromotion
       const defaultOverlapMode =
         rawSettings?.default_overlap_mode === "best_for_customer" ? "best_for_customer" : "priority";
       // Overlays + bundles are independent once we know pause state — run in parallel.
-      const [overlays, bundleRows] = promotionsPaused
-        ? [[], []]
-        : await Promise.all([
+      const [overlays, bundleRows] =
+        promotionsPaused || COUPONS_ONLY
+          ? [[], []]
+          : await Promise.all([
             promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, [
               row.id
             ]),
@@ -207,9 +215,9 @@ export function createStorefrontListingPromotions({ promotionRepo, shopPromotion
     try {
       const rawSettings = await promoReads.getShopPromotionSettings(client, shopId);
       const promotionsPaused = rawSettings?.promotions_paused === true;
-      if (promotionsPaused) {
+      if (promotionsPaused || COUPONS_ONLY) {
         return {
-          promotionsPaused: true,
+          promotionsPaused: promotionsPaused || COUPONS_ONLY,
           skuPromoCategoryIds: new Set(),
           categoryDiscountRulesByCategory: new Map(),
           bundleRowsRaw: []
