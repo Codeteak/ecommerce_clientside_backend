@@ -60,7 +60,7 @@ describe("buildCheckoutOrderLines unit_size snapshot", () => {
     expect(orderItems[0].unitSizeSnapshot).toBe("1");
   });
 
-  it("writes a 250 g step as 0.25 kg with unit size 1 and the per-kg price", async () => {
+  it("bills two 0.25 kg packs at the pack price and keeps the size as a label", async () => {
     const { orderItems } = await buildCheckoutOrderLines({
       cartRepo: null,
       client: null,
@@ -83,32 +83,33 @@ describe("buildCheckoutOrderLines unit_size snapshot", () => {
       priceStorefrontLines: null
     });
 
-    expect(orderItems[0].quantity).toBe(0.5);
-    expect(orderItems[0].paidQuantity).toBe(0.5);
+    expect(orderItems[0].quantity).toBe(2);
+    expect(orderItems[0].paidQuantity).toBe(2);
     expect(orderItems[0].unitLabel).toBe("kg");
-    expect(orderItems[0].unitSizeSnapshot).toBe("1");
+    expect(orderItems[0].unitSizeSnapshot).toBe("0.25");
     expect(orderItems[0].unitPriceMinor).toBe(10000);
-    expect(orderItems[0].lineTotalMinor).toBe(5000);
+    expect(orderItems[0].lineTotalMinor).toBe(20000);
   });
 });
 
 describe("collapseWeightStepOrderItem", () => {
-  it("keeps an already priced 250 g line and does not double the step", () => {
+  it("leaves a packed gram line at pack price times pack count", () => {
     const item = collapseWeightStepOrderItem({
       isCustom: false,
       freeQuantity: 0,
-      unitLabel: "kg",
-      unitSizeSnapshot: "0.25",
+      unitLabel: "g",
+      unitSizeSnapshot: "250",
       quantity: 1,
       paidQuantity: 1,
       unitPriceMinor: 10000,
       listPriceMinor: 10000,
-      lineTotalMinor: 2500
+      lineTotalMinor: 10000
     });
-    expect(item.quantity).toBe(0.25);
-    expect(item.unitSizeSnapshot).toBe("1");
+    expect(item.quantity).toBe(1);
+    expect(item.unitLabel).toBe("g");
+    expect(item.unitSizeSnapshot).toBe("250");
     expect(item.unitPriceMinor).toBe(10000);
-    expect(item.lineTotalMinor).toBe(2500);
+    expect(item.lineTotalMinor).toBe(10000);
   });
 
   it("does not treat sold-by-weight kg quantity as pack count × catalog step", () => {

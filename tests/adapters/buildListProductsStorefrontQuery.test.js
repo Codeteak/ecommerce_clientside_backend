@@ -23,7 +23,7 @@ describe("buildListProductsStorefrontQuery", () => {
     expect(out.text).toContain("FROM shop_products sp");
     expect(out.text).toContain("LEFT JOIN global_products gp");
     expect(out.text).toContain(
-      "CASE WHEN sp.offer_price_minor_per_unit IS NOT NULL AND sp.offer_price_minor_per_unit < sp.price_minor_per_unit"
+      "CASE WHEN sp.offer_price_minor_per_unit IS NOT NULL AND sp.offer_price_minor_per_unit > 0 AND sp.offer_price_minor_per_unit < sp.price_minor_per_unit"
     );
     expect(out.text).not.toContain("c.scope = 'shared'");
     expect(out.text).not.toContain("c.scope = 'private' AND c.owner_shop_id = $1::uuid");

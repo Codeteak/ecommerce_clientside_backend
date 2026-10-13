@@ -24,6 +24,11 @@ describe("resolveStorefrontSkuUnitPrices", () => {
     expect(baselineUnitMinorFromCatalog("100", "110")).toBe(100);
   });
 
+  it("baselineUnitMinorFromCatalog ignores an offer of 0 and keeps the list price", () => {
+    expect(baselineUnitMinorFromCatalog("59900", "0")).toBe(59900);
+    expect(baselineUnitMinorFromCatalog("59900", null)).toBe(59900);
+  });
+
   it("pickWinningPromoOverlay priority uses ascending priority", () => {
     const a = {
       shop_product_id: "s1",
