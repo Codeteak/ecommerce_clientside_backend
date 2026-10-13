@@ -26,6 +26,7 @@ $$;
 
 -- Upgrade: picker self-manage order policy flag.
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS picker_self_manage_orders BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS skip_pickup BOOLEAN NOT NULL DEFAULT false;
 
 -- Backfill: migrate legacy `shops.address`/`shops.location` and `customers.address` into `addresses`.
 -- This block is safe to re-run (only fills when *_address_id is NULL).

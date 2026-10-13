@@ -14,7 +14,8 @@ export function parseMinor(v) {
 }
 
 /**
- * Baseline selling unit from catalog: use offer when strictly below list (MRP).
+ * Baseline selling unit from catalog: use offer when it is a real price strictly below list (MRP).
+ * An offer of 0 means no offer, not a free product.
  * Must match `SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL` in `catalogBaselineUnitSql.js`.
  * @param {unknown} priceMinorStr
  * @param {unknown} offerMinorStr
@@ -23,7 +24,7 @@ export function baselineUnitMinorFromCatalog(priceMinorStr, offerMinorStr) {
   const price = parseMinor(priceMinorStr);
   if (price == null) return 0;
   const offer = parseMinor(offerMinorStr);
-  if (offer != null && offer < price) return offer;
+  if (offer != null && offer > 0 && offer < price) return offer;
   return price;
 }
 

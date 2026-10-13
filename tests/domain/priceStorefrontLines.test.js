@@ -38,22 +38,36 @@ describe("createPriceStorefrontLines", () => {
     expect(out.lines[0].final_price_minor).toBe("800");
   });
 
-  it("charges pack count times unit size times price per kg", async () => {
+  it("bills a packed line once per pack and ignores unit size", async () => {
     const price = createPriceStorefrontLines({ promotionRepo: basePromotionRepo() });
-    const oneStep = await price(fakeClient, {
+    const onePack = await price(fakeClient, {
       shopId,
       lines: [{ productId, quantity: 1, listMinor: 10000, offerMinor: null, unitSize: 0.25 }]
     });
-    expect(oneStep.subtotalMinor).toBe(2500);
-    expect(oneStep.lines[0].final_price_minor).toBe("10000");
-    expect(oneStep.lines[0].line_total_minor).toBe("2500");
+    expect(onePack.subtotalMinor).toBe(10000);
+    expect(onePack.lines[0].final_price_minor).toBe("10000");
+    expect(onePack.lines[0].line_total_minor).toBe("10000");
 
-    const doubleStep = await price(fakeClient, {
+    const twoPacks = await price(fakeClient, {
       shopId,
       lines: [{ productId, quantity: 2, listMinor: 10000, offerMinor: null, unitSize: 0.25 }]
     });
-    expect(doubleStep.subtotalMinor).toBe(5000);
-    expect(doubleStep.lines[0].line_total_minor).toBe("5000");
+    expect(twoPacks.subtotalMinor).toBe(20000);
+    expect(twoPacks.lines[0].line_total_minor).toBe("20000");
+
+    const milk = await price(fakeClient, {
+      shopId,
+      lines: [{ productId, quantity: 1, listMinor: 5000, offerMinor: null, unitSize: 500, unit: "ml" }]
+    });
+    expect(milk.subtotalMinor).toBe(5000);
+    expect(milk.lines[0].line_total_minor).toBe("5000");
+
+    const chips = await price(fakeClient, {
+      shopId,
+      lines: [{ productId, quantity: 1, listMinor: 2000, offerMinor: null, unitSize: 55, unit: "g" }]
+    });
+    expect(chips.subtotalMinor).toBe(2000);
+    expect(chips.lines[0].line_total_minor).toBe("2000");
   });
 
   it("bills 255 g at the same per-kg price", async () => {

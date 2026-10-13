@@ -4,4 +4,4 @@
  * `resolveStorefrontSkuUnitPrices.js` (shop_products alias `sp`).
  */
 export const SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL =
-  "CASE WHEN sp.offer_price_minor_per_unit IS NOT NULL AND sp.offer_price_minor_per_unit < sp.price_minor_per_unit THEN sp.offer_price_minor_per_unit ELSE sp.price_minor_per_unit END";
+  "CASE WHEN sp.offer_price_minor_per_unit IS NOT NULL AND sp.offer_price_minor_per_unit > 0 AND sp.offer_price_minor_per_unit < sp.price_minor_per_unit THEN sp.offer_price_minor_per_unit ELSE sp.price_minor_per_unit END";
