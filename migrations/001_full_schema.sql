@@ -570,7 +570,6 @@ $$;
 
 -- Upgrade: picker self-manage order policy flag.
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS picker_self_manage_orders BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS skip_pickup BOOLEAN NOT NULL DEFAULT false;
 
 -- Backfill: migrate legacy `shops.address`/`shops.location` and `customers.address` into `addresses`.
 -- This block is safe to re-run (only fills when *_address_id is NULL).
@@ -1987,8 +1986,9 @@ COMMENT ON COLUMN order_items.line_discount_minor IS
 COMMENT ON COLUMN order_items.applied_promotion_ids IS
   'Which promotion IDs affected this line. Finer-grained than order-level totals; used when refunds must unwind specific campaign contributions.';
 
--- 035_drop_shop_products_stock_quantity.sql
-ALTER TABLE shop_products DROP COLUMN IF EXISTS stock_quantity;
+-- 035_shop_products_stock_quantity.sql — billing stock count used for product quantity
+ALTER TABLE shop_products
+  ADD COLUMN IF NOT EXISTS stock_quantity NUMERIC(14, 3);
 
 -- 036_outbox_worker_columns.sql — optional worker columns for outboxProcessor
 ALTER TABLE outbox_messages ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending';

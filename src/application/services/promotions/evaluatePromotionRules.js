@@ -73,6 +73,31 @@ export function evaluateSinglePromotionRule(rule, ctx) {
 }
 
 /**
+ * Shrink line totals so they add up to the payable cart (after an automatic
+ * cart discount). Category percents then use that reduced base.
+ * @param {Array<{ lineTotalMinor: number, categoryId?: string | null }>} lines
+ * @param {number} payableSubtotal
+ */
+export function scaleLinesToPayable(lines, payableSubtotal) {
+  const list = (Array.isArray(lines) ? lines : []).map((l) => ({
+    ...l,
+    lineTotalMinor: Math.max(0, Math.trunc(Number(l?.lineTotalMinor) || 0))
+  }));
+  const sum = list.reduce((s, l) => s + l.lineTotalMinor, 0);
+  const target = Math.max(0, Math.trunc(Number(payableSubtotal) || 0));
+  if (sum <= 0 || target >= sum) return list;
+  let allocated = 0;
+  return list.map((l, i) => {
+    if (i === list.length - 1) {
+      return { ...l, lineTotalMinor: Math.max(0, target - allocated) };
+    }
+    const next = Math.min(l.lineTotalMinor, Math.round((l.lineTotalMinor * target) / sum));
+    allocated += next;
+    return { ...l, lineTotalMinor: next };
+  });
+}
+
+/**
  * @param {object[]} rules
  * @param {{ subtotalMinor: number, lines: Array<{ lineTotalMinor: number, categoryId?: string | null }> }} ctx
  */
