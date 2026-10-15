@@ -133,15 +133,100 @@ export function resolveRequestedQuantity(body, currentQty = null) {
   throw new ValidationError("quantity or delta is required");
 }
 
+function rupeeFromMinor(minor) {
+  const major = Math.max(0, Number(minor) || 0) / 100;
+  const rounded = Math.round(major * 100) / 100;
+  if (Number.isInteger(rounded)) return `₹${rounded.toLocaleString("en-IN")}`;
+  return `₹${rounded.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function mapCouponReasonMessage(code) {
   const messages = {
-    MIN_SUBTOTAL_NOT_MET: "Cart subtotal does not meet the minimum for this coupon.",
-    FIRST_ORDER_ONLY_NOT_MET: "This coupon is for first orders only.",
-    NEW_CUSTOMER_ONLY_NOT_MET: "This coupon is for new customers only.",
-    COUPON_NOT_FOUND: "Coupon not found.",
-    COUPON_EXHAUSTED: "This coupon has reached its redemption limit.",
-    COUPON_NOT_APPLICABLE: "Coupon cannot be applied to this cart.",
-    EMPTY_CART_WITH_COUPON: "Cannot apply a coupon to an empty cart."
+    MIN_SUBTOTAL_NOT_MET: "Your order is below the minimum for this coupon.",
+    FIRST_ORDER_ONLY_NOT_MET: "This coupon is only for your first order.",
+    NEW_CUSTOMER_ONLY_NOT_MET: "This coupon is only for new customers.",
+    COUPON_NOT_FOUND: "This coupon code was not found.",
+    COUPON_EXHAUSTED: "This coupon has reached its usage limit.",
+    COUPON_NOT_APPLICABLE: "This coupon does not discount anything in this cart.",
+    COUPON_NO_CART_BENEFIT: "This coupon has no cart discount rules.",
+    COUPON_NOT_WITH_BUNDLE: "Coupons cannot be used with Buy X Get Y offers.",
+    COUPON_NOT_AFTER_AUTO: "This coupon cannot be combined with the automatic cart discount.",
+    COUPON_NOT_WITH_SKU: "This coupon cannot be combined with product sale prices.",
+    COUPON_NOT_WITH_AUTO_CART: "This category coupon cannot be used with the automatic cart discount.",
+    COUPON_NO_MATCHING_ITEMS: "None of the products in your cart are in this coupon's categories.",
+    COUPON_RULE_SUBTOTAL_NOT_MET: "Your order is below the amount this discount needs.",
+    EMPTY_CART_WITH_COUPON: "Add items to your cart before applying a coupon."
   };
-  return messages[code] ?? "Coupon cannot be applied to this cart.";
+  return messages[code] ?? "This coupon cannot be applied to this cart.";
+}
+
+/**
+ * Reason shown when a coupon is rejected. Includes the rupee amount when the rule has one.
+ * @param {string} code
+ * @param {{ minSubtotalMinor?: unknown, cartSubtotalMinor?: unknown, eligibilityDays?: unknown, ruleMinSubtotalMinor?: unknown }} [ctx]
+ */
+export function couponFailureMessage(code, ctx = {}) {
+  if (code === "MIN_SUBTOTAL_NOT_MET") {
+    const min = Number(ctx.minSubtotalMinor);
+    const cart = Number(ctx.cartSubtotalMinor);
+    if (Number.isFinite(min) && min > 0 && Number.isFinite(cart) && cart < min) {
+      return `Add ${rupeeFromMinor(min - cart)} more. This coupon needs an order of at least ${rupeeFromMinor(min)}.`;
+    }
+    if (Number.isFinite(min) && min > 0) {
+      return `This coupon needs an order of at least ${rupeeFromMinor(min)}.`;
+    }
+  }
+  if (code === "NEW_CUSTOMER_ONLY_NOT_MET") {
+    const days = Number(ctx.eligibilityDays);
+    if (Number.isFinite(days) && days > 0) {
+      return `This coupon is only for customers who joined in the last ${Math.floor(days)} days.`;
+    }
+  }
+  if (code === "COUPON_RULE_SUBTOTAL_NOT_MET") {
+    const min = Number(ctx.ruleMinSubtotalMinor);
+    if (Number.isFinite(min) && min > 0) {
+      return `This discount starts when the order is at least ${rupeeFromMinor(min)}.`;
+    }
+  }
+  return mapCouponReasonMessage(code);
+}
+
+/**
+ * Why a coupon matched the shop but discounted ₹0.
+ * @param {object[]} rules
+ * @param {number} subtotalMinor
+ * @returns {{ code: string, message: string }}
+ */
+export function couponZeroDiscountFailure(rules, subtotalMinor) {
+  const list = Array.isArray(rules) ? rules : [];
+  const subtotal = Math.max(0, Number(subtotalMinor) || 0);
+  /** @type {number[]} */
+  const thresholds = [];
+  let categoryRule = false;
+  for (const rule of list) {
+    if (!rule || typeof rule !== "object") continue;
+    const kind = rule.rule_kind ?? rule.kind;
+    if (kind === "category_percent_off") categoryRule = true;
+    if (kind === "cart_percent_off_if_subtotal_above" || kind === "cart_fixed_off_if_subtotal_above") {
+      const threshold = Number(rule.min_subtotal_minor ?? rule.minSubtotalMinor);
+      if (Number.isFinite(threshold) && threshold > subtotal) thresholds.push(threshold);
+    }
+  }
+  if (thresholds.length) {
+    const need = Math.min(...thresholds);
+    return {
+      code: "COUPON_RULE_SUBTOTAL_NOT_MET",
+      message: couponFailureMessage("COUPON_RULE_SUBTOTAL_NOT_MET", { ruleMinSubtotalMinor: need })
+    };
+  }
+  if (categoryRule) {
+    return {
+      code: "COUPON_NO_MATCHING_ITEMS",
+      message: mapCouponReasonMessage("COUPON_NO_MATCHING_ITEMS")
+    };
+  }
+  return {
+    code: "COUPON_NOT_APPLICABLE",
+    message: mapCouponReasonMessage("COUPON_NOT_APPLICABLE")
+  };
 }

@@ -568,6 +568,7 @@ export class OrderRepoPg extends OrderRepo {
     return rows[0] ?? null;
   }
 
+  /** Orders that still count as placed (not cancelled or rejected). Used for first-order coupons. */
   async countDeliveredOrdersForCustomer(client, shopId, customerIdText) {
     await setTenantContext(client, shopId);
     const { rows } = await client.query(
@@ -575,7 +576,7 @@ export class OrderRepoPg extends OrderRepo {
          FROM orders
         WHERE shop_id = $1::uuid
           AND customer_id = $2
-          AND status = 'delivered'`,
+          AND status NOT IN ('cancelled', 'rejected')`,
       [shopId, customerIdText]
     );
     return rows[0]?.cnt ?? 0;

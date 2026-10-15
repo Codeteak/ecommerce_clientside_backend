@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateCartPromotionRules,
-  evaluateSinglePromotionRule
+  evaluateSinglePromotionRule,
+  scaleLinesToPayable
 } from "../../src/application/services/promotions/evaluatePromotionRules.js";
 
 describe("evaluatePromotionRules", () => {
@@ -34,5 +35,21 @@ describe("evaluatePromotionRules", () => {
       { subtotalMinor: 1000, lines: [] }
     );
     expect(total).toBe(150);
+  });
+
+  it("scales category lines down to the cart left after an automatic discount", () => {
+    const scaled = scaleLinesToPayable(
+      [
+        { lineTotalMinor: 800, categoryId: "cat" },
+        { lineTotalMinor: 200, categoryId: "other" }
+      ],
+      900
+    );
+    expect(scaled.reduce((s, l) => s + l.lineTotalMinor, 0)).toBe(900);
+    const d = evaluateSinglePromotionRule(
+      { rule_kind: "category_percent_off", percent_bps: 1000, global_category_id: "cat" },
+      { subtotalMinor: 900, lines: scaled }
+    );
+    expect(d).toBe(72);
   });
 });

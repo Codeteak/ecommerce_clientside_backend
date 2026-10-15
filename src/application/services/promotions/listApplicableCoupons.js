@@ -147,18 +147,6 @@ export function createListApplicableCoupons({ promotionRepo, shopPromotionCache,
           return false;
         }
 
-        const minSub = row.min_subtotal_minor != null ? Number(row.min_subtotal_minor) : null;
-        const firstOrderOnly = row.first_order_only === true;
-        const newCustomerOnly = row.new_customer_only === true;
-
-        // Guest / no customerId: skip first-order / new-customer gates (same as priceStorefrontLines).
-        if (hasCustomerContext && (firstOrderOnly || newCustomerOnly)) {
-          const eligibility = buildCouponEligibility(
-            { minSubtotalMinor: minSub, firstOrderOnly, newCustomerOnly },
-            eligibilityCtx
-          );
-          if (!eligibility.applicable) return false;
-        }
         return true;
       })
       .map((row) => {

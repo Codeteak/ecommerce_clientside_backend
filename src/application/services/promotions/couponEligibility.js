@@ -7,7 +7,7 @@
  *   newCustomerOnly: unknown
  * }} coupon
  * @param {{
- *   deliveredCount: unknown,
+ *   deliveredCount: unknown, // placed orders that are not cancelled or rejected
  *   customerCreatedAt: Date,
  *   newCustomerCutoff: Date,
  *   cartSubtotalMinor: number | null

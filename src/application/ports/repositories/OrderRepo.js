@@ -84,7 +84,7 @@ export class OrderRepo {
     throw new Error("Not implemented");
   }
 
-  /** Prior delivered orders for first-order-only coupon rules. */
+  /** Prior placed orders for first-order-only coupons. Cancelled and rejected orders are ignored. */
   async countDeliveredOrdersForCustomer(_client, _shopId, _customerIdText) {
     void _client;
     void _shopId;

@@ -3,7 +3,7 @@ import { buildCouponEligibility } from "./couponEligibility.js";
 import { COUPONS_ONLY } from "./couponsOnly.js";
 import { evaluateAutoCartRules } from "./evaluateAutoCartRules.js";
 import { evaluateBundleDiscounts, planCrossRewardInjections } from "./evaluateBundleDiscounts.js";
-import { evaluateCartPromotionRules } from "./evaluatePromotionRules.js";
+import { evaluateCartPromotionRules, scaleLinesToPayable } from "./evaluatePromotionRules.js";
 import {
   buildStorefrontListingUnitPriceMap,
   computeStorefrontUnitPricing,
@@ -19,6 +19,7 @@ import {
 } from "../../../adapters/repositories/postgres/queries/shopProductCatalogSql.js";
 import { sellableAtPurchasePredicates } from "../../../adapters/repositories/postgres/queries/sellableShopProductSql.js";
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
+import { couponFailureMessage, couponZeroDiscountFailure } from "../storefront/cart/cartLineRules.js";
 
 function pricingError(code, message) {
   return new AppError(message, { statusCode: 400, code });
@@ -475,7 +476,14 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
         );
         if (!eligibility.applicable) {
           const errCode = eligibility.ineligibilityCodes[0] || "COUPON_NOT_APPLICABLE";
-          throw pricingError(errCode, "Coupon cannot be applied to this order.");
+          throw pricingError(
+            errCode,
+            couponFailureMessage(errCode, {
+              minSubtotalMinor: couponRow.min_subtotal_minor,
+              cartSubtotalMinor: subtotalForCoupon,
+              eligibilityDays: Number(settings?.first_coupon_eligibility_days ?? 30)
+            })
+          );
         }
       }
 
@@ -511,9 +519,13 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
 
       let discount = evaluateCartPromotionRules(rules, {
         subtotalMinor: subtotalForCoupon,
-        lines: ruleLines
+        lines: scaleLinesToPayable(ruleLines, subtotalForCoupon)
       });
       discount = Math.min(discount, subtotalForCoupon);
+      if (discount <= 0) {
+        const failed = couponZeroDiscountFailure(rules, subtotalForCoupon);
+        throw pricingError(failed.code, failed.message);
+      }
 
       return {
         id: String(couponRow.id),
