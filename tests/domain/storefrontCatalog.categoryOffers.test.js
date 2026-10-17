@@ -73,7 +73,9 @@ describe("storefrontCatalog category offers", () => {
 
     const out = await service.listCategories(shopId, { parentId: null });
 
-    expect(promotionRepo.listActiveCategoryPromotionSignals).not.toHaveBeenCalled();
+    // COUPONS_ONLY + ALLOW_AUTO_CART: load category auto-discount signals only.
+    // SKU promo ids / BXGY bundles stay off the category list.
+    expect(promotionRepo.listActiveCategoryPromotionSignals).toHaveBeenCalled();
     expect(promotionRepo.listActiveBundleRulesForShop).not.toHaveBeenCalled();
     expect(out.shop_name).toBe("Market Fresh");
     expect(out.shop_image).toBeNull();
@@ -81,9 +83,14 @@ describe("storefrontCatalog category offers", () => {
     expect(out.categories[0].offers).toEqual({
       has_sku_promo: false,
       has_bundle: false,
-      has_category_discount: false
+      has_category_discount: true
     });
     expect(out.categories[0].bundle_rules).toHaveLength(0);
-    expect(out.categories[0].category_discount_rules).toHaveLength(0);
+    expect(out.categories[0].category_discount_rules).toHaveLength(1);
+    expect(out.categories[0].category_discount_rules[0]).toMatchObject({
+      promotion_id: "promo-cat",
+      kind: "category_percent_off",
+      percent_bps: 1500
+    });
   });
 });
