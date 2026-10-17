@@ -235,9 +235,18 @@ describe("createPriceStorefrontLines", () => {
     ).rejects.toMatchObject({ code: "COUPON_NOT_FOUND" });
   });
 
-  it("ignores automatic cart discounts while coupons-only is on", async () => {
+  it("applies automatic cart discounts while coupons-only still pauses SKU overlays", async () => {
+    const listOverlays = vi.fn().mockResolvedValue([
+      {
+        shop_product_id: productId,
+        promotion_id: "promo-sku",
+        promo_price_minor_per_unit: 500,
+        priority: 1
+      }
+    ]);
     const price = createPriceStorefrontLines({
       promotionRepo: basePromotionRepo({
+        listActivePromotionProductOverlaysForShopProducts: listOverlays,
         listActiveAutoCartRulesForShop: vi.fn().mockResolvedValue([
           {
             promotion_id: "promo-auto",
@@ -254,9 +263,10 @@ describe("createPriceStorefrontLines", () => {
       shopId,
       lines: [{ productId, quantity: 1, listMinor: 1000, offerMinor: null }]
     });
-    expect(out.autoCartDiscountMinor).toBe(0);
-    expect(out.subtotalMinor).toBe(1000);
-    expect(out.appliedPromotionIds).not.toContain("promo-auto");
+    expect(listOverlays).not.toHaveBeenCalled();
+    expect(out.autoCartDiscountMinor).toBe(100);
+    expect(out.subtotalMinor).toBe(900);
+    expect(out.appliedPromotionIds).toContain("promo-auto");
   });
 
   it("applies multiple coupons sequentially reducing remaining subtotal", async () => {

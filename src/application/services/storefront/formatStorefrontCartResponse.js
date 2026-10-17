@@ -117,16 +117,93 @@ export function collectPromoTypesFromItems(items) {
  * @param {Array<{ code: string, applicable?: boolean }>} suggestedCoupons
  * @param {Array<Record<string, unknown>>} items
  */
+function mapAutoOfferRow(row) {
+  if (!row || typeof row !== "object") return null;
+  return {
+    kind: row.kind ?? null,
+    status: row.status ?? null,
+    promotion_id: row.promotion_id ?? row.promotionId ?? null,
+    promotion_name: row.promotion_name ?? row.promotionName ?? null,
+    category_id: row.category_id ?? row.categoryId ?? null,
+    category_name: row.category_name ?? row.categoryName ?? null,
+    percent_bps: row.percent_bps != null ? Number(row.percent_bps) : row.percentBps != null ? Number(row.percentBps) : null,
+    amount_minor:
+      row.amount_minor != null
+        ? Number(row.amount_minor)
+        : row.amountMinor != null
+          ? Number(row.amountMinor)
+          : null,
+    min_subtotal_minor:
+      row.min_subtotal_minor != null
+        ? Number(row.min_subtotal_minor)
+        : row.minSubtotalMinor != null
+          ? Number(row.minSubtotalMinor)
+          : null,
+    remaining_minor:
+      row.remaining_minor != null
+        ? Number(row.remaining_minor)
+        : row.remainingMinor != null
+          ? Number(row.remainingMinor)
+          : null,
+    discount_minor: Number(row.discount_minor ?? row.discountMinor ?? 0) || 0,
+    title: row.title ?? null,
+    message: row.message ?? null
+  };
+}
+
 export function formatStorefrontPromotions(promotionsBase, suggestedCoupons, items) {
   const coupon = promotionsBase?.coupon ?? {};
+  const auto = promotionsBase?.auto && typeof promotionsBase.auto === "object" ? promotionsBase.auto : null;
+  const autoCartDiscountMinor = Number(auto?.auto_cart_discount_minor ?? auto?.autoCartDiscountMinor ?? 0) || 0;
+  const appliedOffers = (Array.isArray(auto?.applied_offers)
+    ? auto.applied_offers
+    : Array.isArray(auto?.appliedOffers)
+      ? auto.appliedOffers
+      : []
+  )
+    .map(mapAutoOfferRow)
+    .filter(Boolean);
+  const suggestedOffers = (Array.isArray(auto?.suggested_offers)
+    ? auto.suggested_offers
+    : Array.isArray(auto?.suggestedOffers)
+      ? auto.suggestedOffers
+      : []
+  )
+    .map(mapAutoOfferRow)
+    .filter(Boolean);
   const types = collectPromoTypesFromItems(items);
   if (coupon.status === "applied") types.push("coupon");
+  if (autoCartDiscountMinor > 0) types.push("auto_cart");
+  if (Number(auto?.bundle_discount_minor ?? auto?.bundleDiscountMinor ?? 0) > 0) types.push("bundle");
+  if (Number(auto?.line_promo_discount_minor ?? auto?.linePromoDiscountMinor ?? 0) > 0) {
+    types.push("sku");
+  }
   return {
     paused: promotionsBase?.paused === true,
     types: [...new Set(types)],
-    promotion_ids: Array.isArray(promotionsBase?.auto?.applied_promotion_ids)
-      ? promotionsBase.auto.applied_promotion_ids
-      : [],
+    promotion_ids: Array.isArray(auto?.applied_promotion_ids)
+      ? auto.applied_promotion_ids
+      : Array.isArray(auto?.appliedPromotionIds)
+        ? auto.appliedPromotionIds
+        : [],
+    auto: auto
+      ? {
+          applied_promotion_ids: Array.isArray(auto.applied_promotion_ids)
+            ? auto.applied_promotion_ids
+            : Array.isArray(auto.appliedPromotionIds)
+              ? auto.appliedPromotionIds
+              : [],
+          bundle_discount_minor: Number(auto.bundle_discount_minor ?? auto.bundleDiscountMinor ?? 0) || 0,
+          line_promo_discount_minor:
+            Number(auto.line_promo_discount_minor ?? auto.linePromoDiscountMinor ?? 0) || 0,
+          auto_cart_discount_minor: autoCartDiscountMinor,
+          has_sku_promo: !!(auto.has_sku_promo ?? auto.hasSkuPromo),
+          has_bundle: !!(auto.has_bundle ?? auto.hasBundle),
+          has_auto_cart: autoCartDiscountMinor > 0 || !!(auto.has_auto_cart ?? auto.hasAutoCart),
+          applied_offers: appliedOffers,
+          suggested_offers: suggestedOffers
+        }
+      : null,
     coupon: {
       code: coupon.code ?? null,
       ...(Array.isArray(coupon.codes) && coupon.codes.length

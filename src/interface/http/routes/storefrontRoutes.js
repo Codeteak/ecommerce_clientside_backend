@@ -107,6 +107,11 @@ export function mountStorefrontRoutes(r, deps) {
       storefrontCat.getProductById
     );
     r.get(`${prefix}/home-sections`, storefrontCat.listHomeSections);
+    r.get(
+      `${prefix}/home-sections/:id`,
+      validate({ params: storefrontProductIdParamSchema }),
+      storefrontCat.getHomeSectionById
+    );
 
     r.post(
       `${prefix}/cart/preview`,
@@ -246,6 +251,7 @@ export function mountStorefrontRoutes(r, deps) {
           if (!catalogCacheOpsAuth(req, next)) return;
           Promise.resolve(
             invalidateShopCatalogCache(req.body.shopId, {
+              scope: req.body.scope === "promotions" ? "promotions" : "catalog",
               prewarm: req.body.prewarm === true,
               topCategoryLimit: req.body.topCategoryLimit,
               productIds: req.body.productIds

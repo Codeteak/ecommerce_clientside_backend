@@ -735,6 +735,94 @@ ${shopProductLeftJoinGlobal}
     }
   }
 
+  async listSellableProductsByCategoryIdsStorefront(shopId, categoryIds, limit = 50) {
+    const cats = Array.isArray(categoryIds)
+      ? [...new Set(categoryIds.map((id) => String(id)).filter(Boolean))]
+      : [];
+    if (cats.length === 0) return [];
+    const cap = Math.min(Math.max(1, Number(limit) || 50), 50);
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `WITH RECURSIVE category_tree AS (
+           SELECT c.id
+             FROM global_categories c
+            WHERE c.id = ANY($2::uuid[])
+           UNION ALL
+           SELECT child.id
+             FROM global_categories child
+             JOIN category_tree ct ON child.parent_id = ct.id
+         )
+         SELECT sp.id, ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug,
+                ${shopProductCategoryIdSql} AS category_id,
+                ${shopProductStockQuantitySql} AS stock_quantity,
+                sp.price_minor_per_unit::text AS price_minor_per_unit,
+                sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
+                ${shopProductImageUrlSql} AS global_image_url,
+                pm.id AS thumb_media_id,
+                pm.storage_key AS thumb_storage_key,
+                pm.content_type AS thumb_content_type
+           FROM shop_products sp
+           ${shopProductLeftJoinGlobal}
+           LEFT JOIN LATERAL (
+             WITH chosen_images AS (
+               SELECT spi.media_asset_id, spi.sort_order
+                 FROM shop_product_images spi
+                WHERE spi.shop_product_id = sp.id
+               UNION ALL
+               SELECT gpi.media_asset_id, gpi.sort_order
+                 FROM global_product_images gpi
+                WHERE gpi.global_product_id = sp.global_product_id
+                  AND NOT EXISTS (
+                    SELECT 1 FROM shop_product_images spi2 WHERE spi2.shop_product_id = sp.id
+                  )
+             )
+             SELECT ci.media_asset_id
+               FROM chosen_images ci
+              ORDER BY ci.sort_order ASC
+              LIMIT 1
+           ) pimg ON true
+           LEFT JOIN media_assets pm ON pm.id = pimg.media_asset_id
+          WHERE sp.shop_id = $1::uuid
+            AND sp.status = 'active'
+            AND sp.availability = 'in_stock'
+            AND ${shopProductCategoryIdSql} IN (SELECT id FROM category_tree)
+          ORDER BY sp.updated_at DESC NULLS LAST, sp.id ASC
+          LIMIT $3`,
+        [shopId, cats, cap]
+      );
+      return rows;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getHomeSectionByIdStorefront(shopId, sectionId) {
+    const id = String(sectionId || "").trim();
+    if (!id) return null;
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `SELECT id, title, type, sort_order, starts_at, ends_at, is_enabled,
+                product_ids, category_ids, buy_product_ids, get_product_ids,
+                buy_qty, get_qty, promotion_id, deleted_at
+           FROM shop_home_sections
+          WHERE shop_id = $1::uuid
+            AND id = $2::uuid
+          LIMIT 1`,
+        [shopId, id]
+      );
+      return rows[0] ?? null;
+    } catch (err) {
+      if (err && err.code === "42P01") return null;
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   async listActiveCategoriesByIdsStorefront(shopId, ids) {
     const categoryIds = Array.isArray(ids) ? ids.map((id) => String(id)).filter(Boolean) : [];
     if (categoryIds.length === 0) return [];

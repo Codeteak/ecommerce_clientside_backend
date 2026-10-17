@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 
 /**
  * Shop-scoped promotion query cache (settings, bundles, overlays, coupon catalog).
- * Keys use catalogCache.shopKeyPrefix so catalog invalidate bumps generation.
+ * Keys use catalogCache.shopPromoKeyPrefix so promotion-only invalidates can
+ * drop these without wiping product-list row caches.
  *
  * @param {{
  *   catalogCache: ReturnType<import("./catalogCache.js").createCatalogCache>,
@@ -17,7 +18,10 @@ export function createShopPromotionCache({ catalogCache, promotionRepo, ttlSec =
     if (ttl <= 0 || typeof catalogCache.wrap !== "function") {
       return fn();
     }
-    const prefix = await catalogCache.shopKeyPrefix(shopId);
+    const prefix =
+      typeof catalogCache.shopPromoKeyPrefix === "function"
+        ? await catalogCache.shopPromoKeyPrefix(shopId)
+        : await catalogCache.shopKeyPrefix(shopId);
     return catalogCache.wrap(`${prefix}promo:${suffix}`, ttl, fn);
   }
 

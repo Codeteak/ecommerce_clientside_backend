@@ -24,7 +24,7 @@ describe("mapCategoryListingPromotions", () => {
     expect(filterBundleRuleRowsForCategory(rows, "c1")[0].promotion_id).toBe("promo-1");
   });
 
-  it("withCategoryListingOffers sets flags from live promotion signals", () => {
+  it("withCategoryListingOffers keeps category discounts under COUPONS_ONLY + ALLOW_AUTO_CART", () => {
     const bundleRowsRaw = [
       {
         promotion_id: "b1",
@@ -58,13 +58,15 @@ describe("mapCategoryListingPromotions", () => {
       categoryDiscountRulesByCategory,
       bundleRowsRaw
     });
+    // SKU/BXGY stay paused; category automatic discounts still surface.
     expect(out.offers).toEqual({
       has_sku_promo: false,
       has_bundle: false,
-      has_category_discount: false
+      has_category_discount: true
     });
     expect(out.bundle_rules).toHaveLength(0);
-    expect(out.category_discount_rules).toEqual([]);
+    expect(out.category_discount_rules).toHaveLength(1);
+    expect(out.category_discount_rules[0].percent_bps).toBe(1000);
   });
 
   it("withCategoryListingOffers clears offers when promotions paused", () => {
