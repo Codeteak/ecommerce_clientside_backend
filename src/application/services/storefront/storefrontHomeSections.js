@@ -119,6 +119,33 @@ export function isoOrNull(value) {
   return Number.isFinite(d.getTime()) ? d.toISOString() : null;
 }
 
+/** Cap matches admin MAX_PRODUCTS_PER_SECTION. */
+export const STOREFRONT_SHELF_PRODUCT_CAP = 50;
+
+/**
+ * Explicit product_ids first, then category-expanded fillers, de-duped, capped.
+ * @param {string[]} explicitIds
+ * @param {{ id: string }[]} categoryProductRows
+ */
+export function mergeShelfProductIds(explicitIds, categoryProductRows) {
+  const out = [];
+  const seen = new Set();
+  for (const id of asIdList(explicitIds)) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= STOREFRONT_SHELF_PRODUCT_CAP) return out;
+  }
+  for (const row of Array.isArray(categoryProductRows) ? categoryProductRows : []) {
+    const id = row?.id != null ? String(row.id) : "";
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= STOREFRONT_SHELF_PRODUCT_CAP) break;
+  }
+  return out;
+}
+
 /**
  * Pair BXGY rules into customer-facing deals with correct buy/get qty from the engine.
  */
@@ -263,25 +290,84 @@ export function buildBxgyDealsForSection({
  *   }>
  * }} [opts]
  */
+/**
+ * Expand category_ids → sellable products for product/event shelves (parallel per section).
+ * @returns {Promise<Map<string, unknown[]>>} sectionId → category product rows
+ */
+async function loadCategoryProductsBySection(catalogRepo, shopId, rows) {
+  const map = new Map();
+  const jobs = [];
+  for (const row of rows) {
+    if (row.type === "buy_x_get_y") continue;
+    const cats = asIdList(row.category_ids);
+    if (!cats.length) {
+      map.set(String(row.id), []);
+      continue;
+    }
+    if (typeof catalogRepo.listSellableProductsByCategoryIdsStorefront !== "function") {
+      map.set(String(row.id), []);
+      continue;
+    }
+    jobs.push(
+      catalogRepo
+        .listSellableProductsByCategoryIdsStorefront(shopId, cats, STOREFRONT_SHELF_PRODUCT_CAP)
+        .then((prods) => {
+          map.set(String(row.id), Array.isArray(prods) ? prods : []);
+        })
+        .catch(() => {
+          map.set(String(row.id), []);
+        })
+    );
+  }
+  if (jobs.length) await Promise.all(jobs);
+  return map;
+}
+
 export async function resolveStorefrontHomeSections(catalogRepo, shopId, opts = {}) {
   const rows = await catalogRepo.listEnabledHomeSectionsStorefront(shopId);
   if (!rows.length) return [];
 
+  const categoryProductsBySection = await loadCategoryProductsBySection(catalogRepo, shopId, rows);
+
   const productIds = [];
   const categoryIds = [];
+  const shelfMergedIdsBySection = new Map();
+
   for (const row of rows) {
-    productIds.push(
-      ...asIdList(row.product_ids),
-      ...asIdList(row.buy_product_ids),
-      ...asIdList(row.get_product_ids)
-    );
     categoryIds.push(...asIdList(row.category_ids));
+    if (row.type === "buy_x_get_y") {
+      productIds.push(...asIdList(row.buy_product_ids), ...asIdList(row.get_product_ids));
+      continue;
+    }
+    const merged = mergeShelfProductIds(
+      row.product_ids,
+      categoryProductsBySection.get(String(row.id)) || []
+    );
+    shelfMergedIdsBySection.set(String(row.id), merged);
+    productIds.push(...merged);
   }
 
-  const [productRows, categoryRows] = await Promise.all([
-    catalogRepo.listSellableProductsByIdsStorefront(shopId, [...new Set(productIds)]),
+  // Also include raw category-expanded rows so we don't re-fetch them by id.
+  const categoryRowById = new Map();
+  for (const prods of categoryProductsBySection.values()) {
+    for (const p of prods) {
+      if (p?.id != null) categoryRowById.set(String(p.id), p);
+    }
+  }
+
+  const uniqueIds = [...new Set(productIds)];
+  const missingIds = uniqueIds.filter((id) => !categoryRowById.has(id));
+
+  const [fetchedById, categoryRows] = await Promise.all([
+    catalogRepo.listSellableProductsByIdsStorefront(shopId, missingIds),
     catalogRepo.listActiveCategoriesByIdsStorefront(shopId, [...new Set(categoryIds)])
   ]);
+
+  const productRowById = new Map(categoryRowById);
+  for (const row of fetchedById) {
+    productRowById.set(String(row.id), row);
+  }
+  const productRows = uniqueIds.map((id) => productRowById.get(id)).filter(Boolean);
 
   let priceMap = new Map();
   let bundleRowsRaw = [];
@@ -315,7 +401,8 @@ export async function resolveStorefrontHomeSections(catalogRepo, shopId, opts = 
   );
   const categories = categoryRows.map(mapHomeSectionCategory);
 
-  return rows.map((row) => {
+  const out = [];
+  for (const row of rows) {
     const type = row.type;
     const base = {
       id: row.id,
@@ -339,7 +426,7 @@ export async function resolveStorefrontHomeSections(catalogRepo, shopId, opts = 
       });
       const labelQtyBuy = deals[0]?.buyQty ?? (Number.isInteger(buyQty) ? buyQty : 1);
       const labelQtyGet = deals[0]?.getQty ?? (Number.isInteger(getQty) ? getQty : 1);
-      return {
+      out.push({
         ...base,
         buyQty: Number.isInteger(buyQty) ? buyQty : null,
         getQty: Number.isInteger(getQty) ? getQty : null,
@@ -351,14 +438,81 @@ export async function resolveStorefrontHomeSections(catalogRepo, shopId, opts = 
         buyProducts: orderByIds(products, buyIds),
         getProducts: orderByIds(products, getIds),
         deals
-      };
+      });
+      continue;
     }
-    return {
+
+    const mergedIds = shelfMergedIdsBySection.get(String(row.id)) || asIdList(row.product_ids);
+    const shelfProducts = orderByIds(products, mergedIds);
+    // Hide empty product/event shelves (categories-only with no sellable SKUs).
+    if (shelfProducts.length === 0) continue;
+    out.push({
       ...base,
       startsAt: isoOrNull(row.starts_at),
       endsAt: isoOrNull(row.ends_at),
       categories: orderByIds(categories, asIdList(row.category_ids)),
-      products: orderByIds(products, asIdList(row.product_ids))
-    };
-  });
+      products: shelfProducts
+    });
+  }
+  return out;
+}
+
+/**
+ * Deep-link lookup for /events?id=… — explains why a section is not shoppable.
+ * @returns {Promise<{
+ *   status: 'ok'|'not_found'|'deleted'|'wrong_type'|'disabled'|'scheduled'|'expired'|'empty',
+ *   section: object | null,
+ *   title: string | null,
+ *   type: string | null
+ * }>}
+ */
+export async function lookupStorefrontHomeSection(catalogRepo, shopId, sectionId, opts = {}) {
+  const empty = {
+    status: "not_found",
+    section: null,
+    title: null,
+    type: null
+  };
+  if (typeof catalogRepo.getHomeSectionByIdStorefront !== "function") {
+    return empty;
+  }
+  const row = await catalogRepo.getHomeSectionByIdStorefront(shopId, sectionId);
+  if (!row) return empty;
+
+  const title = row.title != null ? String(row.title) : null;
+  const type = row.type != null ? String(row.type) : null;
+  const base = { title, type, section: null };
+
+  if (row.deleted_at) return { ...base, status: "deleted" };
+  if (type !== "event_shelf") return { ...base, status: "wrong_type" };
+  if (row.is_enabled !== true) return { ...base, status: "disabled" };
+
+  const now = Date.now();
+  if (row.starts_at) {
+    const t = new Date(row.starts_at).getTime();
+    if (Number.isFinite(t) && t > now) return { ...base, status: "scheduled" };
+  }
+  if (row.ends_at) {
+    const t = new Date(row.ends_at).getTime();
+    if (Number.isFinite(t) && t < now) return { ...base, status: "expired" };
+  }
+
+  // Reuse list resolver path: resolve only this row as if enabled.
+  const fakeRepo = {
+    listEnabledHomeSectionsStorefront: async () => [row],
+    listSellableProductsByIdsStorefront: (...a) =>
+      catalogRepo.listSellableProductsByIdsStorefront(...a),
+    listSellableProductsByCategoryIdsStorefront: (...a) =>
+      typeof catalogRepo.listSellableProductsByCategoryIdsStorefront === "function"
+        ? catalogRepo.listSellableProductsByCategoryIdsStorefront(...a)
+        : Promise.resolve([]),
+    listActiveCategoriesByIdsStorefront: (...a) =>
+      catalogRepo.listActiveCategoriesByIdsStorefront(...a)
+  };
+  const sections = await resolveStorefrontHomeSections(fakeRepo, shopId, opts);
+  const section = sections[0] || null;
+  if (!section || !Array.isArray(section.products) || section.products.length === 0) {
+    return { ...base, status: "empty" };
+  }
+  return { status: "ok", section, title, type };
 }

@@ -90,6 +90,24 @@ export class CatalogRepo {
     throw new Error("Not implemented");
   }
 
+  /**
+   * Active + in-stock products in category trees (root + descendants), capped.
+   * Used to expand home-section category_ids into shelf products.
+   */
+  async listSellableProductsByCategoryIdsStorefront(_shopId, _categoryIds, _limit) {
+    void _shopId;
+    void _categoryIds;
+    void _limit;
+    throw new Error("Not implemented");
+  }
+
+  /** Any non-deleted home section row (ignores enabled / date window). */
+  async getHomeSectionByIdStorefront(_shopId, _sectionId) {
+    void _shopId;
+    void _sectionId;
+    throw new Error("Not implemented");
+  }
+
   async listActiveCategoriesByIdsStorefront(_shopId, _ids) {
     void _shopId;
     void _ids;

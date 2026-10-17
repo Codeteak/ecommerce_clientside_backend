@@ -52,4 +52,24 @@ describe("evaluatePromotionRules", () => {
     );
     expect(d).toBe(72);
   });
+
+  it("matches leaf products when the rule targets a parent aisle", () => {
+    const d = evaluateSinglePromotionRule(
+      { rule_kind: "category_percent_off", percent_bps: 1000, global_category_id: "biscuits" },
+      {
+        subtotalMinor: 1000,
+        categoryParentById: new Map([
+          ["ghee", "dairy"],
+          ["dairy", null],
+          ["cream-biscuit", "biscuits"],
+          ["biscuits", null]
+        ]),
+        lines: [
+          { lineTotalMinor: 600, categoryId: "cream-biscuit" },
+          { lineTotalMinor: 400, categoryId: "ghee" }
+        ]
+      }
+    );
+    expect(d).toBe(60);
+  });
 });

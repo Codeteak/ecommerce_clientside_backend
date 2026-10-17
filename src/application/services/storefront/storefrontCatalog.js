@@ -8,7 +8,10 @@ import {
   mapStorefrontCategoryRow as mapCategoryRow,
   mapStorefrontProductRow as mapProductRow
 } from "./storefrontCatalogMappers.js";
-import { resolveStorefrontHomeSections } from "./storefrontHomeSections.js";
+import {
+  lookupStorefrontHomeSection,
+  resolveStorefrontHomeSections
+} from "./storefrontHomeSections.js";
 import { shouldCacheProductList } from "./shouldCacheProductList.js";
 import { withCategoryListingOffers } from "../promotions/mapCategoryListingPromotions.js";
 import { formatShopBranding } from "../shops/formatShopBranding.js";
@@ -76,6 +79,14 @@ export function createStorefrontCatalog({
     return `shop:${shopId}:g0:`;
   }
 
+  /** Prefix that includes promoGen — categories/offers + listingPromo. */
+  async function shopPromoPrefix(shopId) {
+    if (typeof catalogCache.shopPromoKeyPrefix === "function") {
+      return catalogCache.shopPromoKeyPrefix(shopId);
+    }
+    return shopPrefix(shopId);
+  }
+
   async function enrichProductDetailCached(shopId, productId, data) {
     const enrich = () =>
       runWithClient((client) => listingPromotions.enrichProductDetail(client, shopId, data));
@@ -88,12 +99,12 @@ export function createStorefrontCatalog({
     return attachProductDetailSeo(shopId, data, detail, shopLookupRepo);
   }
 
-  async function cachedSWR(shopId, keySuffix, label, fn, ttlOverride = null) {
+  async function cachedSWR(shopId, keySuffix, label, fn, ttlOverride = null, { promoAware = false } = {}) {
     const effective = ttlOverride != null ? ttlOverride : swrTtlSec;
     if (effective <= 0) {
       return fn();
     }
-    const prefix = await shopPrefix(shopId);
+    const prefix = promoAware ? await shopPromoPrefix(shopId) : await shopPrefix(shopId);
     const key = `${prefix}${keySuffix}`;
     return catalogCache.swr(key, effective, fn, { logLabel: label, shopId });
   }
@@ -110,7 +121,7 @@ export function createStorefrontCatalog({
     if (listingPromoTtlSec <= 0 || typeof catalogCache.wrap !== "function") {
       return runWithClient((client) => listingPromotions.loadListingContext(client, shopId, pageRows));
     }
-    const prefix = await shopPrefix(shopId);
+    const prefix = await shopPromoPrefix(shopId);
     const cacheKey = `${prefix}listingPromo:${listingPromoPageHash(pageRows)}`;
     const cached = await catalogCache.wrap(cacheKey, listingPromoTtlSec, async () => {
       const ctx = await runWithClient((client) => listingPromotions.loadListingContext(client, shopId, pageRows));
@@ -200,14 +211,22 @@ export function createStorefrontCatalog({
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
       const key = all ? `categories:all` : `categories:${parentId ?? "root"}`;
-      const categories = await cachedSWR(shopId, key, "categories:list", async () => {
-        const sellableCategoryIds = await getSellableCategoryIds(shopId);
-        const rows = all
-          ? await catalogRepo.listAllCategoriesStorefront(shopId, { sellableCategoryIds })
-          : await catalogRepo.listCategoriesStorefront(shopId, { parentId, sellableCategoryIds });
-        const mapped = rows.map(mapCategoryRow);
-        return enrichCategoriesWithListingOffers(shopId, mapped);
-      });
+      // promoAware: category offer signals change when promotions invalidate.
+      const categories = await cachedSWR(
+        shopId,
+        key,
+        "categories:list",
+        async () => {
+          const sellableCategoryIds = await getSellableCategoryIds(shopId);
+          const rows = all
+            ? await catalogRepo.listAllCategoriesStorefront(shopId, { sellableCategoryIds })
+            : await catalogRepo.listCategoriesStorefront(shopId, { parentId, sellableCategoryIds });
+          const mapped = rows.map(mapCategoryRow);
+          return enrichCategoriesWithListingOffers(shopId, mapped);
+        },
+        null,
+        { promoAware: true }
+      );
       return buildCategoriesListResponse(shopId, categories);
     },
 
@@ -417,12 +436,31 @@ export function createStorefrontCatalog({
     async listHomeSections(shopIdRaw) {
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);
-      const sections = await cachedSWR(shopId, "home-sections:v2", "home-sections:list", () =>
-        resolveStorefrontHomeSections(catalogRepo, shopId, {
-          loadListingPromotionsContext
-        })
+      // promoAware: shelves / Damaka / category-offer sections change with
+      // promotion invalidates without wiping product-list row caches.
+      const sections = await cachedSWR(
+        shopId,
+        "home-sections:v3",
+        "home-sections:list",
+        () =>
+          resolveStorefrontHomeSections(catalogRepo, shopId, {
+            loadListingPromotionsContext
+          }),
+        null,
+        { promoAware: true }
       );
       return { data: { sections } };
+    },
+
+    /**
+     * Event deep-link lookup (not list-cached): status + hydrated section when ok.
+     */
+    async getHomeSectionById(shopIdRaw, sectionId) {
+      const shopId = requireShopId(shopIdRaw);
+      await ensureShopForCatalog(shopId);
+      return lookupStorefrontHomeSection(catalogRepo, shopId, sectionId, {
+        loadListingPromotionsContext
+      });
     }
   };
 }

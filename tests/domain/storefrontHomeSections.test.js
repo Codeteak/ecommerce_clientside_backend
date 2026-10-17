@@ -53,6 +53,7 @@ describe("resolveStorefrontHomeSections", () => {
           thumb_storage_key: null
         }
       ]),
+      listSellableProductsByCategoryIdsStorefront: vi.fn().mockResolvedValue([]),
       listActiveCategoriesByIdsStorefront: vi.fn().mockResolvedValue([
         { id: CATEGORY, name: "Dairy", slug: "dairy", image_storage_key: null }
       ])
@@ -118,6 +119,7 @@ describe("resolveStorefrontHomeSections", () => {
           thumb_storage_key: null
         }
       ]),
+      listSellableProductsByCategoryIdsStorefront: vi.fn().mockResolvedValue([]),
       listActiveCategoriesByIdsStorefront: vi.fn().mockResolvedValue([])
     };
 
@@ -149,6 +151,50 @@ describe("resolveStorefrontHomeSections", () => {
     });
     expect(sections[0].label).toMatch(/Buy 2/i);
   });
+
+  it("expands category_ids into sellable products for event shelves", async () => {
+    const FROM_CAT = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const catalogRepo = {
+      listEnabledHomeSectionsStorefront: vi.fn().mockResolvedValue([
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          title: "Festive",
+          type: "event_shelf",
+          sort_order: 0,
+          starts_at: null,
+          ends_at: null,
+          product_ids: [],
+          category_ids: [CATEGORY],
+          buy_product_ids: [],
+          get_product_ids: [],
+          buy_qty: null,
+          get_qty: null,
+          promotion_id: null
+        }
+      ]),
+      listSellableProductsByIdsStorefront: vi.fn().mockResolvedValue([]),
+      listSellableProductsByCategoryIdsStorefront: vi.fn().mockResolvedValue([
+        {
+          id: FROM_CAT,
+          name: "Festive Sweet",
+          slug: "festive-sweet",
+          price_minor_per_unit: "9900",
+          global_image_url: null,
+          thumb_storage_key: null
+        }
+      ]),
+      listActiveCategoriesByIdsStorefront: vi.fn().mockResolvedValue([
+        { id: CATEGORY, name: "Sweets", slug: "sweets", image_storage_key: null }
+      ])
+    };
+
+    const sections = await resolveStorefrontHomeSections(catalogRepo, shopId);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].type).toBe("event_shelf");
+    expect(sections[0].products).toHaveLength(1);
+    expect(sections[0].products[0].id).toBe(FROM_CAT);
+    expect(catalogRepo.listSellableProductsByCategoryIdsStorefront).toHaveBeenCalled();
+  });
 });
 
 describe("storefrontCatalog listHomeSections", () => {
@@ -156,6 +202,7 @@ describe("storefrontCatalog listHomeSections", () => {
     const catalogRepo = {
       listEnabledHomeSectionsStorefront: vi.fn().mockResolvedValue([]),
       listSellableProductsByIdsStorefront: vi.fn(),
+      listSellableProductsByCategoryIdsStorefront: vi.fn(),
       listActiveCategoriesByIdsStorefront: vi.fn()
     };
     const service = createStorefrontCatalog({

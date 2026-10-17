@@ -124,6 +124,20 @@ function listHomeSectionsHandler(ctx) {
   });
 }
 
+function getHomeSectionByIdHandler(ctx) {
+  return asyncHandler(async (req, res) => {
+    const shopId = shopIdForStorefront(req);
+    const sectionId = String(req.params?.id || "").trim();
+    if (!sectionId) {
+      throw new ValidationError("section id is required");
+    }
+    const result = await ctx.storefrontCatalog.getHomeSectionById(shopId, sectionId);
+    // Do not HTTP-cache lookup — status is time-sensitive (schedule / stock).
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ data: result });
+  });
+}
+
 export const storefrontCatalogController = {
   listCategories: (ctx) => listCategoriesHandler(ctx),
   listProducts: (ctx) => listProductsHandler(ctx),
@@ -131,6 +145,7 @@ export const storefrontCatalogController = {
   getProductById: (ctx) => getProductByIdHandler(ctx),
   getCategoryBySlug: (ctx) => getCategoryBySlugHandler(ctx),
   listHomeSections: (ctx) => listHomeSectionsHandler(ctx),
+  getHomeSectionById: (ctx) => getHomeSectionByIdHandler(ctx),
 
   forCtx(ctx) {
     return {
@@ -139,7 +154,8 @@ export const storefrontCatalogController = {
       getProductBySlug: getProductBySlugHandler(ctx),
       getProductById: getProductByIdHandler(ctx),
       getCategoryBySlug: getCategoryBySlugHandler(ctx),
-      listHomeSections: listHomeSectionsHandler(ctx)
+      listHomeSections: listHomeSectionsHandler(ctx),
+      getHomeSectionById: getHomeSectionByIdHandler(ctx)
     };
   }
 };

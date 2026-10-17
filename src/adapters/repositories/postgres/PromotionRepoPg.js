@@ -542,6 +542,8 @@ export class PromotionRepoPg extends PromotionRepo {
               pr.min_subtotal_minor::text AS min_subtotal_minor,
               pr.global_category_id::text AS global_category_id,
               pr.max_discount_minor::text AS max_discount_minor,
+              p.name AS promotion_name,
+              gc.name AS category_name,
               p.priority,
               p.created_at,
               p.allow_coupon_after_auto,
@@ -552,6 +554,8 @@ export class PromotionRepoPg extends PromotionRepo {
          JOIN promotions p
            ON p.id = pr.promotion_id
           AND p.shop_id = pr.shop_id
+         LEFT JOIN global_categories gc
+           ON gc.id = pr.global_category_id
         WHERE pr.shop_id = $1::uuid
           AND pr.is_deleted = false
           AND p.is_deleted = false

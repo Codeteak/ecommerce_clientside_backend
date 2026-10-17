@@ -66,7 +66,9 @@ export function createCartPricing({ priceStorefrontLines }) {
           auto_cart_discount_minor: 0,
           has_sku_promo: false,
           has_bundle: false,
-          has_auto_cart: false
+          has_auto_cart: false,
+          applied_offers: [],
+          suggested_offers: []
         },
         coupon: {
           code: normalizedCoupon,
@@ -82,6 +84,9 @@ export function createCartPricing({ priceStorefrontLines }) {
     const bundleDiscountMinor = Number(priced.bundleDiscountMinor ?? 0);
     const linePromoDiscountMinor = Number(priced.linePromoDiscountMinor ?? 0);
     const autoCartDiscountMinor = Number(priced.autoCartDiscountMinor ?? 0);
+    const autoOffers = priced.autoCartOffers && typeof priced.autoCartOffers === "object"
+      ? priced.autoCartOffers
+      : { applied: [], suggested: [] };
 
     let couponStatus = "none";
     let reasonCode = null;
@@ -111,7 +116,9 @@ export function createCartPricing({ priceStorefrontLines }) {
         auto_cart_discount_minor: autoCartDiscountMinor,
         has_sku_promo: linePromoDiscountMinor > 0,
         has_bundle: bundleDiscountMinor > 0,
-        has_auto_cart: autoCartDiscountMinor > 0
+        has_auto_cart: autoCartDiscountMinor > 0,
+        applied_offers: Array.isArray(autoOffers.applied) ? autoOffers.applied : [],
+        suggested_offers: Array.isArray(autoOffers.suggested) ? autoOffers.suggested : []
       },
       coupon: {
         code: priced.couponCodeNormalized ?? code,

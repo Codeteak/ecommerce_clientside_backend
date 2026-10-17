@@ -183,6 +183,8 @@ export const storefrontCouponsListQuerySchema = z.object({
 
 export const storefrontCatalogCacheInvalidateBodySchema = z.object({
   shopId: z.string().uuid(),
+  /** catalog (default) = product+promo; promotions = promo overlays only (keep product lists warm). */
+  scope: z.enum(["catalog", "promotions"]).optional(),
   prewarm: z.boolean().optional(),
   topCategoryLimit: z.coerce.number().int().min(1).max(20).optional(),
   productIds: z.array(z.string().uuid()).max(50).optional()

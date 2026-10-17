@@ -267,10 +267,25 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_shop_home_sections_one_bxgy_per_shop
 DO $$
 DECLARE
   s RECORD;
+  has_shops_deleted_at boolean;
 BEGIN
-  FOR s IN SELECT id FROM shops WHERE deleted_at IS NULL LOOP
-    PERFORM app.ensure_system_home_sections(s.id);
-  END LOOP;
+  SELECT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'shops'
+      AND column_name = 'deleted_at'
+  ) INTO has_shops_deleted_at;
+
+  IF has_shops_deleted_at THEN
+    FOR s IN EXECUTE 'SELECT id FROM shops WHERE deleted_at IS NULL' LOOP
+      PERFORM app.ensure_system_home_sections(s.id);
+    END LOOP;
+  ELSE
+    FOR s IN SELECT id FROM shops LOOP
+      PERFORM app.ensure_system_home_sections(s.id);
+    END LOOP;
+  END IF;
 END $$;
 
 -- ---------------------------------------------------------------------------

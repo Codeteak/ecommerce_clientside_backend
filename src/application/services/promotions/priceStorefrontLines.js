@@ -1,9 +1,10 @@
 import { AppError } from "../../../domain/errors/AppError.js";
 import { buildCouponEligibility } from "./couponEligibility.js";
-import { COUPONS_ONLY } from "./couponsOnly.js";
+import { ALLOW_AUTO_CART, COUPONS_ONLY } from "./couponsOnly.js";
 import { evaluateAutoCartRules } from "./evaluateAutoCartRules.js";
 import { evaluateBundleDiscounts, planCrossRewardInjections } from "./evaluateBundleDiscounts.js";
 import { evaluateCartPromotionRules, scaleLinesToPayable } from "./evaluatePromotionRules.js";
+import { summarizeAutoCartOffers } from "./summarizeAutoCartOffers.js";
 import {
   buildStorefrontListingUnitPriceMap,
   computeStorefrontUnitPricing,
@@ -67,6 +68,44 @@ function resolveStackFlag(campaignValue, shopDefault) {
 }
 
 /**
+ * Walk parents for product category ids so aisle-level promo rules match leaf SKUs.
+ * @param {import("pg").PoolClient} client
+ * @param {Iterable<string | null | undefined>} categoryIds
+ * @returns {Promise<Map<string, string | null>>}
+ */
+async function loadCategoryParentById(client, categoryIds) {
+  const ids = [
+    ...new Set(
+      [...categoryIds]
+        .map((id) => (id != null ? String(id).trim() : ""))
+        .filter(Boolean)
+    )
+  ];
+  /** @type {Map<string, string | null>} */
+  const out = new Map();
+  if (!ids.length) return out;
+  const { rows } = await client.query(
+    `WITH RECURSIVE chain AS (
+       SELECT id, parent_id
+         FROM global_categories
+        WHERE id = ANY($1::uuid[])
+       UNION ALL
+       SELECT p.id, p.parent_id
+         FROM global_categories p
+         JOIN chain c ON c.parent_id = p.id
+        WHERE c.parent_id IS NOT NULL
+     )
+     SELECT id::text AS id, parent_id::text AS parent_id
+       FROM chain`,
+    [ids]
+  );
+  for (const row of rows) {
+    out.set(String(row.id), row.parent_id != null ? String(row.parent_id) : null);
+  }
+  return out;
+}
+
+/**
  * @param {{
  *   promotionRepo: import("../../ports/repositories/PromotionRepo.js").PromotionRepo,
  *   shopPromotionCache?: ReturnType<import("../../../infra/cache/shopPromotionCache.js").createShopPromotionCache>,
@@ -120,23 +159,26 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
 
     const productIds = [...new Set(linesIn.map((l) => String(l.productId)).filter(Boolean))];
 
-    // Product sales, Buy X Get Y, and automatic cart discounts stay in this file.
-    // COUPONS_ONLY skips them; coupon evaluation below is unchanged.
+    // Product sales and Buy X Get Y stay paused while COUPONS_ONLY.
+    // Automatic cart rules load when ALLOW_AUTO_CART (even if COUPONS_ONLY).
     let overlays = [];
     let bundleRulesRaw = [];
     let autoCartRulesRaw = [];
     if (!COUPONS_ONLY) {
-      [overlays, bundleRulesRaw, autoCartRulesRaw] = await Promise.all([
+      const [skuOverlays, bxgyRules] = await Promise.all([
         promotionsPaused || !productIds.length
           ? []
           : promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, productIds),
-        promotionsPaused ? [] : promoReads.listActiveBundleRulesForShop(client, shopId),
-        promotionsPaused
-          ? []
-          : typeof promoReads.listActiveAutoCartRulesForShop === "function"
-            ? promoReads.listActiveAutoCartRulesForShop(client, shopId)
-            : promotionRepo.listActiveAutoCartRulesForShop(client, shopId)
+        promotionsPaused ? [] : promoReads.listActiveBundleRulesForShop(client, shopId)
       ]);
+      overlays = skuOverlays;
+      bundleRulesRaw = bxgyRules;
+    }
+    if (ALLOW_AUTO_CART && !promotionsPaused) {
+      autoCartRulesRaw =
+        typeof promoReads.listActiveAutoCartRulesForShop === "function"
+          ? await promoReads.listActiveAutoCartRulesForShop(client, shopId)
+          : await promotionRepo.listActiveAutoCartRulesForShop(client, shopId);
     }
 
     /** @type {Map<string, unknown[]>} */
@@ -297,8 +339,14 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
       }
     }
 
+    const categoryParentById = await loadCategoryParentById(
+      client,
+      pricedLines.map((l) => l.categoryId)
+    );
+
     const { bundleDiscountMinor, appliedByPromotion } = evaluateBundleDiscounts(pricedLines, bundleRulesRaw, {
-      allowCombineAutoCampaigns
+      allowCombineAutoCampaigns,
+      categoryParentById
     });
     for (const pid of appliedByPromotion.keys()) {
       if (!appliedPromotionIds.includes(pid)) appliedPromotionIds.push(pid);
@@ -312,6 +360,7 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
 
     const lineCtx = {
       subtotalMinor: subtotalAfterBundles,
+      categoryParentById,
       lines: pricedLines.map((l) => ({
         lineTotalMinor: l.linePayableMinor ?? l.lineTotalMinor,
         categoryId: l.categoryId
@@ -343,6 +392,12 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
         appliedPromotionDiscounts.set(pid, (appliedPromotionDiscounts.get(pid) ?? 0) + discountMinor);
       }
     }
+
+    const autoCartOffers = summarizeAutoCartOffers({
+      rules: autoRulesFiltered,
+      ctx: lineCtx,
+      appliedByPromotion: autoApplied
+    });
 
     const subtotalAfterAuto = Math.max(0, subtotalAfterBundles - autoCartDiscountMinor);
 
@@ -519,6 +574,7 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
 
       let discount = evaluateCartPromotionRules(rules, {
         subtotalMinor: subtotalForCoupon,
+        categoryParentById,
         lines: scaleLinesToPayable(ruleLines, subtotalForCoupon)
       });
       discount = Math.min(discount, subtotalForCoupon);
@@ -615,6 +671,7 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
       linePromoDiscountMinor: linePromoDiscountTotal,
       bundleDiscountMinor,
       autoCartDiscountMinor,
+      autoCartOffers,
       couponDiscountMinor,
       promotionDiscountTotalMinor,
       appliedPromotionIds,

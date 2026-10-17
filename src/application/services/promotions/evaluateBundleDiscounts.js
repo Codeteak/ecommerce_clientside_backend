@@ -1,3 +1,5 @@
+import { lineCategoryMatchesRule } from "./evaluatePromotionRules.js";
+
 /**
  * Plan missing free reward product lines for cross BXGY when buy qualifies.
  * @param {Array<{ productId: string, quantity: number, paidQuantity?: number }>} lines
@@ -95,7 +97,10 @@ function billablePaidQuantity(quantity, line) {
 /**
  * @param {PricedLine[]} lines
  * @param {BundleRuleRow[]} bundleRules
- * @param {{ allowCombineAutoCampaigns: boolean }} opts
+ * @param {{
+ *   allowCombineAutoCampaigns: boolean,
+ *   categoryParentById?: Map<string, string | null> | Record<string, string | null> | null
+ * }} opts
  * @returns {{ bundleDiscountMinor: number, appliedByPromotion: Map<string, number> }}
  */
 export function evaluateBundleDiscounts(lines, bundleRules, opts) {
@@ -117,10 +122,11 @@ export function evaluateBundleDiscounts(lines, bundleRules, opts) {
   }
 
   const allowCombine = opts.allowCombineAutoCampaigns !== false;
+  const categoryParentById = opts.categoryParentById ?? null;
   /** @type {BundleRuleRow[]} */
   let activeRules = rules;
   if (!allowCombine) {
-    activeRules = pickOneBundleRulePerScope(lines, rules);
+    activeRules = pickOneBundleRulePerScope(lines, rules, categoryParentById);
   }
 
   let totalDiscount = 0;
@@ -128,7 +134,7 @@ export function evaluateBundleDiscounts(lines, bundleRules, opts) {
   const appliedByPromotion = new Map();
 
   for (const rule of activeRules) {
-    const d = applyBundleRuleToLines(lines, rule);
+    const d = applyBundleRuleToLines(lines, rule, categoryParentById);
     if (d <= 0) continue;
     totalDiscount += d;
     const pid = String(rule.promotion_id);
@@ -164,8 +170,9 @@ function refreshLinePayableTotals(lines) {
 /**
  * @param {PricedLine[]} lines
  * @param {BundleRuleRow[]} rules
+ * @param {Map<string, string | null> | Record<string, string | null> | null} [_categoryParentById]
  */
-function pickOneBundleRulePerScope(lines, rules) {
+function pickOneBundleRulePerScope(lines, rules, _categoryParentById = null) {
   /** @type {Map<string, BundleRuleRow>} */
   const winners = new Map();
   for (const rule of rules) {
@@ -204,15 +211,16 @@ function compareBundleRulePriority(a, b) {
 /**
  * @param {PricedLine[]} lines
  * @param {BundleRuleRow} rule
+ * @param {Map<string, string | null> | Record<string, string | null> | null} [categoryParentById]
  */
-function matchingLines(lines, rule) {
+function matchingLines(lines, rule, categoryParentById = null) {
   if (rule.scope === "same_shop_product") {
     const pid = String(rule.shop_product_id);
     return lines.filter((l) => String(l.productId) === pid);
   }
   if (rule.scope === "global_category") {
     const cid = String(rule.global_category_id);
-    return lines.filter((l) => l.categoryId != null && String(l.categoryId) === cid);
+    return lines.filter((l) => lineCategoryMatchesRule(l.categoryId, cid, categoryParentById));
   }
   return [];
 }
@@ -220,9 +228,10 @@ function matchingLines(lines, rule) {
 /**
  * @param {PricedLine[]} lines
  * @param {BundleRuleRow} rule
+ * @param {Map<string, string | null> | Record<string, string | null> | null} [categoryParentById]
  * @returns {number} discount minor for this rule
  */
-function applyBundleRuleToLines(lines, rule) {
+function applyBundleRuleToLines(lines, rule, categoryParentById = null) {
   const buyQty = Math.max(1, Math.trunc(Number(rule.buy_qty)));
   const getQty = Math.max(1, Math.trunc(Number(rule.get_qty)));
   const pid = String(rule.promotion_id);
@@ -254,7 +263,7 @@ function applyBundleRuleToLines(lines, rule) {
     return ruleDiscount;
   }
 
-  const matched = matchingLines(lines, rule);
+  const matched = matchingLines(lines, rule, categoryParentById);
   if (!matched.length) return 0;
 
   if (rule.scope === "same_shop_product") {

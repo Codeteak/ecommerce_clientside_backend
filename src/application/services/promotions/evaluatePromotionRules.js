@@ -17,8 +17,44 @@ function parseBps(v) {
 }
 
 /**
+ * True when the line category is the rule category or a descendant of it
+ * (walk up parents via categoryParentById).
+ * @param {string | null | undefined} lineCategoryId
+ * @param {string | null | undefined} ruleCategoryId
+ * @param {Map<string, string | null> | Record<string, string | null> | null | undefined} categoryParentById
+ */
+export function lineCategoryMatchesRule(lineCategoryId, ruleCategoryId, categoryParentById) {
+  if (lineCategoryId == null || ruleCategoryId == null) return false;
+  const lineId = String(lineCategoryId);
+  const ruleId = String(ruleCategoryId);
+  if (!lineId || !ruleId) return false;
+  if (lineId === ruleId) return true;
+  if (!categoryParentById) return false;
+  const parentOf = (id) => {
+    if (categoryParentById instanceof Map) return categoryParentById.get(id) ?? null;
+    const v = categoryParentById[id];
+    return v === undefined ? null : v;
+  };
+  let cur = lineId;
+  const seen = new Set();
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    const parent = parentOf(cur);
+    if (parent == null || parent === "") break;
+    const parentId = String(parent);
+    if (parentId === ruleId) return true;
+    cur = parentId;
+  }
+  return false;
+}
+
+/**
  * @param {object} rule
- * @param {{ subtotalMinor: number, lines: Array<{ lineTotalMinor: number, categoryId?: string | null }> }} ctx
+ * @param {{
+ *   subtotalMinor: number,
+ *   lines: Array<{ lineTotalMinor: number, categoryId?: string | null }>,
+ *   categoryParentById?: Map<string, string | null> | Record<string, string | null> | null
+ * }} ctx
  * @returns {number}
  */
 export function evaluateSinglePromotionRule(rule, ctx) {
@@ -62,8 +98,9 @@ export function evaluateSinglePromotionRule(rule, ctx) {
     if (catId == null) return 0;
     const bps = parseBps(rule.percent_bps ?? rule.percentBps);
     if (bps == null) return 0;
+    const parentById = ctx.categoryParentById ?? null;
     const catSub = ctx.lines
-      .filter((l) => l.categoryId != null && String(l.categoryId) === String(catId))
+      .filter((l) => lineCategoryMatchesRule(l.categoryId, catId, parentById))
       .reduce((sum, l) => sum + Math.max(0, l.lineTotalMinor), 0);
     if (catSub <= 0) return 0;
     return cap(Math.round((catSub * bps) / 10000));

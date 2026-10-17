@@ -44,6 +44,10 @@ import { getSharedRedisClient } from "../infra/redis/sharedRedis.js";
 import { withClient } from "../infra/db/tx.js";
 import { createStorefrontCatalog } from "../application/services/storefront/storefrontCatalog.js";
 import { createPrewarmStorefrontCache } from "../application/services/cache/prewarmStorefrontCache.js";
+import {
+  createPrewarmStorefrontPromoCache,
+  scheduleBackgroundPromoPrewarm
+} from "../application/services/cache/prewarmStorefrontPromoCache.js";
 import { createStorefrontListingPromotions } from "../application/services/storefront/storefrontListingPromotions.js";
 import { createStorefrontCart } from "../application/services/storefront/storefrontCart.js";
 import { createStorefrontCartPreview } from "../application/services/storefront/storefrontCartPreview.js";
@@ -205,6 +209,9 @@ export function createAppContext() {
   });
 
   const prewarmStorefrontCache = createPrewarmStorefrontCache({ storefrontCatalog });
+  const prewarmStorefrontPromoCache = createPrewarmStorefrontPromoCache({
+    storefrontCatalog
+  });
 
   const priceStorefrontLines = createPriceStorefrontLines({
     promotionRepo,
@@ -380,12 +387,40 @@ export function createAppContext() {
     checkoutStorefront,
     storefrontCatalogHttpCacheSec,
     invalidateShopCatalogCache: async (shopId, opts = {}) => {
-      await catalogCache.invalidateShopCatalog(shopId);
-      await shopResolveCache.invalidateShop(shopId);
+      const scope = opts.scope === "promotions" ? "promotions" : "catalog";
+      if (scope === "promotions" && typeof catalogCache.invalidateShopPromotions === "function") {
+        await catalogCache.invalidateShopPromotions(shopId);
+      } else {
+        await catalogCache.invalidateShopCatalog(shopId);
+        await shopResolveCache.invalidateShop(shopId);
+      }
       realtime.emitCatalogInvalidated({
         shopId,
-        productIds: Array.isArray(opts.productIds) ? opts.productIds : undefined
+        productIds: Array.isArray(opts.productIds) ? opts.productIds : undefined,
+        scope
       });
+
+      // Promo-only: refill offer/home-section caches in the background so the
+      // invalidate HTTP call stays fast and shoppers don't pay cold-miss lag.
+      // Product-list keys (catalogGen) are left warm.
+      if (scope === "promotions") {
+        scheduleBackgroundPromoPrewarm(
+          prewarmStorefrontPromoCache,
+          shopId,
+          { topCategoryLimit: opts.topCategoryLimit },
+          {
+            delayMs: 400,
+            onError: (err, id) => {
+              logger.warn(
+                { err, shopId: id, event: "catalog_cache_promo_prewarm_failed" },
+                "Background promo cache prewarm failed"
+              );
+            }
+          }
+        );
+        return undefined;
+      }
+
       if (opts.prewarm === true) {
         return prewarmStorefrontCache(shopId, {
           topCategoryLimit: opts.topCategoryLimit
@@ -393,7 +428,11 @@ export function createAppContext() {
       }
     },
     prewarmStorefrontCache,
-    getShopCatalogRevision: (shopId) => catalogCache.getCatalogGeneration(shopId),
+    prewarmStorefrontPromoCache,
+    getShopCatalogRevision: (shopId) =>
+      typeof catalogCache.getStorefrontRevision === "function"
+        ? catalogCache.getStorefrontRevision(shopId)
+        : catalogCache.getCatalogGeneration(shopId),
     getPageMetadata: (shopId, pageType, slug) =>
       seoMetadataCache.getPageMetadata(shopId, pageType, slug),
     get emitOrderPlaced() {

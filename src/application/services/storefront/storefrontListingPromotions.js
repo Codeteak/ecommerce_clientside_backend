@@ -7,7 +7,7 @@ import {
   filterBundleRuleRowsForProduct,
   mapActiveBundleRuleRow
 } from "../promotions/mapActiveBundleRulesPublic.js";
-import { COUPONS_ONLY } from "../promotions/couponsOnly.js";
+import { ALLOW_AUTO_CART, COUPONS_ONLY } from "../promotions/couponsOnly.js";
 
 /**
  * @param {Array<{ global_category_id: string }>} rules
@@ -65,14 +65,13 @@ export function createStorefrontListingPromotions({ promotionRepo, shopPromotion
       const defaultOverlapMode =
         rawSettings?.default_overlap_mode === "best_for_customer" ? "best_for_customer" : "priority";
       const ids = pageRows.map((r) => r.id);
-      const overlays =
-        promotionsPaused || COUPONS_ONLY
-          ? []
-          : await promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, ids);
-      const bundleRowsRaw =
-        promotionsPaused || COUPONS_ONLY
-          ? []
-          : await promoReads.listActiveBundleRulesForShop(client, shopId);
+      const skipSkuBundles = promotionsPaused || COUPONS_ONLY;
+      const [overlays, bundleRowsRaw] = skipSkuBundles
+        ? [[], []]
+        : await Promise.all([
+            promoReads.listActivePromotionProductOverlaysForShopProducts(client, shopId, ids),
+            promoReads.listActiveBundleRulesForShop(client, shopId)
+          ]);
       return {
         promotionsPaused,
         priceMap: buildStorefrontListingUnitPriceMap({
@@ -215,9 +214,18 @@ export function createStorefrontListingPromotions({ promotionRepo, shopPromotion
     try {
       const rawSettings = await promoReads.getShopPromotionSettings(client, shopId);
       const promotionsPaused = rawSettings?.promotions_paused === true;
-      if (promotionsPaused || COUPONS_ONLY) {
+      if (promotionsPaused) {
         return {
-          promotionsPaused: promotionsPaused || COUPONS_ONLY,
+          promotionsPaused: true,
+          skuPromoCategoryIds: new Set(),
+          categoryDiscountRulesByCategory: new Map(),
+          bundleRowsRaw: []
+        };
+      }
+      // Coupons-only pauses SKU/BXGY signals unless we need category auto-cart rules.
+      if (COUPONS_ONLY && !ALLOW_AUTO_CART) {
+        return {
+          promotionsPaused: true,
           skuPromoCategoryIds: new Set(),
           categoryDiscountRulesByCategory: new Map(),
           bundleRowsRaw: []
@@ -227,11 +235,16 @@ export function createStorefrontListingPromotions({ promotionRepo, shopPromotion
         typeof promoReads.listActiveCategoryPromotionSignals === "function"
           ? await promoReads.listActiveCategoryPromotionSignals(client, shopId)
           : { skuPromoCategoryIds: [], categoryDiscountRules: [] };
-      const bundleRowsRaw = await promoReads.listActiveBundleRulesForShop(client, shopId);
+      const bundleRowsRaw =
+        COUPONS_ONLY
+          ? []
+          : await promoReads.listActiveBundleRulesForShop(client, shopId);
       return {
         promotionsPaused: false,
         skuPromoCategoryIds: new Set(
-          (signals.skuPromoCategoryIds ?? []).map((id) => String(id))
+          COUPONS_ONLY
+            ? []
+            : (signals.skuPromoCategoryIds ?? []).map((id) => String(id))
         ),
         categoryDiscountRulesByCategory: categoryDiscountRulesByCategoryMap(
           signals.categoryDiscountRules ?? []

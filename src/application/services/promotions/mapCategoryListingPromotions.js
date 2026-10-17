@@ -1,4 +1,4 @@
-import { COUPONS_ONLY } from "./couponsOnly.js";
+import { ALLOW_AUTO_CART, COUPONS_ONLY } from "./couponsOnly.js";
 import { mapActiveBundleRuleRow } from "./mapActiveBundleRulesPublic.js";
 
 /**
@@ -53,7 +53,7 @@ export function withCategoryListingOffers(input) {
     bundleRowsRaw
   } = input;
   const id = String(category.id);
-  if (promotionsPaused || COUPONS_ONLY) {
+  if (promotionsPaused) {
     return {
       ...category,
       offers: {
@@ -65,6 +65,26 @@ export function withCategoryListingOffers(input) {
       category_discount_rules: []
     };
   }
+
+  // Coupons-only mode pauses SKU/BXGY listing signals, but category automatic
+  // discounts still surface when ALLOW_AUTO_CART is on.
+  if (COUPONS_ONLY) {
+    const discountRows = ALLOW_AUTO_CART
+      ? (categoryDiscountRulesByCategory.get(id) ?? [])
+      : [];
+    const categoryDiscountRules = discountRows.map(mapCategoryDiscountRuleRow);
+    return {
+      ...category,
+      offers: {
+        has_sku_promo: false,
+        has_bundle: false,
+        has_category_discount: categoryDiscountRules.length > 0
+      },
+      bundle_rules: [],
+      category_discount_rules: categoryDiscountRules
+    };
+  }
+
   const bundleSubset = filterBundleRuleRowsForCategory(bundleRowsRaw, id);
   const discountRows = categoryDiscountRulesByCategory.get(id) ?? [];
   const categoryDiscountRules = discountRows.map(mapCategoryDiscountRuleRow);
