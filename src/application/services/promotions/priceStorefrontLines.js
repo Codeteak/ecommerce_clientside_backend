@@ -368,7 +368,10 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
     };
 
     let autoRulesFiltered = Array.isArray(autoCartRulesRaw) ? [...autoCartRulesRaw] : [];
-    if (hasSkuPromo || linePromoDiscountTotal > 0) {
+    // Stack flags apply only when a campaign SKU overlay won on the cart.
+    // Catalog list→offer savings must NOT suppress cart/category auto rules
+    // (linePromoDiscountTotal includes that catalog gap and was blocking checkout).
+    if (hasSkuPromo) {
       autoRulesFiltered = autoRulesFiltered.filter((row) => {
         const kind = row.rule_kind ?? row.kind;
         if (kind === "category_percent_off") {

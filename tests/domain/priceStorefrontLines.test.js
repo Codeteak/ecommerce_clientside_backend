@@ -269,6 +269,32 @@ describe("createPriceStorefrontLines", () => {
     expect(out.appliedPromotionIds).toContain("promo-auto");
   });
 
+  it("keeps cart auto rules when the line only has a catalog offer (not SKU promo)", async () => {
+    const price = createPriceStorefrontLines({
+      promotionRepo: basePromotionRepo({
+        listActiveAutoCartRulesForShop: vi.fn().mockResolvedValue([
+          {
+            promotion_id: "promo-cart",
+            rule_kind: "cart_percent_off",
+            percent_bps: 1000,
+            priority: 10,
+            created_at: new Date("2026-01-01"),
+            stack_sku_with_cart: null
+          }
+        ])
+      })
+    });
+    // Catalog sale (list 1000 → offer 800) used to set linePromoDiscountTotal > 0 and
+    // drop auto rules when stack flags default false. Auto should still apply on 800.
+    const out = await price(fakeClient, {
+      shopId,
+      lines: [{ productId, quantity: 1, listMinor: 1000, offerMinor: 800 }]
+    });
+    expect(out.autoCartDiscountMinor).toBe(80);
+    expect(out.subtotalMinor).toBe(720);
+    expect(out.appliedPromotionIds).toContain("promo-cart");
+  });
+
   it("applies multiple coupons sequentially reducing remaining subtotal", async () => {
     const findCoupon = vi.fn().mockImplementation(async (_c, _shop, code) => {
       if (code === "SAVE10") {
