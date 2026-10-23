@@ -10,6 +10,7 @@ export class ShopServiceAreaRepoPg extends ShopServiceAreaRepo {
         `SELECT s.id,
                 s.status,
                 s.service_area_radius_meters,
+                s.min_purchase_minor,
                 a.lat AS hub_lat,
                 a.lng AS hub_lng
            FROM shops s

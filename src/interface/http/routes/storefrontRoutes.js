@@ -8,6 +8,7 @@ import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import {
   storefrontCatalogCacheInvalidateBodySchema,
   storefrontCatalogCachePrewarmBodySchema,
+  storefrontShopSettingsInvalidateBodySchema,
   storefrontOrdersListQuerySchema
 } from "../validations/storefrontRestSchemas.js";
 
@@ -56,6 +57,7 @@ export function mountStorefrontRoutes(r, deps) {
     storefrontOrders,
     storefrontPromotions,
     invalidateShopCatalogCache,
+    invalidateShopSettings,
     prewarmStorefrontCache,
     getShopCatalogRevision
   } = deps;
@@ -263,6 +265,23 @@ export function mountStorefrontRoutes(r, deps) {
               }
               return res.status(204).send();
             })
+            .catch(next);
+        }
+      );
+    }
+    if (env.CATALOG_CACHE_INVALIDATE_TOKEN && typeof invalidateShopSettings === "function") {
+      r.post(
+        `${prefix}/shop/settings/invalidate`,
+        authLimiter,
+        validate({ body: storefrontShopSettingsInvalidateBodySchema }),
+        (req, res, next) => {
+          if (!catalogCacheOpsAuth(req, next)) return;
+          Promise.resolve(
+            invalidateShopSettings(req.body.shopId, {
+              minPurchaseMinor: req.body.minPurchaseMinor
+            })
+          )
+            .then(() => res.status(204).send())
             .catch(next);
         }
       );

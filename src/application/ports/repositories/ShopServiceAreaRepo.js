@@ -6,6 +6,7 @@ export class ShopServiceAreaRepo {
    *   id: string,
    *   status: string,
    *   service_area_radius_meters: number|null,
+   *   min_purchase_minor?: string|number|null,
    *   hub_lat: number|null,
    *   hub_lng: number|null
    * }|null>}

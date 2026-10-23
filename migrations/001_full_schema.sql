@@ -144,6 +144,20 @@ ALTER TABLE shops ADD COLUMN IF NOT EXISTS custom_domain TEXT;
 ALTER TABLE shops
   ADD COLUMN IF NOT EXISTS service_area_radius_meters INTEGER NOT NULL DEFAULT 5000;
 
+ALTER TABLE shops
+  ADD COLUMN IF NOT EXISTS min_purchase_minor BIGINT NOT NULL DEFAULT 0;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'shops_min_purchase_minor_chk'
+  ) THEN
+    ALTER TABLE shops
+      ADD CONSTRAINT shops_min_purchase_minor_chk
+      CHECK (min_purchase_minor >= 0);
+  END IF;
+END $$;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shops_public_id_len_chk') THEN

@@ -14,6 +14,7 @@ import {
 } from "./checkoutIdempotency.js";
 import { buildCheckoutOrderLines } from "./checkoutOrderAssembly.js";
 import { OUTBOX_EVENT_TYPES } from "../../constants/outboxEventTypes.js";
+import { assertMinPurchaseMet } from "../../../domain/ordering/minPurchase.js";
 
 async function recordPromotionRedemptions({
   promotionRepo,
@@ -80,7 +81,8 @@ export function createCheckoutStorefront({
   deliveryFeeMinor,
   priceStorefrontLines,
   promotionRepo,
-  emitOrderPlaced = null
+  emitOrderPlaced = null,
+  getShopMinPurchaseMinor = null
 }) {
   const cartValidation = createCheckoutCartValidation({ authRepo, checkShopServiceArea });
 
@@ -165,6 +167,9 @@ export function createCheckoutStorefront({
 
       const delivery = Number(deliveryFeeMinor) || 0;
       // `subtotal` from priceStorefrontLines is already net of promotions/coupon.
+      const minPurchaseMinor =
+        typeof getShopMinPurchaseMinor === "function" ? await getShopMinPurchaseMinor(shopId) : 0;
+      assertMinPurchaseMet({ minPurchaseMinor, subtotalMinor: subtotal });
       const total = Math.max(0, subtotal) + delivery;
       const orderNumber = randomOrderNumber();
 

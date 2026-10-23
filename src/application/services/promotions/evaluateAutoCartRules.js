@@ -101,8 +101,21 @@ export function evaluateAutoCartRules(ruleRows, ctx, opts) {
   }
 
   const capped = Math.min(Math.max(0, Math.trunc(total)), Math.max(0, Math.trunc(ctx.subtotalMinor)));
-  if (capped < total && winners.length === 1) {
-    appliedByPromotion.set(winners[0].promotionId, capped);
+  // When combined auto discounts exceed payable, scale each promo's share so
+  // redemption / applied_offers totals match the capped cart discount.
+  if (capped < total && total > 0) {
+    let allocated = 0;
+    for (let i = 0; i < winners.length; i++) {
+      const pid = winners[i].promotionId;
+      const raw = winners[i].discountMinor;
+      if (i === winners.length - 1) {
+        appliedByPromotion.set(pid, Math.max(0, capped - allocated));
+      } else {
+        const share = Math.floor((raw * capped) / total);
+        appliedByPromotion.set(pid, share);
+        allocated += share;
+      }
+    }
   }
 
   return {

@@ -546,6 +546,103 @@ describe("checkoutStorefront validations", () => {
     expect(d.cartRepo.validateClientLinesForCheckout).not.toHaveBeenCalled();
   });
 
+  it("rejects checkout when payable subtotal is 199 vs ₹200 min", async () => {
+    const d = pricedDeps({
+      getShopMinPurchaseMinor: vi.fn().mockResolvedValue(20000),
+      priceStorefrontLines: vi.fn().mockResolvedValue({
+        subtotalMinor: 19900,
+        promotionDiscountTotalMinor: 0,
+        couponDiscountMinor: 0,
+        appliedPromotionIds: [],
+        lines: [
+          {
+            cartItemId: "cart-item-1",
+            productId: PRODUCT_ID,
+            quantity: 1,
+            list_price_minor: "19900",
+            total_price_minor: "19900",
+            final_price_minor: "19900",
+            line_total_minor: "19900",
+            offer_discount_minor: "0",
+            promo_discount_minor: "0",
+            total_discount_minor: "0",
+            applied_promotion_ids: []
+          }
+        ]
+      })
+    });
+    const run = createCheckoutStorefront(d);
+    await expect(run({}, checkoutInput())).rejects.toMatchObject({
+      code: "MIN_PURCHASE_NOT_MET",
+      statusCode: 400
+    });
+    expect(d.orderRepo.insertOrderWithItemsAndOutbox).not.toHaveBeenCalled();
+  });
+
+  it("allows checkout when payable subtotal meets ₹200 min", async () => {
+    const d = pricedDeps({
+      getShopMinPurchaseMinor: vi.fn().mockResolvedValue(20000),
+      priceStorefrontLines: vi.fn().mockResolvedValue({
+        subtotalMinor: 20000,
+        promotionDiscountTotalMinor: 0,
+        couponDiscountMinor: 0,
+        appliedPromotionIds: [],
+        lines: [
+          {
+            cartItemId: "cart-item-1",
+            productId: PRODUCT_ID,
+            quantity: 1,
+            list_price_minor: "20000",
+            total_price_minor: "20000",
+            final_price_minor: "20000",
+            line_total_minor: "20000",
+            offer_discount_minor: "0",
+            promo_discount_minor: "0",
+            total_discount_minor: "0",
+            applied_promotion_ids: []
+          }
+        ]
+      })
+    });
+    const run = createCheckoutStorefront(d);
+    const out = await run({}, checkoutInput());
+    expect(out).toMatchObject({ orderId: "order-1" });
+    expect(d.orderRepo.insertOrderWithItemsAndOutbox).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects checkout when a 100% coupon drops payable subtotal below min", async () => {
+    const d = pricedDeps({
+      getShopMinPurchaseMinor: vi.fn().mockResolvedValue(20000)
+    });
+    d.priceStorefrontLines = vi.fn().mockResolvedValue({
+      subtotalMinor: 0,
+      promotionDiscountTotalMinor: 20000,
+      couponDiscountMinor: 20000,
+      appliedPromotionIds: ["promo-1"],
+      coupon: { id: "coupon-1", code: "FREE", promotionId: "promo-1", discountMinor: 20000 },
+      lines: [
+        {
+          cartItemId: "cart-item-1",
+          productId: PRODUCT_ID,
+          quantity: 1,
+          list_price_minor: "20000",
+          total_price_minor: "20000",
+          final_price_minor: "0",
+          line_total_minor: "0",
+          offer_discount_minor: "0",
+          promo_discount_minor: "0",
+          total_discount_minor: "20000",
+          applied_promotion_ids: []
+        }
+      ]
+    });
+    const run = createCheckoutStorefront(d);
+    await expect(run({}, checkoutInput({ couponCode: "FREE" }))).rejects.toMatchObject({
+      code: "MIN_PURCHASE_NOT_MET"
+    });
+    expect(d.orderRepo.insertOrderWithItemsAndOutbox).not.toHaveBeenCalled();
+  });
+
   it("does not fail checkout when realtime emit fails and writes retry outbox event", async () => {
     const d = deps();
     const emitOrderPlaced = vi.fn(() => {

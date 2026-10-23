@@ -171,6 +171,23 @@ export async function createRealtimeServer(httpServer, { redis, logger }) {
         "Emitted catalog.invalidated"
       );
     },
+    emitShopMinPurchaseUpdated(payload) {
+      const shopId = payload?.shopId;
+      if (!shopId) {
+        logger?.warn?.({ event: "realtime.emit.skipped", reason: "missing_shopId" });
+        return;
+      }
+      const minPurchaseMinor = Math.max(0, Math.floor(Number(payload.minPurchaseMinor) || 0));
+      const room = shopCatalogRoom(shopId);
+      io.to(room).emit("shop.min_purchase.updated", {
+        shopId: String(shopId),
+        minPurchaseMinor
+      });
+      logger?.debug?.(
+        { event: "realtime.shop_min_purchase_updated", shopId, minPurchaseMinor },
+        "Emitted shop.min_purchase.updated"
+      );
+    },
     async close() {
       await new Promise((resolve) => io.close(() => resolve()));
     }

@@ -25,7 +25,8 @@ export function createStorefrontCartPreview({
   ensureShopForCatalog,
   priceStorefrontLines,
   listApplicableCoupons,
-  pricing
+  pricing,
+  getShopMinPurchaseMinor
 }) {
   const { buildPromotionBlock } = pricing;
 
@@ -43,6 +44,9 @@ export function createStorefrontCartPreview({
   return async function previewCartContents(client, shopIdRaw, scope, body = {}) {
     const shopId = requireShopId(shopIdRaw);
     await ensureShopForCatalog(shopId);
+    const minPurchaseMinor =
+      typeof getShopMinPurchaseMinor === "function" ? await getShopMinPurchaseMinor(shopId) : 0;
+    const minPurchase = { minPurchaseMinor };
 
     const customerId =
       scope?.customerId != null && String(scope.customerId).trim()
@@ -70,7 +74,7 @@ export function createStorefrontCartPreview({
       return {
         cart_id: null,
         items: emptyItems,
-        summary: formatStorefrontSummary(null, 0),
+        summary: formatStorefrontSummary(null, 0, minPurchase),
         promotions: formatStorefrontPromotions(
           buildPromotionBlock(null, primaryCouponCode, null),
           [],
@@ -115,7 +119,7 @@ export function createStorefrontCartPreview({
       return {
         cart_id: null,
         items: emptyItems,
-        summary: formatStorefrontSummary(null, 0),
+        summary: formatStorefrontSummary(null, 0, minPurchase),
         promotions: formatStorefrontPromotions(
           buildPromotionBlock(null, primaryCouponCode, null),
           [],
@@ -286,7 +290,7 @@ export function createStorefrontCartPreview({
     return {
       cart_id: null,
       items: cartItems,
-      summary: formatStorefrontSummary(priced, displayUnitsTotal),
+      summary: formatStorefrontSummary(priced, displayUnitsTotal, minPurchase),
       promotions: formatStorefrontPromotions(promotionsBase, suggested_coupons, cartItems)
     };
   };

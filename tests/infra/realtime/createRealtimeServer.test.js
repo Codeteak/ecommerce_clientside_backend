@@ -85,6 +85,12 @@ describe("createRealtimeServer catalog.invalidated", () => {
     expect(toSpy).toHaveBeenCalledWith(shopCatalogRoom(SHOP_ID));
   });
 
+  it("emitShopMinPurchaseUpdated targets shop catalog room", () => {
+    const toSpy = vi.spyOn(realtime.io, "to");
+    realtime.emitShopMinPurchaseUpdated({ shopId: SHOP_ID, minPurchaseMinor: 20000 });
+    expect(toSpy).toHaveBeenCalledWith(shopCatalogRoom(SHOP_ID));
+  });
+
   it("emitOrderPlaced targets staff shop room only", () => {
     const toSpy = vi.spyOn(realtime.io, "to");
     realtime.emitOrderPlaced({
