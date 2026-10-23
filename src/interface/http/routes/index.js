@@ -231,6 +231,7 @@ export function createRoutes(ctx) {
     storefrontOrders,
     storefrontPromotions,
     invalidateShopCatalogCache: ctx.invalidateShopCatalogCache,
+    invalidateShopSettings: ctx.invalidateShopSettings,
     getShopCatalogRevision: ctx.getShopCatalogRevision,
     prewarmStorefrontCache: ctx.prewarmStorefrontCache
   });

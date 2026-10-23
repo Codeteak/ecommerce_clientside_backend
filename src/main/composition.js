@@ -34,6 +34,7 @@ import { createUpdateStorefrontProfile } from "../application/services/profile/u
 import { createRequestPhoneChangeOtp } from "../application/services/profile/requestPhoneChangeOtp.js";
 import { createVerifyPhoneChangeOtp } from "../application/services/profile/verifyPhoneChangeOtp.js";
 import { createCheckShopServiceArea } from "../application/services/shops/checkShopServiceArea.js";
+import { createGetShopMinPurchaseMinor } from "../application/services/shops/getShopMinPurchaseMinor.js";
 import { createListApplicableCoupons } from "../application/services/promotions/listApplicableCoupons.js";
 import { createPriceStorefrontLines } from "../application/services/promotions/priceStorefrontLines.js";
 import { createEnsureShopForCatalog } from "../application/services/catalog/ensureShopForCatalog.js";
@@ -117,6 +118,10 @@ export function createAppContext() {
     serviceHubTtlSec: shopServiceAreaCacheTtlSec
   });
   const ensureShopForCatalog = createEnsureShopForCatalog({ shopResolveCache });
+  const getShopMinPurchaseMinor = createGetShopMinPurchaseMinor({
+    shopResolveCache,
+    shopServiceAreaRepo
+  });
   const sessionCache = createSessionCache({ redis });
   const accessTokenRegistry = createAccessTokenRegistry({ redis });
   const sessionValidityCache = {
@@ -236,7 +241,8 @@ export function createAppContext() {
     ensureShopForCatalog,
     priceStorefrontLines,
     listApplicableCoupons,
-    pricing: createCartPricing({ priceStorefrontLines })
+    pricing: createCartPricing({ priceStorefrontLines }),
+    getShopMinPurchaseMinor
   });
   const assertCustomerShopAccess = createAssertCustomerShopAccess({ authRepo });
   const requireCustomerShopAccess = createRequireCustomerShopAccess({ authRepo });
@@ -320,10 +326,10 @@ export function createAppContext() {
     shopResolveCache,
     defaultMaxRadiusM: env.SERVICE_AREA_RADIUS_METERS
   });
-
   const realtime = {
     emitOrderPlaced: () => {},
-    emitCatalogInvalidated: () => {}
+    emitCatalogInvalidated: () => {},
+    emitShopMinPurchaseUpdated: () => {}
   };
 
   const checkoutStorefront = createCheckoutStorefront({
@@ -334,7 +340,8 @@ export function createAppContext() {
     priceStorefrontLines,
     checkShopServiceArea,
     deliveryFeeMinor: env.STOREFRONT_DELIVERY_FEE_MINOR,
-    emitOrderPlaced: (payload) => realtime.emitOrderPlaced(payload)
+    emitOrderPlaced: (payload) => realtime.emitOrderPlaced(payload),
+    getShopMinPurchaseMinor
   });
 
   const getPageMetadataCore = createGetPageMetadata({ shopLookupRepo, catalogRepo });
@@ -446,6 +453,19 @@ export function createAppContext() {
     },
     set emitCatalogInvalidated(fn) {
       realtime.emitCatalogInvalidated = fn;
+    },
+    get emitShopMinPurchaseUpdated() {
+      return realtime.emitShopMinPurchaseUpdated;
+    },
+    set emitShopMinPurchaseUpdated(fn) {
+      realtime.emitShopMinPurchaseUpdated = fn;
+    },
+    invalidateShopSettings: async (shopId, opts = {}) => {
+      await shopResolveCache.invalidateShop(shopId);
+      realtime.emitShopMinPurchaseUpdated({
+        shopId,
+        minPurchaseMinor: opts.minPurchaseMinor
+      });
     }
   };
 }

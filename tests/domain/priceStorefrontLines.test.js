@@ -292,6 +292,7 @@ describe("createPriceStorefrontLines", () => {
     });
     expect(out.autoCartDiscountMinor).toBe(80);
     expect(out.subtotalMinor).toBe(720);
+    expect(out.hasSkuPromo).toBe(false);
     expect(out.appliedPromotionIds).toContain("promo-cart");
   });
 

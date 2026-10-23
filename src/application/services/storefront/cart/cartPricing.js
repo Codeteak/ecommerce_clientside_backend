@@ -114,7 +114,7 @@ export function createCartPricing({ priceStorefrontLines }) {
         bundle_discount_minor: bundleDiscountMinor,
         line_promo_discount_minor: linePromoDiscountMinor,
         auto_cart_discount_minor: autoCartDiscountMinor,
-        has_sku_promo: linePromoDiscountMinor > 0,
+        has_sku_promo: priced.hasSkuPromo === true,
         has_bundle: bundleDiscountMinor > 0,
         has_auto_cart: autoCartDiscountMinor > 0,
         applied_offers: Array.isArray(autoOffers.applied) ? autoOffers.applied : [],

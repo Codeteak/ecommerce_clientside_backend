@@ -175,6 +175,7 @@ async function main() {
     realtimeServer = await createRealtimeServer(server, { redis: redisForAdapter, logger });
     ctx.emitOrderPlaced = realtimeServer.emitOrderPlaced;
     ctx.emitCatalogInvalidated = realtimeServer.emitCatalogInvalidated;
+    ctx.emitShopMinPurchaseUpdated = realtimeServer.emitShopMinPurchaseUpdated;
     logStartupSuccess("realtime", "Socket.IO realtime server attached");
   } else {
     logStartupSkip("realtime", "Realtime disabled (REALTIME_ENABLED=false)");

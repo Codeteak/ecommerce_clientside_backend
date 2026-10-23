@@ -194,3 +194,8 @@ export const storefrontCatalogCachePrewarmBodySchema = z.object({
   shopId: z.string().uuid(),
   topCategoryLimit: z.coerce.number().int().min(1).max(20).optional()
 });
+
+export const storefrontShopSettingsInvalidateBodySchema = z.object({
+  shopId: z.string().uuid(),
+  minPurchaseMinor: z.coerce.number().int().min(0).optional()
+});

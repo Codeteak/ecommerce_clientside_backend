@@ -2,6 +2,11 @@
  * Purpose: Shapes storefront cart API responses for clients (minimal fields, promo-aware).
  */
 
+import {
+  parseMinPurchaseMinor,
+  remainingMinPurchaseMinor
+} from "../../../domain/ordering/minPurchase.js";
+
 function pickImageUrl(row) {
   const fromImage = row?.image?.url ?? row?.image_url ?? row?.thumbnail_url ?? null;
   if (typeof fromImage === "string" && fromImage.trim()) {
@@ -175,7 +180,8 @@ export function formatStorefrontPromotions(promotionsBase, suggestedCoupons, ite
   if (coupon.status === "applied") types.push("coupon");
   if (autoCartDiscountMinor > 0) types.push("auto_cart");
   if (Number(auto?.bundle_discount_minor ?? auto?.bundleDiscountMinor ?? 0) > 0) types.push("bundle");
-  if (Number(auto?.line_promo_discount_minor ?? auto?.linePromoDiscountMinor ?? 0) > 0) {
+  // Catalog list→offer savings are not SKU overlays; only real campaign wins.
+  if (auto?.has_sku_promo === true || auto?.hasSkuPromo === true) {
     types.push("sku");
   }
   return {
@@ -225,8 +231,14 @@ export function formatStorefrontPromotions(promotionsBase, suggestedCoupons, ite
 /**
  * @param {object} priced
  * @param {number} unitsTotal
+ * @param {{ minPurchaseMinor?: unknown }} [minPurchase]
  */
-export function formatStorefrontSummary(priced, unitsTotal) {
+export function formatStorefrontSummary(priced, unitsTotal, minPurchase = null) {
+  const minPurchaseMinor = parseMinPurchaseMinor(
+    minPurchase?.minPurchaseMinor ?? priced?.minPurchaseMinor
+  );
+  const subtotalMinor = priced ? parseMinPurchaseMinor(priced.subtotalMinor) : 0;
+  const remainingMinor = remainingMinPurchaseMinor(minPurchaseMinor, subtotalMinor);
   if (!priced) {
     return {
       subtotal_minor: 0,
@@ -237,6 +249,8 @@ export function formatStorefrontSummary(priced, unitsTotal) {
       bundle_discount_minor: 0,
       auto_cart_discount_minor: 0,
       coupon_discount_minor: 0,
+      min_purchase_minor: minPurchaseMinor,
+      min_purchase_remaining_minor: remainingMinor,
       currency: "INR",
       units_display_total: 0
     };
@@ -253,6 +267,8 @@ export function formatStorefrontSummary(priced, unitsTotal) {
     bundle_discount_minor: priced.bundleDiscountMinor ?? 0,
     auto_cart_discount_minor: priced.autoCartDiscountMinor ?? 0,
     coupon_discount_minor: priced.couponDiscountMinor ?? 0,
+    min_purchase_minor: minPurchaseMinor,
+    min_purchase_remaining_minor: remainingMinor,
     currency: "INR",
     units_display_total: unitsTotal
   };
