@@ -49,7 +49,8 @@ async function attachRedisAdapter(io, redis, logger) {
  * Socket.IO on the API HTTP server with Redis adapter for multi-instance fanout.
  * Connect auth:
  * - Storefront browsers: shopId + STOREFRONT_CATALOG_REALTIME_TOKEN → catalog room only
- * - Staff/picker: staff JWT or REALTIME_CONNECT_TOKEN → shop room (order.placed)
+ * - Staff/picker: staff JWT with matching shopId claim → shop room (order.placed)
+ * - REALTIME_CONNECT_TOKEN: local/dev only unless REALTIME_ALLOW_SHARED_CONNECT_TOKEN=true
  */
 export async function createRealtimeServer(httpServer, { redis, logger }) {
   const io = new Server(httpServer, {
@@ -87,7 +88,10 @@ export async function createRealtimeServer(httpServer, { redis, logger }) {
     }
 
     const connectToken = env.REALTIME_CONNECT_TOKEN;
-    if (connectToken && token === connectToken) {
+    const allowSharedStaffToken =
+      Boolean(connectToken) &&
+      (env.NODE_ENV !== "production" || env.REALTIME_ALLOW_SHARED_CONNECT_TOKEN === true);
+    if (allowSharedStaffToken && token === connectToken) {
       socket.data.shopId = String(shopId);
       socket.data.connectionKind = "staff";
       return next();
@@ -95,7 +99,10 @@ export async function createRealtimeServer(httpServer, { redis, logger }) {
 
     try {
       const payload = verifyStaffAccessToken(String(token || ""));
-      if (payload.shopId != null && String(payload.shopId) !== String(shopId)) {
+      if (payload.shopId == null || String(payload.shopId).trim() === "") {
+        return next(new Error("staff token missing shopId"));
+      }
+      if (String(payload.shopId) !== String(shopId)) {
         return next(new Error("shopId does not match token"));
       }
       socket.data.shopId = String(shopId);

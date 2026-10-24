@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { CartRepo } from "../../../application/ports/repositories/CartRepo.js";
 import { AppError } from "../../../domain/errors/AppError.js";
-import { MAX_LINE_QUANTITY, normalizeCheckoutLineQuantity } from "../../../application/services/storefront/cart/cartLineRules.js";
+import {
+  MAX_LINE_QUANTITY,
+  hasEnoughStock,
+  normalizeCheckoutLineQuantity
+} from "../../../application/services/storefront/cart/cartLineRules.js";
 import { setTenantContext } from "../../../infra/db/tenantContext.js";
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
 import {
@@ -15,6 +19,7 @@ import {
   shopProductNameSql,
   shopProductSlugSql,
   shopProductSoldByWeightSql,
+  shopProductStockQuantitySql,
   shopProductUnitSizeSql
 } from "./queries/shopProductCatalogSql.js";
 import {
@@ -299,6 +304,7 @@ export class CartRepoPg extends CartRepo {
               ${shopProductBaseUnitSql} AS base_unit,
               ${shopProductUnitSizeSql}::text AS unit_size,
               ${shopProductSoldByWeightSql} AS sold_by_weight,
+              ${shopProductStockQuantitySql} AS stock_quantity,
               sp.price_minor_per_unit::text AS price_minor_per_unit,
               sp.status,
               sp.availability
@@ -320,6 +326,41 @@ export class CartRepoPg extends CartRepo {
       lockedById.set(String(r.id), r);
     }
     return lockedById;
+  }
+
+  /**
+   * Assert stock under the FOR UPDATE lock and decrement tracked quantities.
+   * Null/blank stock_quantity means unlimited (no decrement).
+   */
+  async #assertAndDecrementStock(client, shopId, lockedById, qtyByProductId) {
+    for (const [productId, orderedQty] of qtyByProductId) {
+      const p = lockedById.get(String(productId));
+      if (!p) continue;
+      if (!hasEnoughStock(p.stock_quantity, orderedQty)) {
+        throw commitErr(
+          "PRODUCT_OUT_OF_STOCK",
+          "One or more products do not have enough stock. Please refresh your cart."
+        );
+      }
+      if (p.stock_quantity == null || String(p.stock_quantity).trim() === "") continue;
+      const need = Number(orderedQty);
+      const { rowCount } = await client.query(
+        `UPDATE shop_products
+            SET stock_quantity = stock_quantity - $3::numeric,
+                updated_at = NOW()
+          WHERE shop_id = $1::uuid
+            AND id = $2::uuid
+            AND stock_quantity IS NOT NULL
+            AND stock_quantity >= $3::numeric`,
+        [shopId, productId, need]
+      );
+      if (rowCount !== 1) {
+        throw commitErr(
+          "PRODUCT_OUT_OF_STOCK",
+          "One or more products do not have enough stock. Please refresh your cart."
+        );
+      }
+    }
   }
 
   async validateCartForCheckoutCommit(client, shopId, cartId) {
@@ -349,6 +390,8 @@ export class CartRepoPg extends CartRepo {
     );
     const lockedById = await this.#lockSellableProducts(client, shopId, uniqueProductIds);
 
+    /** @type {Map<string, number>} */
+    const qtyByProductId = new Map();
     for (const line of lines) {
       if (line.is_custom) continue;
       if (!line.product_id) {
@@ -361,27 +404,37 @@ export class CartRepoPg extends CartRepo {
           "One or more products are unavailable. Please refresh your cart."
         );
       }
+      const soldByWeight = p.sold_by_weight === true;
+      const quantity = normalizeCheckoutLineQuantity(Number(line.quantity), soldByWeight);
+      line.quantity = String(quantity);
+      qtyByProductId.set(
+        String(line.product_id),
+        (qtyByProductId.get(String(line.product_id)) || 0) + quantity
+      );
       line.unit_price_minor = Number(p.price_minor_per_unit);
       if (p.name) line.title_snapshot = p.name;
       if (p.base_unit) line.unit_label = p.base_unit;
       // Sold-by-weight qty is already kilograms; catalog unit_size is the order
       // step only. Persist factor 1 so collapseWeightStepOrderItem does not
       // treat kg qty as pack count × step.
-      if (p.sold_by_weight === true) {
+      if (soldByWeight) {
         line.unit_size_snapshot = "1";
       } else if (p.unit_size != null) {
         line.unit_size_snapshot = String(p.unit_size);
       }
     }
 
+    await this.#assertAndDecrementStock(client, shopId, lockedById, qtyByProductId);
     return lines;
   }
 
   /**
    * Checkout from client cart lines ({ productId, quantity }). Catalog locks and live prices;
    * client unit prices are ignored.
+   * @param {{ reserveStock?: boolean }} [options] When reserveStock is true (checkout commit only),
+   *   assert and decrement tracked stock_quantity under the row lock.
    */
-  async validateClientLinesForCheckout(client, shopId, items) {
+  async validateClientLinesForCheckout(client, shopId, items, options = {}) {
     const qtyByProduct = new Map();
     for (const raw of Array.isArray(items) ? items : []) {
       const productId = String(raw?.productId ?? raw?.product_id ?? "").trim();
@@ -407,10 +460,13 @@ export class CartRepoPg extends CartRepo {
     const uniqueProductIds = [...qtyByProduct.keys()].sort((a, b) => a.localeCompare(b));
     const lockedById = await this.#lockSellableProducts(client, shopId, uniqueProductIds);
 
-    return uniqueProductIds.map((productId) => {
+    /** @type {Map<string, number>} */
+    const normalizedQty = new Map();
+    const lines = uniqueProductIds.map((productId) => {
       const p = lockedById.get(String(productId));
       const soldByWeight = p.sold_by_weight === true;
       const quantity = normalizeCheckoutLineQuantity(qtyByProduct.get(productId), soldByWeight);
+      normalizedQty.set(productId, quantity);
       return {
         id: randomUUID(),
         product_id: productId,
@@ -425,6 +481,21 @@ export class CartRepoPg extends CartRepo {
         sold_by_weight: soldByWeight
       };
     });
+
+    if (options?.reserveStock === true) {
+      await this.#assertAndDecrementStock(client, shopId, lockedById, normalizedQty);
+    } else {
+      for (const [productId, orderedQty] of normalizedQty) {
+        const p = lockedById.get(String(productId));
+        if (p && !hasEnoughStock(p.stock_quantity, orderedQty)) {
+          throw commitErr(
+            "PRODUCT_OUT_OF_STOCK",
+            "One or more products do not have enough stock. Please refresh your cart."
+          );
+        }
+      }
+    }
+    return lines;
   }
 
   async listLiveProductPricingByIds(client, shopId, productIds) {

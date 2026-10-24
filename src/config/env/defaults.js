@@ -92,6 +92,7 @@ export function getDevLikeDefaults(nodeEnv) {
     ACCESS_JTI_DB_FALLBACK_ENABLED: "true",
     REALTIME_ENABLED: "false",
     REALTIME_CONNECT_TOKEN: "",
+    REALTIME_ALLOW_SHARED_CONNECT_TOKEN: "false",
     STOREFRONT_CATALOG_REALTIME_TOKEN: "",
     SEARCH_USE_TRGM: "false"
   };

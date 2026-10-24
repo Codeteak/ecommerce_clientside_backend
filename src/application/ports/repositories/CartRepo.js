@@ -139,11 +139,13 @@ export class CartRepo {
   /**
    * Checkout from client lines `{ productId, quantity }[]`. Locks catalog rows and prices from Postgres.
    * Client unit prices are ignored.
+   * @param {{ reserveStock?: boolean }} [_options] Pass `{ reserveStock: true }` only inside checkout commit.
    */
-  async validateClientLinesForCheckout(_client, _shopId, _items) {
+  async validateClientLinesForCheckout(_client, _shopId, _items, _options) {
     void _client;
     void _shopId;
     void _items;
+    void _options;
     throw new Error("Not implemented");
   }
 
