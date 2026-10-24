@@ -37,8 +37,7 @@ describe("customer OTP auth", () => {
   it("requests OTP and sends via sms sender", async () => {
     const authRepo = {
       getShopById: vi.fn().mockResolvedValue(activeShop()),
-      findLatestOtpChallenge: vi.fn().mockResolvedValue(null),
-      countOtpChallengesSince: vi.fn().mockResolvedValue(0),
+      getOtpRequestGate: vi.fn().mockResolvedValue({ latestChallenge: null, sentCountInWindow: 0 }),
       insertOtpChallenge: vi.fn().mockResolvedValue({ id: "otp-1" })
     };
     const smsSender = { sendOtp: vi.fn().mockResolvedValue(undefined) };
@@ -58,7 +57,7 @@ describe("customer OTP auth", () => {
   it("rejects OTP request when shop status is not active", async () => {
     const authRepo = {
       getShopById: vi.fn().mockResolvedValue({ id: shopId, status: "blocked" }),
-      findLatestOtpChallenge: vi.fn(),
+      getOtpRequestGate: vi.fn(),
       insertOtpChallenge: vi.fn()
     };
     const run = createRequestCustomerOtp({ authRepo, smsSender: { sendOtp: vi.fn() } });
@@ -73,8 +72,7 @@ describe("customer OTP auth", () => {
   it("consumes OTP challenge when SMS send fails", async () => {
     const authRepo = {
       getShopById: vi.fn().mockResolvedValue(activeShop()),
-      findLatestOtpChallenge: vi.fn().mockResolvedValue(null),
-      countOtpChallengesSince: vi.fn().mockResolvedValue(0),
+      getOtpRequestGate: vi.fn().mockResolvedValue({ latestChallenge: null, sentCountInWindow: 0 }),
       insertOtpChallenge: vi.fn().mockResolvedValue({ id: "otp-fail-1" }),
       consumeOtpChallenge: vi.fn().mockResolvedValue(undefined)
     };
@@ -91,12 +89,14 @@ describe("customer OTP auth", () => {
     const authRepo = {
       getShopById: vi.fn().mockResolvedValue(activeShop()),
       isPhoneUsedByActiveShopStaff: vi.fn().mockResolvedValue(false),
-      findLatestOtpChallenge: vi.fn().mockResolvedValue({
-        id: "otp-1",
-        consumed_at: null,
-        created_at: new Date().toISOString()
+      getOtpRequestGate: vi.fn().mockResolvedValue({
+        latestChallenge: {
+          id: "otp-1",
+          consumed_at: null,
+          created_at: new Date().toISOString()
+        },
+        sentCountInWindow: 0
       }),
-      countOtpChallengesSince: vi.fn().mockResolvedValue(0),
       insertOtpChallenge: vi.fn()
     };
     const run = createRequestCustomerOtp({ authRepo, smsSender: { sendOtp: vi.fn() } });

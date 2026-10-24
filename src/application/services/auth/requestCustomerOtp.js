@@ -32,14 +32,13 @@ export function createRequestCustomerOtp({
     assertShopAllowsCustomers(shop, { statusCode: 400 });
 
     const now = new Date();
-    const latest = await authRepo.findLatestOtpChallenge(client, phone, shopId);
     const windowSinceIso = new Date(now.getTime() - otpRequestWindowSeconds * 1000).toISOString();
-    const sentCount = await authRepo.countOtpChallengesSince(client, phone, shopId, windowSinceIso);
+    const gate = await authRepo.getOtpRequestGate(client, phone, shopId, windowSinceIso);
 
     assertOtpRequestAllowed({
       now,
-      latestChallenge: latest,
-      sentCountInWindow: sentCount,
+      latestChallenge: gate.latestChallenge,
+      sentCountInWindow: gate.sentCountInWindow,
       otpResendSeconds,
       otpRequestWindowSeconds,
       otpMaxRequestsPerWindow

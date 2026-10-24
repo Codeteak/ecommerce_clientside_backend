@@ -53,14 +53,13 @@ export function createRequestPhoneChangeOtp({
     }
 
     const now = new Date();
-    const latest = await authRepo.findLatestOtpChallenge(client, newPhone, shopId);
     const windowSinceIso = new Date(now.getTime() - otpRequestWindowSeconds * 1000).toISOString();
-    const sentCount = await authRepo.countOtpChallengesSince(client, newPhone, shopId, windowSinceIso);
+    const gate = await authRepo.getOtpRequestGate(client, newPhone, shopId, windowSinceIso);
 
     assertOtpRequestAllowed({
       now,
-      latestChallenge: latest,
-      sentCountInWindow: sentCount,
+      latestChallenge: gate.latestChallenge,
+      sentCountInWindow: gate.sentCountInWindow,
       otpResendSeconds,
       otpRequestWindowSeconds,
       otpMaxRequestsPerWindow

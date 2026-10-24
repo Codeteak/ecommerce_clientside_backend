@@ -163,6 +163,18 @@ export class CustomerAuthRepo {
     throw new Error("Not implemented");
   }
 
+  /**
+   * Latest OTP challenge + count since window start (one round-trip).
+   * @returns {Promise<{ latestChallenge: object | null, sentCountInWindow: number }>}
+   */
+  async getOtpRequestGate(_client, _phone, _shopId, _sinceIso) {
+    void _client;
+    void _phone;
+    void _shopId;
+    void _sinceIso;
+    throw new Error("Not implemented");
+  }
+
   async countOtpChallengesSince(_client, _phone, _shopId, _sinceIso) {
     void _client;
     void _phone;

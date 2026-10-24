@@ -515,10 +515,11 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
   }
 
   async insertOtpChallenge(client, { phone, shopId, codeHash, expiresAtIso }) {
+    // Phones are stored as normalized 10-digit values — exact match uses the lookup index.
     await client.query(
       `UPDATE customer_otp_challenges
           SET consumed_at = now()
-        WHERE ${phoneMatchesStorage("phone", 1)}
+        WHERE phone = $1
           AND shop_id = $2::uuid
           AND consumed_at IS NULL`,
       [phone, shopId]
@@ -532,11 +533,43 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     return rows[0];
   }
 
+  /**
+   * One round-trip for OTP send gates: latest challenge + count in window.
+   * @returns {Promise<{ latestChallenge: object | null, sentCountInWindow: number }>}
+   */
+  async getOtpRequestGate(client, phone, shopId, sinceIso) {
+    const { rows } = await client.query(
+      `SELECT
+         (SELECT to_jsonb(t)
+            FROM (
+              SELECT id, phone, shop_id, code_hash, attempts, consumed_at, expires_at, created_at
+                FROM customer_otp_challenges
+               WHERE phone = $1
+                 AND shop_id = $2::uuid
+               ORDER BY created_at DESC
+               LIMIT 1
+            ) t
+         ) AS latest,
+         (SELECT count(*)::int
+            FROM customer_otp_challenges
+           WHERE phone = $1
+             AND shop_id = $2::uuid
+             AND created_at >= $3::timestamptz
+         ) AS sent_count`,
+      [phone, shopId, sinceIso]
+    );
+    const row = rows[0];
+    return {
+      latestChallenge: row?.latest ?? null,
+      sentCountInWindow: row?.sent_count ?? 0
+    };
+  }
+
   async countOtpChallengesSince(client, phone, shopId, sinceIso) {
     const { rows } = await client.query(
       `SELECT count(*)::int AS cnt
          FROM customer_otp_challenges
-        WHERE ${phoneMatchesStorage("phone", 1)}
+        WHERE phone = $1
           AND shop_id = $2::uuid
           AND created_at >= $3::timestamptz`,
       [phone, shopId, sinceIso]
@@ -548,7 +581,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     const { rows } = await client.query(
       `SELECT id, phone, shop_id, code_hash, attempts, consumed_at, expires_at, created_at
          FROM customer_otp_challenges
-        WHERE ${phoneMatchesStorage("phone", 1)}
+        WHERE phone = $1
           AND shop_id = $2::uuid
         ORDER BY created_at DESC
         LIMIT 1`,
@@ -562,7 +595,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     const { rows } = await client.query(
       `SELECT id, phone, shop_id, code_hash, attempts, consumed_at, expires_at, created_at
          FROM customer_otp_challenges
-        WHERE ${phoneMatchesStorage("phone", 1)}
+        WHERE phone = $1
           AND shop_id = $2::uuid
         ORDER BY created_at DESC
         LIMIT $3::int`,
