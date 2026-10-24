@@ -45,7 +45,7 @@ const ADDRESS_API_TO_DB = {
 export class CustomerAuthRepoPg extends CustomerAuthRepo {
   async getShopById(client, shopId) {
     const { rows } = await client.query(
-      `SELECT id, slug, name, status
+      `SELECT id, name, status
          FROM shops
         WHERE id = $1`,
       [shopId]

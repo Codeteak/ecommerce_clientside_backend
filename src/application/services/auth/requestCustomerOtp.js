@@ -56,7 +56,7 @@ export function createRequestCustomerOtp({
       expiresAtIso
     });
 
-    const shopLabel = String(shop.name || shop.slug || "our store").trim() || "our store";
+    const shopLabel = String(shop.name || "our store").trim() || "our store";
     try {
       await smsSender.sendOtp({ to: formatCustomerPhoneForSms(phone), code, shopName: shopLabel });
     } catch (err) {
