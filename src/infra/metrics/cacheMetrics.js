@@ -27,13 +27,3 @@ export function incrementCacheMetric(name, layer = "catalog") {
   bucket[name] += 1;
   incrementCachePromMetric(name, layer);
 }
-
-export function getCacheMetricsSnapshot() {
-  const out = { catalog: { ...counters.catalog } };
-  for (const layer of layers) {
-    if (layer !== "catalog") {
-      out[layer] = { ...counters[layer] };
-    }
-  }
-  return out;
-}

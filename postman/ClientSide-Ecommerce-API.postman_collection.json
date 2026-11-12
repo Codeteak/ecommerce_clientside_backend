@@ -27,16 +27,6 @@
       "name": "Health",
       "item": [
         {
-          "name": "GET /",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/",
-            "description": "Service stub: `ok`, `service`, links to `/health`, `/openapi.json`, and `/api-docs`."
-          },
-          "response": []
-        },
-        {
           "name": "GET /health",
           "request": {
             "method": "GET",

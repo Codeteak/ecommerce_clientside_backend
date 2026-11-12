@@ -133,13 +133,11 @@ store: new RedisStore({ sendCommand: (...args) => redis.call(...args) })
 - **Risk:** `phone`, `email`, `otp` not redacted if body logging expands.  
 - **Recommended fix:** Extend redact paths; never log raw auth bodies.
 
-## Issue: Deploy script forces API docs on in production
+## Issue: Deploy script used to force API docs on in production
 
 - **Severity:** Medium  
-- **File:** `scripts/cicd/application_start.sh` ~29–34  
-- **Problem:** Prepends `ENABLE_API_DOCS=true` and `ALLOW_API_DOCS_IN_PRODUCTION=true`.  
-- **Risk:** OpenAPI/Swagger exposed in production unless overridden elsewhere.  
-- **Recommended fix:** Remove those lines; keep docs dev/staging only.
+- **File:** `scripts/cicd/application_start.sh`  
+- **Status:** Closed. `GET /openapi.json` and `GET /api-docs` are removed, along with `ENABLE_API_DOCS`.
 
 ### What is already secure
 

@@ -7,12 +7,10 @@ import pinoHttp from "pino-http";
 import { randomUUID } from "node:crypto";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
-import swaggerUi from "swagger-ui-express";
 import { createRoutes } from "../interface/http/routes/index.js";
 import { notFound } from "../interface/http/middleware/notFound.js";
 import { errorHandler } from "../interface/http/middleware/errorHandler.js";
 import { createAppContext } from "./composition.js";
-import { getOpenApiDocument } from "../infra/openapi/openapiDocument.js";
 import { requestMetricsMiddleware } from "../infra/metrics/requestMetrics.js";
 import { requestContextMiddleware } from "../infra/logging/requestContext.js";
 import { createCorsOriginDelegate } from "../infra/http/corsOrigin.js";
@@ -21,21 +19,13 @@ export function createExpressApp(ctx) {
   const isNoisePath = (url) =>
     url === "/health" ||
     url === "/health/ready" ||
-    url === "/metrics" ||
-    url === "/metrics/json" ||
-    url === "/";
+    url === "/metrics";
 
   const app = express();
   app.set("trust proxy", env.TRUST_PROXY ? env.TRUST_PROXY_HOPS : false);
 
   app.disable("x-powered-by");
-  app.use(
-    helmet(
-      env.ENABLE_API_DOCS
-        ? { contentSecurityPolicy: false }
-        : undefined
-    )
-  );
+  app.use(helmet());
   app.use(requestMetricsMiddleware);
   app.use(
     pinoHttp({
@@ -124,26 +114,6 @@ export function createExpressApp(ctx) {
     })
   );
   app.use(requestContextMiddleware);
-
-  if (env.ENABLE_API_DOCS) {
-    const openApiDocument = getOpenApiDocument(env);
-    app.get("/openapi.json", (_req, res) => {
-      res.setHeader("Cache-Control", "no-store");
-      res.json(openApiDocument);
-    });
-    app.use(
-      "/api-docs",
-      swaggerUi.serve,
-      swaggerUi.setup(openApiDocument, {
-        customSiteTitle: "Storefront API — Swagger UI",
-        customCss: ".swagger-ui .topbar { display: none }",
-        swaggerOptions: {
-          persistAuthorization: true,
-          displayRequestDuration: true
-        }
-      })
-    );
-  }
 
   app.use(
     cors({

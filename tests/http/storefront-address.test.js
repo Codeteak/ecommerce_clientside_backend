@@ -72,34 +72,6 @@ describe("ADDRESS_NOT_FOUND error shape", () => {
   });
 });
 
-describe("storefront address OpenAPI", () => {
-  let app;
-
-  beforeAll(() => {
-    app = getTestApp();
-  });
-
-  it("documents DELETE and omits state/postalCode/country", async () => {
-    const res = await request(app).get("/openapi.json").expect(200);
-    const addressPath = res.body.paths?.["/storefront/address"];
-    expect(addressPath?.delete?.responses?.["204"]).toBeTruthy();
-    expect(addressPath?.delete?.responses?.["404"]).toBeTruthy();
-
-    const addr = res.body.components?.schemas?.StorefrontAddress?.properties;
-    expect(addr?.state).toBeUndefined();
-    expect(addr?.postalCode).toBeUndefined();
-    expect(addr?.country).toBeUndefined();
-    expect(addr?.line1).toBeTruthy();
-    expect(addr?.city).toBeTruthy();
-
-    const post = res.body.components?.schemas?.AddressPostRequest;
-    expect(post?.required).toContain("line1");
-    expect(post?.properties?.state).toBeUndefined();
-    expect(post?.properties?.postalCode).toBeUndefined();
-    expect(post?.properties?.country).toBeUndefined();
-  });
-});
-
 describe("checkout ADDRESS_REQUIRED after delete", () => {
   it("fails when profile has no address", async () => {
     const authRepo = {

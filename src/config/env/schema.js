@@ -100,11 +100,6 @@ export const envSchema = z
           .filter(Boolean)
       )
       .pipe(z.array(z.string().min(1)).min(1)),
-    ENABLE_API_DOCS: z.preprocess((val) => {
-      if (val === undefined || val === null || val === "") return false;
-      return boolFromEnv(val);
-    }, z.boolean()),
-    ALLOW_API_DOCS_IN_PRODUCTION: z.preprocess(boolFromEnv, z.boolean()).default(false),
     TRUST_PROXY: z.preprocess(boolFromEnv, z.boolean()),
     TRUST_PROXY_HOPS: z.coerce.number().int().positive().default(1),
     SERVICE_AREA_RADIUS_METERS: z.coerce.number().int().positive().default(5000),
@@ -185,14 +180,6 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ["LOG_OTP_IN_DEV"],
         message: "LOG_OTP_IN_DEV must be false in production"
-      });
-    }
-    if (val.NODE_ENV === "production" && val.ENABLE_API_DOCS && !val.ALLOW_API_DOCS_IN_PRODUCTION) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["ENABLE_API_DOCS"],
-        message:
-          "ENABLE_API_DOCS is blocked in production unless ALLOW_API_DOCS_IN_PRODUCTION=true"
       });
     }
     if (val.NODE_ENV === "production" && !val.TRUST_PROXY) {

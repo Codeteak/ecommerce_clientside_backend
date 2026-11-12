@@ -260,7 +260,6 @@ Default catalog cache TTL: `STOREFRONT_CATALOG_CACHE_TTL_SEC` (often **60**). In
 
 - [CACHING.md](./CACHING.md) — full cache key list and TTL reference  
 - [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md) — production env vars  
-- OpenAPI: `GET /openapi.json` — paths under **Storefront catalog**  
 - Postman collection: folder **Catalog cache** (if present)
 
 ---
