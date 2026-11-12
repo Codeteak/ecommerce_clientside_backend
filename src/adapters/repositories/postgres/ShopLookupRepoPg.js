@@ -1,6 +1,5 @@
 import { ShopLookupRepo } from "../../../application/ports/repositories/ShopLookupRepo.js";
 import { pool } from "../../../infra/db/pool.js";
-import { setTenantContext } from "../../../infra/db/tenantContext.js";
 
 // Purpose: This file gets shop IDs from PostgreSQL using slug or custom domain.
 export class ShopLookupRepoPg extends ShopLookupRepo {
@@ -31,56 +30,87 @@ export class ShopLookupRepoPg extends ShopLookupRepo {
     }
   }
 
-  async #loadBannerStorageKeys(client, assetIds) {
-    const ids = Array.isArray(assetIds) ? assetIds.filter(Boolean) : [];
-    if (!ids.length) return [];
-    const { rows } = await client.query(
-      `SELECT ma.storage_key
-         FROM unnest($1::uuid[]) WITH ORDINALITY AS ord(id, ord)
-         LEFT JOIN media_assets ma ON ma.id = ord.id
-        WHERE ma.storage_key IS NOT NULL
-          AND btrim(ma.storage_key) <> ''
-        ORDER BY ord.ord`,
-      [ids]
-    );
-    return rows.map((r) => String(r.storage_key));
-  }
-
-  async #loadShopBrandingRow(client, shopRow) {
-    if (!shopRow) return null;
-    await setTenantContext(client, shopRow.id);
-    const { rows: imageRows } = await client.query(
-      `SELECT ma.storage_key AS shop_image_storage_key
-         FROM entity_images ei
-         JOIN media_assets ma ON ma.id = ei.media_asset_id
-        WHERE ei.shop_id = $1
-          AND ei.entity_type = 'shop'
-        ORDER BY ei.updated_at DESC NULLS LAST, ei.created_at DESC
-        LIMIT 1`,
-      [shopRow.id]
-    );
-    const bannerEnabled = shopRow.banner_enabled !== false;
+  #mapBrandingRow(row) {
+    if (!row) return null;
+    const bannerEnabled = row.banner_enabled !== false;
     const bannerStorageKeys = bannerEnabled
-      ? await this.#loadBannerStorageKeys(client, shopRow.banner_media_asset_ids)
+      ? (Array.isArray(row.banner_storage_keys) ? row.banner_storage_keys : []).map((key) =>
+          String(key)
+        )
       : [];
     return {
-      id: shopRow.id,
-      name: shopRow.name,
-      domain: shopRow.domain ?? null,
-      custom_domain: shopRow.custom_domain ?? null,
-      seo_title: shopRow.seo_title ?? null,
-      seo_description: shopRow.seo_description ?? null,
-      seo_keywords: shopRow.seo_keywords ?? null,
-      tagline: shopRow.tagline ?? null,
-      locale: shopRow.locale ?? null,
-      theme_color: shopRow.theme_color ?? null,
-      og_image_storage_key: shopRow.og_image_storage_key ?? null,
-      og_image_alt: shopRow.og_image_alt ?? null,
-      twitter_card: shopRow.twitter_card ?? null,
-      shop_image_storage_key: imageRows[0]?.shop_image_storage_key ?? null,
+      id: row.id,
+      name: row.name,
+      domain: row.domain ?? null,
+      custom_domain: row.custom_domain ?? null,
+      seo_title: null,
+      seo_description: null,
+      seo_keywords: null,
+      tagline: null,
+      locale: null,
+      theme_color: null,
+      og_image_storage_key: null,
+      og_image_alt: null,
+      twitter_card: null,
+      shop_image_storage_key: row.shop_image_storage_key ?? null,
       banner_enabled: bannerEnabled,
       banner_storage_keys: bannerStorageKeys
     };
+  }
+
+  /**
+   * Shop row, logo, and banners in one statement.
+   * Logo and banner predicates match the previous separate queries.
+   * set_config runs in this statement so entity_images row security still sees the shop.
+   */
+  async #selectShopBranding(whereSql, params) {
+    const client = await pool.connect();
+    try {
+      const { rows } = await client.query(
+        `SELECT s.id,
+                s.name,
+                s.domain,
+                s.custom_domain,
+                s.banner_enabled,
+                logo.shop_image_storage_key,
+                COALESCE(banners.storage_keys, ARRAY[]::text[]) AS banner_storage_keys
+           FROM (
+             SELECT ${ShopLookupRepoPg.#shopBrandingSelectColumns}
+               FROM shops
+              WHERE ${whereSql}
+              LIMIT 1
+           ) s
+           CROSS JOIN LATERAL (
+             SELECT set_config('app.current_shop_id', s.id::text, true) AS ctx
+           ) cfg
+           LEFT JOIN LATERAL (
+             SELECT ma.storage_key AS shop_image_storage_key
+               FROM entity_images ei
+               JOIN media_assets ma ON ma.id = ei.media_asset_id
+              WHERE cfg.ctx IS NOT NULL
+                AND ei.shop_id = s.id
+                AND ei.entity_type = 'shop'
+              ORDER BY ei.updated_at DESC NULLS LAST, ei.created_at DESC
+              LIMIT 1
+           ) logo ON true
+           LEFT JOIN LATERAL (
+             SELECT array_agg(picked.storage_key ORDER BY picked.ord) AS storage_keys
+               FROM (
+                 SELECT ma.storage_key, ord.ord
+                   FROM unnest(s.banner_media_asset_ids) WITH ORDINALITY AS ord(id, ord)
+                   LEFT JOIN media_assets ma ON ma.id = ord.id
+                  WHERE cfg.ctx IS NOT NULL
+                    AND s.banner_enabled IS NOT FALSE
+                    AND ma.storage_key IS NOT NULL
+                    AND btrim(ma.storage_key) <> ''
+               ) picked
+           ) banners ON true`,
+        params
+      );
+      return this.#mapBrandingRow(rows[0]);
+    } finally {
+      client.release();
+    }
   }
 
   static #shopBrandingSelectColumns = `
@@ -91,38 +121,17 @@ export class ShopLookupRepoPg extends ShopLookupRepo {
   async findShopByDomain(domain) {
     const d = String(domain || "").trim().toLowerCase();
     if (!d) return null;
-    const client = await pool.connect();
-    try {
-      const { rows } = await client.query(
-        `SELECT ${ShopLookupRepoPg.#shopBrandingSelectColumns}
-           FROM shops
-          WHERE lower(domain) = lower($1)
-             OR lower(custom_domain) = lower($1)
-          LIMIT 1`,
-        [d]
-      );
-      return this.#loadShopBrandingRow(client, rows[0]);
-    } finally {
-      client.release();
-    }
+    return this.#selectShopBranding(
+      `lower(domain) = lower($1)
+          OR lower(custom_domain) = lower($1)`,
+      [d]
+    );
   }
 
   async findShopBrandingById(shopId) {
     const id = String(shopId || "").trim();
     if (!id) return null;
-    const client = await pool.connect();
-    try {
-      const { rows } = await client.query(
-        `SELECT ${ShopLookupRepoPg.#shopBrandingSelectColumns}
-           FROM shops
-          WHERE id = $1::uuid
-          LIMIT 1`,
-        [id]
-      );
-      return this.#loadShopBrandingRow(client, rows[0]);
-    } finally {
-      client.release();
-    }
+    return this.#selectShopBranding("id = $1::uuid", [id]);
   }
 
   async findShopIdByDomain(domain) {
