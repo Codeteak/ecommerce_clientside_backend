@@ -15,8 +15,8 @@ export function createVerifyPhoneChangeOtp({ authRepo, buildStorefrontSession, o
     const ip = input.ip ?? null;
     const userAgent = input.userAgent ?? null;
 
-    if (!/^\d{6}$/.test(code)) {
-      throw new ValidationError("OTP code must be 6 digits");
+    if (!/^\d{4}$/.test(code)) {
+      throw new ValidationError("OTP code must be 4 digits");
     }
 
     const profile = await authRepo.getCustomerProfileByCustomerId(client, customerId);

@@ -50,25 +50,23 @@ function otpVerifyHandler(ctx) {
   );
 }
 
-function emailOtpRequestHandler(ctx) {
-  return withSecurityAudit(
-    "otp.email.requested",
-    "otp.email.request.failed",
-    (req) => ({ email: req.body?.email ? "provided" : "missing" }),
-    (req) => withClient((client) => ctx.requestCustomerEmailOtp(client, req.body))
-  );
+function emailOtpDisabledHandler(event) {
+  return withSecurityAudit(event, `${event}.failed`, null, async () => {
+    throw new AppError("Email OTP login is disabled. Use phone OTP.", {
+      statusCode: 410,
+      code: "EMAIL_OTP_DISABLED"
+    });
+  });
 }
 
-function emailOtpVerifyHandler(ctx) {
-  return withSecurityAudit("otp.email.verified", "otp.email.verify.failed", null, (req) =>
-    withTx((client) =>
-      ctx.verifyCustomerEmailOtp(client, {
-        ...req.body,
-        ip: req.ip,
-        userAgent: req.get("user-agent") || null
-      })
-    )
-  );
+function emailOtpRequestHandler(_ctx) {
+  void _ctx;
+  return emailOtpDisabledHandler("otp.email.requested");
+}
+
+function emailOtpVerifyHandler(_ctx) {
+  void _ctx;
+  return emailOtpDisabledHandler("otp.email.verified");
 }
 
 function refreshHandler(ctx) {

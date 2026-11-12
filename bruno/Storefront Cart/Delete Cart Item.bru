@@ -1,0 +1,27 @@
+meta {
+  name: Delete Cart Item
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/storefront/cart/items/:itemId
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+params:path {
+  itemId: {{cartItemId}}
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Retired. Expect 410 CART_SERVER_RETIRED. Optional body field is couponCode.
+}

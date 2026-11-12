@@ -114,7 +114,7 @@ export const schemas = {
     properties: {
       phone: { type: "string", pattern: "^[0-9+][0-9]{7,31}$" },
       shopId: { type: "string", format: "uuid" },
-      code: { type: "string", pattern: "^\\d{6}$" }
+      code: { type: "string", pattern: "^\\d{4}$" }
     }
   },
   EmailOtpRequestBody: {
@@ -133,7 +133,7 @@ export const schemas = {
     properties: {
       email: { type: "string", format: "email" },
       shopId: { type: "string", format: "uuid" },
-      code: { type: "string", pattern: "^\\d{6}$" }
+      code: { type: "string", pattern: "^\\d{4}$" }
     }
   },
   LogoutBody: {

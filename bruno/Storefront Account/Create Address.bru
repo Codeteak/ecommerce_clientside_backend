@@ -1,0 +1,30 @@
+meta {
+  name: Create Address
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/storefront/address
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "line1": "{{addressLine1}}",
+    "line2": null,
+    "landmark": null,
+    "city": "{{addressCity}}",
+    "lat": {{lat}},
+    "lng": {{lng}}
+  }
+}
+
+docs {
+  line1 is required, 1 to 200 characters. Do not send state, postalCode, country, or zipCode. Those keys are rejected.
+}

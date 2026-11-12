@@ -1,0 +1,23 @@
+meta {
+  name: List Orders
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/storefront/orders
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+params:query {
+  ~limit: 20
+}
+
+docs {
+  limit is optional, from 1 to 100.
+}

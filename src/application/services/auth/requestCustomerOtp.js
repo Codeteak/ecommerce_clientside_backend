@@ -1,17 +1,13 @@
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { logger } from "../../../config/logger.js";
-import { randomInt } from "node:crypto";
 import { hashOtpCode } from "../../../infra/security/otpHasher.js";
+import { generateOtpCode } from "../../../domain/auth/generateOtpCode.js";
 import { assertShopAllowsCustomers } from "./shopPolicy.js";
 import { assertOtpRequestAllowed } from "./assertOtpRequestAllowed.js";
 import {
   formatCustomerPhoneForSms,
   normalizeCustomerPhoneForStorage
 } from "../../../domain/phone/normalizeCustomerPhone.js";
-
-function randomSixDigitCode() {
-  return String(randomInt(100000, 1000000));
-}
 
 export function createRequestCustomerOtp({
   authRepo,
@@ -44,7 +40,7 @@ export function createRequestCustomerOtp({
       otpMaxRequestsPerWindow
     });
 
-    const code = randomSixDigitCode();
+    const code = generateOtpCode(4);
     const codeHash = await hashOtpCode(code);
     const expiresAtIso = new Date(now.getTime() + otpTtlSeconds * 1000).toISOString();
 
@@ -56,6 +52,8 @@ export function createRequestCustomerOtp({
     });
 
     const shopLabel = String(shop.name || "our store").trim() || "our store";
+    const phoneMasked =
+      phone.length <= 4 ? "****" : `${"*".repeat(Math.max(0, phone.length - 4))}${phone.slice(-4)}`;
     try {
       await smsSender.sendOtp({ to: formatCustomerPhoneForSms(phone), code, shopName: shopLabel });
     } catch (err) {
@@ -66,6 +64,8 @@ export function createRequestCustomerOtp({
           {
             event: "otp.challenge.consume_after_send_failed",
             challengeId: challenge.id,
+            shopId,
+            phoneMasked,
             consumeErr: consumeErr?.message,
             originalErr: err?.message
           },
@@ -74,6 +74,16 @@ export function createRequestCustomerOtp({
       }
       throw err;
     }
+
+    logger.info(
+      {
+        event: "api.auth.otp.request.ok",
+        shopId,
+        phoneMasked,
+        challengeId: challenge.id
+      },
+      "Customer OTP request completed"
+    );
 
     return {
       ok: true,

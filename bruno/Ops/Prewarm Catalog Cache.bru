@@ -1,0 +1,26 @@
+meta {
+  name: Prewarm Catalog Cache
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/storefront/catalog/cache/prewarm
+  body: json
+  auth: none
+}
+
+headers {
+  X-Catalog-Cache-Invalidate: {{catalogCacheToken}}
+}
+
+body:json {
+  {
+    "shopId": "{{shopId}}",
+    "topCategoryLimit": 5
+  }
+}
+
+docs {
+  Warms catalog cache for the shop. topCategoryLimit is optional, 1 to 20. Returns 200.
+}

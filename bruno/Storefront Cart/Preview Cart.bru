@@ -1,0 +1,28 @@
+meta {
+  name: Preview Cart
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/storefront/cart/preview
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "items": [
+      {
+        "productId": "{{productId}}",
+        "quantity": 1
+      }
+    ],
+    "couponCode": "{{couponCode}}",
+    "includeSuggestedCoupons": true
+  }
+}
+
+docs {
+  Prices client-side lines without a saved server cart. Auth is off so a guest preview works. After login, switch Auth to Bearer and set the token to {{accessToken}} for customer-specific coupons. At least one item is required, max 100. quantity must be positive. couponCode is uppercased by the API. Delete couponCode from the body to preview without a coupon. Needs x-shop-id.
+}

@@ -15,7 +15,7 @@ export const otpVerifyBodySchema = z
   .object({
     phone: phoneSchema,
     shopId: z.string().uuid(),
-    code: z.string().regex(/^\d{6}$/, "OTP code must be 6 digits")
+    code: z.string().regex(/^\d{4}$/, "OTP code must be 4 digits")
   })
   .strict();
 
@@ -30,7 +30,7 @@ export const emailOtpVerifyBodySchema = z
   .object({
     email: emailSchema,
     shopId: z.string().uuid(),
-    code: z.string().regex(/^\d{6}$/, "OTP code must be 6 digits")
+    code: z.string().regex(/^\d{4}$/, "OTP code must be 4 digits")
   })
   .strict();
 

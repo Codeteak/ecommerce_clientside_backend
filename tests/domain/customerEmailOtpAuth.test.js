@@ -47,7 +47,7 @@ describe("customer email OTP auth", () => {
     expect(authRepo.insertEmailOtpChallenge).toHaveBeenCalledTimes(1);
     const senderArg = otpSender.sendOtp.mock.calls[0][0];
     expect(senderArg.to).toBe("user@example.com");
-    expect(String(senderArg.code)).toMatch(/^\d{6}$/);
+    expect(String(senderArg.code)).toMatch(/^\d{4}$/);
   });
 
   it("consumes email OTP challenge when send fails", async () => {
@@ -66,7 +66,7 @@ describe("customer email OTP auth", () => {
   });
 
   it("verifies email OTP and provisions user/customer session", async () => {
-    const codeHash = await hashOtpCode("123456");
+    const codeHash = await hashOtpCode("1234");
     const authRepo = {
       getShopById: vi.fn().mockResolvedValue(activeShop()),
       isEmailUsedByActiveShopStaff: vi.fn().mockResolvedValue(false),
@@ -118,7 +118,7 @@ describe("customer email OTP auth", () => {
     };
 
     const run = createVerifyEmailOtpForTests(authRepo);
-    const out = await run({}, { email: "user@example.com", shopId, code: "123456" });
+    const out = await run({}, { email: "user@example.com", shopId, code: "1234" });
 
     expect(out.accessToken).toBeTypeOf("string");
     expect(out.refreshToken).toBeTypeOf("string");
@@ -141,7 +141,7 @@ describe("customer email OTP auth", () => {
   });
 
   it("verifies email OTP for active shop staff and returns session", async () => {
-    const codeHash = await hashOtpCode("123456");
+    const codeHash = await hashOtpCode("1234");
     const authRepo = {
       getShopById: vi.fn().mockResolvedValue(activeShop()),
       findLatestEmailOtpChallenge: vi.fn().mockResolvedValue({
@@ -194,7 +194,7 @@ describe("customer email OTP auth", () => {
     };
 
     const run = createVerifyEmailOtpForTests(authRepo);
-    const out = await run({}, { email: "staff@example.com", shopId, code: "123456" });
+    const out = await run({}, { email: "staff@example.com", shopId, code: "1234" });
 
     expect(out.accessToken).toBeTypeOf("string");
     expect(authRepo.insertCustomer).toHaveBeenCalledWith({}, {

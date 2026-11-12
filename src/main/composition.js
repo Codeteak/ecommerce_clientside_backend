@@ -253,7 +253,9 @@ export function createAppContext() {
         authKey: msg91Key,
         templateId: env.OTP_TEMPLATE_ID,
         shortUrl: env.MSG91_SHORT_URL,
-        timeoutMs: env.MSG91_REQUEST_TIMEOUT_MS
+        timeoutMs: env.MSG91_REQUEST_TIMEOUT_MS,
+        nodeEnv: env.NODE_ENV,
+        logOtpInDev: env.LOG_OTP_IN_DEV
       })
     : new ConsoleSmsSender({
         nodeEnv: env.NODE_ENV,

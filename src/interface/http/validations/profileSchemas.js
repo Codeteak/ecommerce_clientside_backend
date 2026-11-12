@@ -53,6 +53,6 @@ export const phoneChangeRequestBodySchema = z
 export const phoneChangeVerifyBodySchema = z
   .object({
     newPhone: phoneSchema,
-    code: z.string().regex(/^\d{6}$/, "OTP code must be 6 digits")
+    code: z.string().regex(/^\d{4}$/, "OTP code must be 4 digits")
   })
   .strict();

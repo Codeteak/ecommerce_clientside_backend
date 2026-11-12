@@ -325,19 +325,17 @@ export function buildPaths() {
     "/api/auth/email-otp/request": {
       post: {
         tags: ["Auth"],
-        summary: "Request customer email OTP",
-        description: "Creates an OTP challenge for `{ email, shopId }` and sends OTP via configured sender.",
+        summary: "Request customer email OTP (disabled)",
+        description:
+          "Disabled. Customer auth uses phone OTP only. Always returns `410 EMAIL_OTP_DISABLED`.",
+        deprecated: true,
         requestBody: {
           required: true,
           content: { "application/json": { schema: { $ref: "#/components/schemas/EmailOtpRequestBody" } } }
         },
         responses: {
-          "200": {
-            description: "OK",
-            content: { "application/json": { schema: { $ref: "#/components/schemas/OtpRequestResponse" } } }
-          },
+          "410": jsonErr,
           "400": jsonErr,
-          "404": jsonErr,
           "429": jsonErr
         }
       }
@@ -345,20 +343,17 @@ export function buildPaths() {
     "/api/auth/email-otp/verify": {
       post: {
         tags: ["Auth"],
-        summary: "Verify customer email OTP and issue JWT session",
-        description: "Verifies `{ email, shopId, code }`, consumes challenge, and returns customer session JWT payload.",
+        summary: "Verify customer email OTP (disabled)",
+        description:
+          "Disabled. Customer auth uses phone OTP only. Always returns `410 EMAIL_OTP_DISABLED`.",
+        deprecated: true,
         requestBody: {
           required: true,
           content: { "application/json": { schema: { $ref: "#/components/schemas/EmailOtpVerifyBody" } } }
         },
         responses: {
-          "200": {
-            description: "OK",
-            content: { "application/json": { schema: { $ref: "#/components/schemas/SessionResponse" } } }
-          },
+          "410": jsonErr,
           "400": jsonErr,
-          "401": jsonErr,
-          "404": jsonErr,
           "429": jsonErr
         }
       }

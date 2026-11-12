@@ -1,0 +1,22 @@
+meta {
+  name: Check Location
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/storefront/location/check
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "lat": {{lat}},
+    "lng": {{lng}}
+  }
+}
+
+docs {
+  Body is lat and lng only. Sets the serviceability cookie. Enable Bruno's cookie jar before checkout if STOREFRONT_ENFORCE_SERVICEABILITY is on.
+}

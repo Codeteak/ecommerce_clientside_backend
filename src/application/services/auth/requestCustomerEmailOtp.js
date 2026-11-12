@@ -1,16 +1,12 @@
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { logger } from "../../../config/logger.js";
-import { randomInt } from "node:crypto";
 import { hashOtpCode } from "../../../infra/security/otpHasher.js";
+import { generateOtpCode } from "../../../domain/auth/generateOtpCode.js";
 import { assertShopAllowsCustomers } from "./shopPolicy.js";
 import { assertOtpRequestAllowed } from "./assertOtpRequestAllowed.js";
 
 function normalizeEmail(raw) {
   return String(raw || "").trim().toLowerCase();
-}
-
-function randomSixDigitCode() {
-  return String(randomInt(100000, 1000000));
 }
 
 export function createRequestCustomerEmailOtp({
@@ -45,7 +41,7 @@ export function createRequestCustomerEmailOtp({
       otpMaxRequestsPerWindow
     });
 
-    const code = randomSixDigitCode();
+    const code = generateOtpCode(4);
     const codeHash = await hashOtpCode(code);
     const expiresAtIso = new Date(now.getTime() + otpTtlSeconds * 1000).toISOString();
 

@@ -1,7 +1,7 @@
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
-import { randomInt } from "node:crypto";
 import { hashOtpCode } from "../../../infra/security/otpHasher.js";
+import { generateOtpCode } from "../../../domain/auth/generateOtpCode.js";
 import { logger } from "../../../config/logger.js";
 import { assertShopAllowsCustomers } from "../auth/shopPolicy.js";
 import { assertOtpRequestAllowed } from "../auth/assertOtpRequestAllowed.js";
@@ -9,10 +9,6 @@ import {
   formatCustomerPhoneForSms,
   normalizeCustomerPhoneForStorage
 } from "../../../domain/phone/normalizeCustomerPhone.js";
-
-function randomSixDigitCode() {
-  return String(randomInt(100000, 1000000));
-}
 
 export function createRequestPhoneChangeOtp({
   authRepo,
@@ -65,7 +61,7 @@ export function createRequestPhoneChangeOtp({
       otpMaxRequestsPerWindow
     });
 
-    const code = randomSixDigitCode();
+    const code = generateOtpCode(4);
     const codeHash = await hashOtpCode(code);
     const expiresAtIso = new Date(now.getTime() + otpTtlSeconds * 1000).toISOString();
 

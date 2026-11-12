@@ -1,0 +1,20 @@
+meta {
+  name: Product Metadata
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/seo/metadata
+  body: none
+  auth: none
+}
+
+params:query {
+  pageType: product
+  slug: {{productSlug}}
+}
+
+docs {
+  pageType=product. `slug` is required.
+}

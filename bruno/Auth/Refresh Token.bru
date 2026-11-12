@@ -1,0 +1,34 @@
+meta {
+  name: Refresh Token
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/auth/refresh
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{refreshToken}}"
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (res.getStatus() !== 200 || !body) return;
+  if (body.accessToken) {
+    bru.setEnvVar("accessToken", body.accessToken);
+    bru.setVar("accessToken", body.accessToken);
+  }
+  if (body.refreshToken) {
+    bru.setEnvVar("refreshToken", body.refreshToken);
+    bru.setVar("refreshToken", body.refreshToken);
+  }
+}
+
+docs {
+  Rotates the refresh token. `refreshToken` must be at least 20 characters. The script replaces both tokens in the environment.
+}

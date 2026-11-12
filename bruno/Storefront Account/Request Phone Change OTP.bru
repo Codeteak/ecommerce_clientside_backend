@@ -1,0 +1,25 @@
+meta {
+  name: Request Phone Change OTP
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/storefront/phone/change/request-otp
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "newPhone": "{{phone}}"
+  }
+}
+
+docs {
+  Sends a 4-digit OTP to newPhone. Put the new number in `phone` before sending, or edit the body.
+}

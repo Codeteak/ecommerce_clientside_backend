@@ -1,0 +1,25 @@
+meta {
+  name: Upsert Profile
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/storefront/profile
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "displayName": "{{displayName}}"
+  }
+}
+
+docs {
+  displayName is required in the body and may be null. Max 120 characters.
+}

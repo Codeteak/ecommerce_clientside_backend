@@ -1,0 +1,6 @@
+{
+  "version": "1",
+  "name": "Clientside Ecommerce API",
+  "type": "collection",
+  "ignore": ["node_modules", ".git"]
+}

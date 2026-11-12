@@ -1,0 +1,30 @@
+meta {
+  name: List Products
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/storefront/products
+  body: none
+  auth: none
+}
+
+params:query {
+  ~category_id: {{categoryId}}
+  ~search: milk
+  ~limit: 20
+  ~offset: 0
+  ~sort_by: name
+  ~sort_order: asc
+  ~availability: in_stock
+  ~layout: flat
+  ~search_mode: contains
+  ~include_descendants: true
+  ~min_price_minor: 0
+  ~max_price_minor: 100000
+}
+
+docs {
+  Public. Shop comes from x-shop-id. Enable the filters you need. sort_by is price, created_at, or name. availability is in_stock, out_of_stock, or unknown. layout is grouped or flat. Cursor pagination only works with sort_by=created_at. Do not send shop_id and shop_ids together.
+}

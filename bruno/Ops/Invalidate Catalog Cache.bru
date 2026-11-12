@@ -1,0 +1,27 @@
+meta {
+  name: Invalidate Catalog Cache
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/storefront/catalog/cache/invalidate
+  body: json
+  auth: none
+}
+
+headers {
+  X-Catalog-Cache-Invalidate: {{catalogCacheToken}}
+}
+
+body:json {
+  {
+    "shopId": "{{shopId}}",
+    "scope": "catalog",
+    "prewarm": false
+  }
+}
+
+docs {
+  scope is catalog or promotions. prewarm, topCategoryLimit (1 to 20), and productIds (max 50 UUIDs) are optional. Returns 204, or 200 when prewarm is true. Returns 404 when the server token is unset because the route is not mounted.
+}

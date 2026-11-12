@@ -1,0 +1,23 @@
+meta {
+  name: Get Order
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/storefront/orders/:id
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+params:path {
+  id: {{orderId}}
+}
+
+docs {
+  Order id is a UUID. Copy one from List Orders into the orderId environment variable.
+}

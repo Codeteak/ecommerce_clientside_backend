@@ -1,0 +1,19 @@
+meta {
+  name: Shop Metadata
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/seo/metadata
+  body: none
+  auth: none
+}
+
+params:query {
+  pageType: shop
+}
+
+docs {
+  pageType=shop. Needs shop context via x-shop-id.
+}

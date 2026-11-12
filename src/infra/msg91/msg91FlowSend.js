@@ -30,7 +30,7 @@ export function normalizePhoneForMsg91(raw) {
  * @param {string} opts.authKey
  * @param {string} opts.templateId
  * @param {string} opts.mobileRaw — customer phone (any common format)
- * @param {string} opts.otp — 6-digit OTP (maps to Flow vars `otp` and VAR1-style templates)
+ * @param {string} opts.otp — 4-digit OTP (maps to Flow vars `otp` and VAR1-style templates)
  * @param {string} opts.shopDisplayName — shop label (maps to `name` and VAR2-style templates)
  * @param {string} [opts.shortUrl="0"]
  * @param {number} [opts.timeoutMs=15000]

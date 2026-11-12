@@ -81,7 +81,7 @@ describe("phone change OTP", () => {
     });
 
     await expect(
-      run({}, { userId, customerId, shopId, newPhone: "+919999999999", code: "123456" })
+      run({}, { userId, customerId, shopId, newPhone: "+919999999999", code: "1234" })
     ).rejects.toMatchObject({
       code: "CONFLICT",
       message: "Phone number is already in use"

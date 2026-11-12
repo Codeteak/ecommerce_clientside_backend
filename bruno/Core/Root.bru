@@ -1,0 +1,21 @@
+meta {
+  name: Root
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/
+  body: none
+  auth: none
+}
+
+docs {
+  Service index. Lists health, metrics, and docs URLs when API docs are enabled.
+}
+
+tests {
+  test("status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
