@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import pg from "pg";
 import { createCheckoutStorefront } from "../../src/application/services/checkout/checkoutStorefront.js";
 import { CartRepoPg } from "../../src/adapters/repositories/postgres/CartRepoPg.js";

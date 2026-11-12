@@ -74,7 +74,7 @@ export function createExpressApp(ctx) {
         if (res.statusCode >= 400) return "warn";
         return "info";
       },
-      customSuccessMessage(req, res) {
+      customSuccessMessage(req, _res) {
         return isNoisePath(req.url) ? "health.check" : "api.request.completed";
       },
       customReceivedMessage(req) {

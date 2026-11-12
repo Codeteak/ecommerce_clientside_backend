@@ -11,7 +11,6 @@ export class ShopServiceAreaRepo {
    *   hub_lng: number|null
    * }|null>}
    */
-  // eslint-disable-next-line no-unused-vars
   async getShopHubForServiceCheck(_shopId) {
     throw new Error("Not implemented");
   }

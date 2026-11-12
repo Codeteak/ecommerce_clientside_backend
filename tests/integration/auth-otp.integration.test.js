@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import jwt from "jsonwebtoken";
 import pg from "pg";
 import { env } from "../../src/config/env.js";

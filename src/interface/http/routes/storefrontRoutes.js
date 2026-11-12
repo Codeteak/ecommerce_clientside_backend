@@ -2,7 +2,6 @@
 
 import { z } from "zod";
 import { env } from "../../../config/env.js";
-import { validate } from "../middleware/validate.js";
 import { ForbiddenError } from "../../../domain/errors/ForbiddenError.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import {

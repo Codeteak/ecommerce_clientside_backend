@@ -61,7 +61,7 @@ export async function buildCheckoutOrderLines({
   /** @type {string[]} */
   let appliedPromotionIds = [];
   /** @type {Array<Record<string, unknown>>} */
-  let orderItems = [];
+  let orderItems;
   /** @type {Awaited<ReturnType<NonNullable<typeof priceStorefrontLines>>> | null} */
   let pricedResult = null;
 

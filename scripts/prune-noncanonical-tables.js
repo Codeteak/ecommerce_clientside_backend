@@ -18,7 +18,6 @@ const sql = fs.readFileSync(sqlPath, "utf8");
 
 try {
   await pool.query(sql);
-  // eslint-disable-next-line no-console
   console.log("Applied:", path.basename(sqlPath));
 } finally {
   await pool.end();

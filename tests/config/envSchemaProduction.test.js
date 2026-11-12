@@ -7,6 +7,7 @@ const baseProductionEnv = {
   CORS_ORIGIN: "https://example.com",
   API_PUBLIC_URL: "https://api.example.com",
   DATABASE_URL: "postgresql://localhost:5432/postgres",
+  DATABASE_SSL_REJECT_UNAUTHORIZED: true,
   JWT_SECRET: "production_jwt_secret_16",
   JWT_REFRESH_SECRET: "production_refresh_secret_16",
   JWT_ISSUER: "clientside-ecommerce",

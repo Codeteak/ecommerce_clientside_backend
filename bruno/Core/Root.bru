@@ -10,12 +10,16 @@ get {
   auth: none
 }
 
-docs {
-  Service index. Lists health, metrics, and docs URLs when API docs are enabled.
+vars:pre-request {
+  baseUrl: http://localhost:4100
 }
 
 tests {
   test("status is 200", function() {
     expect(res.getStatus()).to.equal(200);
   });
+}
+
+docs {
+  Service index. Lists health, metrics, and docs URLs when API docs are enabled.
 }

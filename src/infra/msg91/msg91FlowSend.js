@@ -82,7 +82,7 @@ export async function sendMsg91FlowOtp({
     });
   } catch (err) {
     const msg = err?.name === "AbortError" ? "MSG91 request timed out" : err?.message || "MSG91 request failed";
-    throw new Error(msg);
+    throw new Error(msg, { cause: err });
   } finally {
     clearTimeout(t);
   }

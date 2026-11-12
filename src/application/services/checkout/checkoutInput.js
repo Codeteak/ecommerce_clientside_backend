@@ -59,6 +59,14 @@ export function normalizeCouponCode(code) {
   return trimmed ? trimmed.toUpperCase() : null;
 }
 
+function hasControlCharacter(value) {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
+
 export function assertValidIdempotencyKey(rawIdem) {
   if (!rawIdem) {
     throw checkoutError(
@@ -72,7 +80,7 @@ export function assertValidIdempotencyKey(rawIdem) {
       "Idempotency-Key header must be between 8 and 128 characters."
     );
   }
-  if (/[\x00-\x1f\x7f]/.test(rawIdem)) {
+  if (hasControlCharacter(rawIdem)) {
     throw checkoutError(
       "INVALID_IDEMPOTENCY_KEY",
       "Idempotency-Key must not contain control characters."
