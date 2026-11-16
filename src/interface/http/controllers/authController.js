@@ -50,25 +50,6 @@ function otpVerifyHandler(ctx) {
   );
 }
 
-function emailOtpDisabledHandler(event) {
-  return withSecurityAudit(event, `${event}.failed`, null, async () => {
-    throw new AppError("Email OTP login is disabled. Use phone OTP.", {
-      statusCode: 410,
-      code: "EMAIL_OTP_DISABLED"
-    });
-  });
-}
-
-function emailOtpRequestHandler(_ctx) {
-  void _ctx;
-  return emailOtpDisabledHandler("otp.email.requested");
-}
-
-function emailOtpVerifyHandler(_ctx) {
-  void _ctx;
-  return emailOtpDisabledHandler("otp.email.verified");
-}
-
 function refreshHandler(ctx) {
   return withSecurityAudit("auth.refresh.succeeded", "auth.refresh.failed", null, (req) =>
     withTx((client) =>
@@ -98,8 +79,6 @@ export const authController = {
   otpRequest: (ctx) => otpRequestHandler(ctx),
   otpVerify: (ctx) => otpVerifyHandler(ctx),
   refresh: (ctx) => refreshHandler(ctx),
-  emailOtpRequest: (ctx) => emailOtpRequestHandler(ctx),
-  emailOtpVerify: (ctx) => emailOtpVerifyHandler(ctx),
   logout: (ctx) => logoutHandler(ctx),
 
   forCtx(ctx) {
@@ -107,8 +86,6 @@ export const authController = {
       otpRequest: otpRequestHandler(ctx),
       otpVerify: otpVerifyHandler(ctx),
       refresh: refreshHandler(ctx),
-      emailOtpRequest: emailOtpRequestHandler(ctx),
-      emailOtpVerify: emailOtpVerifyHandler(ctx),
       logout: logoutHandler(ctx)
     };
   }

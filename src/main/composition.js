@@ -25,8 +25,6 @@ import { provisionCustomerForOAuthShop } from "../application/services/auth/prov
 import { createAssertCustomerShopAccess } from "../application/services/auth/assertCustomerShopAccess.js";
 import { createRequestCustomerOtp } from "../application/services/auth/requestCustomerOtp.js";
 import { createVerifyCustomerOtp } from "../application/services/auth/verifyCustomerOtp.js";
-import { createRequestCustomerEmailOtp } from "../application/services/auth/requestCustomerEmailOtp.js";
-import { createVerifyCustomerEmailOtp } from "../application/services/auth/verifyCustomerEmailOtp.js";
 import { createRotateCustomerRefreshToken } from "../application/services/auth/rotateCustomerRefreshToken.js";
 import { getCustomerProfile } from "../application/services/profile/getCustomerProfile.js";
 import { updateCustomerProfile } from "../application/services/profile/updateCustomerProfile.js";
@@ -57,7 +55,6 @@ import { createCheckoutStorefront } from "../application/services/checkout/check
 import { logger } from "../config/logger.js";
 import { ConsoleSmsSender } from "../adapters/sms/consoleSmsSender.js";
 import { Msg91SmsSender } from "../adapters/sms/msg91SmsSender.js";
-import { SmtpOtpSender } from "../adapters/sms/smtpOtpSender.js";
 import { createSessionCache } from "../utils/sessionCache.js";
 import { createAccessTokenRegistry } from "../infra/auth/accessTokenRegistry.js";
 import { createLogoutCustomer } from "../application/services/auth/logoutCustomer.js";
@@ -261,20 +258,6 @@ export function createAppContext() {
         nodeEnv: env.NODE_ENV,
         logOtpInDev: env.LOG_OTP_IN_DEV
       });
-  const emailOtpSender = env.SMTP_HOST
-    ? new SmtpOtpSender({
-        host: env.SMTP_HOST,
-        port: env.SMTP_PORT,
-        user: env.SMTP_USER,
-        pass: env.SMTP_PASS,
-        fromEmail: env.OTP_FROM_EMAIL,
-        secure: env.SMTP_SECURE
-      })
-    : {
-        async sendOtp() {
-          throw new Error("Email OTP is not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS, and OTP_FROM_EMAIL.");
-        }
-      };
   const requestCustomerOtp = createRequestCustomerOtp({
     authRepo,
     smsSender,
@@ -291,19 +274,6 @@ export function createAppContext() {
     });
 
   const verifyCustomerOtp = createVerifyCustomerOtp({
-    authRepo,
-    buildStorefrontSession,
-    otpMaxAttempts: env.OTP_MAX_ATTEMPTS
-  });
-  const requestCustomerEmailOtp = createRequestCustomerEmailOtp({
-    authRepo,
-    otpSender: emailOtpSender,
-    otpTtlSeconds: env.OTP_TTL_SECONDS,
-    otpResendSeconds: env.OTP_RESEND_SECONDS,
-    otpRequestWindowSeconds: env.OTP_REQUEST_WINDOW_SECONDS,
-    otpMaxRequestsPerWindow: env.OTP_MAX_REQUESTS_PER_WINDOW
-  });
-  const verifyCustomerEmailOtp = createVerifyCustomerEmailOtp({
     authRepo,
     buildStorefrontSession,
     otpMaxAttempts: env.OTP_MAX_ATTEMPTS
@@ -376,8 +346,6 @@ export function createAppContext() {
     verifyCustomerOtp,
     logoutCustomer,
     rotateCustomerRefreshToken,
-    requestCustomerEmailOtp,
-    verifyCustomerEmailOtp,
     requestPhoneChangeOtp,
     verifyPhoneChangeOtp,
     getCustomerProfile: getCustomerProfile({ authRepo }),

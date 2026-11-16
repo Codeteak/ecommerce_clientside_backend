@@ -210,39 +210,6 @@ export class CustomerAuthRepo {
     throw new Error("Not implemented");
   }
 
-  async insertEmailOtpChallenge(_client, _row) {
-    void _client;
-    void _row;
-    throw new Error("Not implemented");
-  }
-
-  async countEmailOtpChallengesSince(_client, _email, _shopId, _sinceIso) {
-    void _client;
-    void _email;
-    void _shopId;
-    void _sinceIso;
-    throw new Error("Not implemented");
-  }
-
-  async findLatestEmailOtpChallenge(_client, _email, _shopId) {
-    void _client;
-    void _email;
-    void _shopId;
-    throw new Error("Not implemented");
-  }
-
-  async incrementEmailOtpChallengeAttempts(_client, _challengeId) {
-    void _client;
-    void _challengeId;
-    throw new Error("Not implemented");
-  }
-
-  async consumeEmailOtpChallenge(_client, _challengeId) {
-    void _client;
-    void _challengeId;
-    throw new Error("Not implemented");
-  }
-
   async insertCustomer(_client, _row) {
     void _client;
     void _row;

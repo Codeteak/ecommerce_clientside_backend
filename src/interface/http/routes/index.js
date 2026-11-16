@@ -19,9 +19,7 @@ import {
   otpRequestBodySchema,
   otpVerifyBodySchema,
   refreshTokenBodySchema,
-  logoutBodySchema,
-  emailOtpRequestBodySchema,
-  emailOtpVerifyBodySchema
+  logoutBodySchema
 } from "../validations/authSchemas.js";
 import {
   patchProfileBodySchema,
@@ -178,9 +176,7 @@ export function createRoutes(ctx) {
     otpRequestBodySchema,
     otpVerifyBodySchema,
     refreshTokenBodySchema,
-    logoutBodySchema,
-    emailOtpRequestBodySchema,
-    emailOtpVerifyBodySchema
+    logoutBodySchema
   });
 
   mountProfileRoutes(r, {

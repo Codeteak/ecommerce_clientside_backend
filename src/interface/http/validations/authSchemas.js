@@ -2,7 +2,6 @@ import { z } from "zod";
 import { customerPhoneSchema } from "./phoneSchema.js";
 
 const phoneSchema = customerPhoneSchema;
-const emailSchema = z.string().trim().toLowerCase().email("Invalid email format");
 
 export const otpRequestBodySchema = z
   .object({
@@ -14,21 +13,6 @@ export const otpRequestBodySchema = z
 export const otpVerifyBodySchema = z
   .object({
     phone: phoneSchema,
-    shopId: z.string().uuid(),
-    code: z.string().regex(/^\d{4}$/, "OTP code must be 4 digits")
-  })
-  .strict();
-
-export const emailOtpRequestBodySchema = z
-  .object({
-    email: emailSchema,
-    shopId: z.string().uuid()
-  })
-  .strict();
-
-export const emailOtpVerifyBodySchema = z
-  .object({
-    email: emailSchema,
     shopId: z.string().uuid(),
     code: z.string().regex(/^\d{4}$/, "OTP code must be 4 digits")
   })
