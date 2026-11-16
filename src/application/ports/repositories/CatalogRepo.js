@@ -95,6 +95,21 @@ export class CatalogRepo {
     throw new Error("Not implemented");
   }
 
+  /**
+   * Same shelf fill as listSellableProductsByCategoryIdsStorefront, one query for every shelf.
+   * Each section keeps its own newest rows, capped per shelf.
+   * @param {string} _shopId
+   * @param {{ sectionId: string, categoryIds: string[] }[]} _sections
+   * @param {number} [_limit]
+   * @returns {Promise<object[]>} rows include section_id
+   */
+  async listSellableProductsBySectionCategoriesStorefront(_shopId, _sections, _limit) {
+    void _shopId;
+    void _sections;
+    void _limit;
+    throw new Error("Not implemented");
+  }
+
   /** Any non-deleted home section row (ignores enabled / date window). */
   async getHomeSectionByIdStorefront(_shopId, _sectionId) {
     void _shopId;

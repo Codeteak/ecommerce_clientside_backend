@@ -4,6 +4,7 @@ import { setTenantContext } from "../../../infra/db/tenantContext.js";
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
 import { storefrontProductsOrderByClause } from "../../../application/services/catalog/catalogSearchOrder.js";
 import { buildListProductsStorefrontQuery } from "./queries/buildListProductsStorefrontQuery.js";
+import { buildListSellableProductsBySectionCategoriesQuery } from "./queries/buildListSellableProductsBySectionCategoriesQuery.js";
 import { categoryImageLateralJoinSql } from "./queries/categoryImageSql.js";
 import {
   shopProductBaseUnitSql,
@@ -776,6 +777,36 @@ ${shopProductLeftJoinGlobal}
           LIMIT $3`,
         [shopId, cats, cap]
       );
+      return rows;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listSellableProductsBySectionCategoriesStorefront(shopId, sections, limit = 50) {
+    const sectionIds = [];
+    const categoryIds = [];
+    for (const section of Array.isArray(sections) ? sections : []) {
+      const sectionId = String(section?.sectionId || "").trim();
+      const cats = Array.isArray(section?.categoryIds) ? section.categoryIds : [];
+      for (const categoryId of cats) {
+        const id = String(categoryId || "").trim();
+        if (!sectionId || !id) continue;
+        sectionIds.push(sectionId);
+        categoryIds.push(id);
+      }
+    }
+    if (sectionIds.length === 0) return [];
+    const cap = Math.min(Math.max(1, Number(limit) || 50), 50);
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(buildListSellableProductsBySectionCategoriesQuery(), [
+        shopId,
+        sectionIds,
+        categoryIds,
+        cap
+      ]);
       return rows;
     } finally {
       client.release();
