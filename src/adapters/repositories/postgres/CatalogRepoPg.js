@@ -454,6 +454,46 @@ ${shopProductLeftJoinGlobal}
     }
   }
 
+  /**
+   * One image lookup per category on the page, using the same picture rules
+   * as the previous per-product join.
+   */
+  async #attachCategoryImages(client, shopId, rows) {
+    for (const row of rows) {
+      row.category_image_media_id = null;
+      row.category_image_storage_key = null;
+      row.category_image_content_type = null;
+    }
+    const ids = [
+      ...new Set(
+        rows
+          .map((row) => (row.category_id != null ? String(row.category_id) : ""))
+          .filter(Boolean)
+      )
+    ];
+    if (ids.length === 0) return;
+
+    const { rows: images } = await client.query(
+      `SELECT c.id,
+              ma.id AS image_media_id,
+              ma.storage_key AS image_storage_key,
+              ma.content_type AS image_content_type
+         FROM global_categories c
+         ${categoryImageLateralJoinSql()}
+        WHERE c.id = ANY($2::uuid[])`,
+      [shopId, ids]
+    );
+    const byId = new Map(images.map((image) => [String(image.id), image]));
+    for (const row of rows) {
+      if (row.category_id == null) continue;
+      const image = byId.get(String(row.category_id));
+      if (!image) continue;
+      row.category_image_media_id = image.image_media_id ?? null;
+      row.category_image_storage_key = image.image_storage_key ?? null;
+      row.category_image_content_type = image.image_content_type ?? null;
+    }
+  }
+
   async listProductsStorefront(shopId, params) {
     const {
       categoryId,
@@ -491,6 +531,7 @@ ${shopProductLeftJoinGlobal}
         includeDescendants: includeDescendants === true
       });
       const { rows } = await client.query(query);
+      await this.#attachCategoryImages(client, shopId, rows);
       return rows;
     } finally {
       client.release();

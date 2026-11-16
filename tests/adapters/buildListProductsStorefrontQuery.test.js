@@ -22,6 +22,8 @@ describe("buildListProductsStorefrontQuery", () => {
     expect(out.text).toContain("AND (sp.created_at, sp.id) < ($9::timestamptz, $10::uuid)");
     expect(out.text).toContain("FROM shop_products sp");
     expect(out.text).toContain("LEFT JOIN global_products gp");
+    expect(out.text).not.toContain("category_descendants");
+    expect(out.text).not.toContain("global_category_images");
     expect(out.text).toContain(
       "CASE WHEN sp.offer_price_minor_per_unit IS NOT NULL AND sp.offer_price_minor_per_unit > 0 AND sp.offer_price_minor_per_unit < sp.price_minor_per_unit"
     );
@@ -48,6 +50,9 @@ describe("buildListProductsStorefrontQuery", () => {
       orderBySql: "sp.created_at DESC, sp.id DESC"
     });
     expect(out.text).toContain("sp2.availability = 'in_stock'");
+    expect(out.text).toContain("category_descendants");
+    expect(out.text).toContain("IN (SELECT id FROM effective_categories)");
+    expect(out.text).not.toContain("global_category_images");
     expect(out.text).toContain("AND ($5::text IS NULL OR sp.availability = $5)");
   });
 
