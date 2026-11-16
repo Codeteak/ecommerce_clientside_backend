@@ -102,11 +102,6 @@ export function mountStorefrontRoutes(r, deps) {
       validate({ params: storefrontProductSlugParamSchema }),
       storefrontCat.getProductBySlug
     );
-    r.get(
-      `${prefix}/products/id/:id`,
-      validate({ params: storefrontProductIdParamSchema }),
-      storefrontCat.getProductById
-    );
     r.get(`${prefix}/home-sections`, storefrontCat.listHomeSections);
     r.get(
       `${prefix}/home-sections/:id`,

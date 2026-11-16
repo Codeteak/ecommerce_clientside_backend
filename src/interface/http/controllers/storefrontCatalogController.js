@@ -86,22 +86,6 @@ function getProductBySlugHandler(ctx) {
   });
 }
 
-function getProductByIdHandler(ctx) {
-  return asyncHandler(async (req, res) => {
-    if (!req.shopId) {
-      throw new NotFoundError("Product not found");
-    }
-    const shopId = shopIdForStorefront(req);
-    const { id } = req.params;
-    const product = await ctx.storefrontCatalog.getProductById(shopId, id);
-    if (!product) {
-      throw new NotFoundError("Product not found");
-    }
-    setCatalogHttpCache(ctx, res);
-    res.json(product);
-  });
-}
-
 function getCategoryBySlugHandler(ctx) {
   return asyncHandler(async (req, res) => {
     const shopId = shopIdForStorefront(req);
@@ -142,7 +126,6 @@ export const storefrontCatalogController = {
   listCategories: (ctx) => listCategoriesHandler(ctx),
   listProducts: (ctx) => listProductsHandler(ctx),
   getProductBySlug: (ctx) => getProductBySlugHandler(ctx),
-  getProductById: (ctx) => getProductByIdHandler(ctx),
   getCategoryBySlug: (ctx) => getCategoryBySlugHandler(ctx),
   listHomeSections: (ctx) => listHomeSectionsHandler(ctx),
   getHomeSectionById: (ctx) => getHomeSectionByIdHandler(ctx),
@@ -152,7 +135,6 @@ export const storefrontCatalogController = {
       listCategories: listCategoriesHandler(ctx),
       listProducts: listProductsHandler(ctx),
       getProductBySlug: getProductBySlugHandler(ctx),
-      getProductById: getProductByIdHandler(ctx),
       getCategoryBySlug: getCategoryBySlugHandler(ctx),
       listHomeSections: listHomeSectionsHandler(ctx),
       getHomeSectionById: getHomeSectionByIdHandler(ctx)

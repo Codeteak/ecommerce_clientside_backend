@@ -380,16 +380,6 @@
           "response": []
         },
         {
-          "name": "GET /storefront/products/id/:id",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
-            "url": "{{baseUrl}}/storefront/products/id/00000000-0000-0000-0000-000000000000",
-            "description": "Product by shop_products.id. Active + in_stock only."
-          },
-          "response": []
-        },
-        {
           "name": "POST /storefront/cart",
           "request": {
             "method": "POST",

@@ -403,21 +403,6 @@ export function createStorefrontCatalog({
       return enrichProductDetailCached(shopId, data.product.id, data);
     },
 
-    async getProductById(shopIdRaw, id) {
-      const shopId = requireShopId(shopIdRaw);
-      await ensureShopForCatalog(shopId);
-      const key = `product:id:${String(id).toLowerCase()}`;
-      const data = await cachedSWR(
-        shopId,
-        key,
-        "products:detail:id",
-        async () => catalogRepo.getProductByIdStorefront(shopId, id),
-        swrTtlSec
-      );
-      if (!data) return null;
-      return enrichProductDetailCached(shopId, id, data);
-    },
-
     async getCategoryBySlug(shopIdRaw, slug) {
       const shopId = requireShopId(shopIdRaw);
       await ensureShopForCatalog(shopId);

@@ -644,63 +644,6 @@ ${shopProductLeftJoinGlobal}
     }
   }
 
-  async getProductByIdStorefront(shopId, id) {
-    const client = await pool.connect();
-    try {
-      await setTenantContext(client, shopId);
-      const { rows: prodRows } = await client.query(
-        `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id,
-                ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit, ${shopProductUnitSizeSql}::text AS unit_size, ${shopProductStockQuantitySql} AS stock_quantity,
-                ${shopProductSoldByWeightSql} AS sold_by_weight,
-                ${shopProductDescriptionSql} AS description, ${shopProductSeoTitleSql} AS seo_title, ${shopProductSeoDescriptionSql} AS seo_description,
-                sp.status, sp.availability,
-                sp.price_minor_per_unit::text AS price_minor_per_unit,
-                sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
-                sp.created_at, sp.updated_at, sp.global_product_id, ${shopProductImageUrlSql} AS global_image_url
-           FROM shop_products sp
-${shopProductLeftJoinGlobal}
-          WHERE sp.shop_id = $1::uuid
-            AND sp.id = $2::uuid
-            AND sp.status = 'active'
-            AND sp.availability = 'in_stock'
-          LIMIT 1`,
-        [shopId, id]
-      );
-      const product = prodRows[0];
-      if (!product) return null;
-
-      const { rows: galRows } = await client.query(
-        `SELECT spi.media_asset_id, spi.sort_order,
-                m.storage_key, m.content_type
-           FROM shop_product_images spi
-           JOIN media_assets m ON m.id = spi.media_asset_id
-          WHERE spi.shop_product_id = $1::uuid
-          ORDER BY spi.sort_order ASC
-          LIMIT 6`,
-        [product.id]
-      );
-
-      let gallery = galRows;
-      if (gallery.length === 0) {
-        const { rows: fallbackRows } = await client.query(
-          `SELECT gpi.media_asset_id, gpi.sort_order,
-                  m.storage_key, m.content_type
-             FROM global_product_images gpi
-             JOIN media_assets m ON m.id = gpi.media_asset_id
-            WHERE gpi.global_product_id = $1::uuid
-            ORDER BY gpi.sort_order ASC
-            LIMIT 6`,
-          [product.global_product_id]
-        );
-        gallery = fallbackRows;
-      }
-
-      return { product, gallery };
-    } finally {
-      client.release();
-    }
-  }
-
   async listEnabledHomeSectionsStorefront(shopId) {
     const client = await pool.connect();
     try {
