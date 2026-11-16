@@ -405,7 +405,7 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     }
 
     if (!addressPatch || Object.keys(addressPatch).length === 0) {
-      return;
+      return { created: false };
     }
 
     let addrId = c.address_id;
@@ -472,16 +472,18 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
         `UPDATE customers SET address_id = $1, updated_at = now() WHERE id = $2`,
         [addrId, customerId]
       );
-    } else {
-      await client.query(
-        `UPDATE addresses
-            SET raw = $1,
-                lat = $2,
-                lng = $3
-          WHERE id = $4`,
-        [raw, merged.lat, merged.lng, addrId]
-      );
+      return { created: true };
     }
+
+    await client.query(
+      `UPDATE addresses
+          SET raw = $1,
+              lat = $2,
+              lng = $3
+        WHERE id = $4`,
+      [raw, merged.lat, merged.lng, addrId]
+    );
+    return { created: false };
   }
 
   /**

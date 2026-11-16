@@ -65,7 +65,7 @@ function resolveStackFlag(campaignValue, shopDefault) {
  *   shopPromotionCache?: ReturnType<import("../../../infra/cache/shopPromotionCache.js").createShopPromotionCache>,
  *   authRepo?: import("../../ports/repositories/CustomerAuthRepo.js").CustomerAuthRepo,
  *   orderRepo?: import("../../ports/repositories/OrderRepo.js").OrderRepo,
- *   catalogRepo?: import("../../ports/repositories/CatalogRepo.js").CatalogRepo
+ *   catalogRepo: import("../../ports/repositories/CatalogRepo.js").CatalogRepo
  * }} deps
  */
 export function createPriceStorefrontLines({
@@ -75,6 +75,14 @@ export function createPriceStorefrontLines({
   orderRepo,
   catalogRepo
 }) {
+  if (
+    typeof catalogRepo?.listCategoryParents !== "function" ||
+    typeof catalogRepo?.listRewardProductsForPricing !== "function"
+  ) {
+    throw new Error(
+      "catalogRepo with listCategoryParents and listRewardProductsForPricing is required"
+    );
+  }
   const promoReads = shopPromotionCache ?? promotionRepo;
   /**
    * @param {import("pg").PoolClient} client
@@ -235,10 +243,7 @@ export function createPriceStorefrontLines({
       const injectIds = [...new Set(injections.map((i) => i.productId))];
       /** @type {Map<string, { listMinor: number, offerMinor: number | null, categoryId: string | null, name: string | null, imageUrl: string | null, baseUnit: string | null }>} */
       const injectPricing = new Map();
-      const rows =
-        catalogRepo && typeof catalogRepo.listRewardProductsForPricing === "function"
-          ? await catalogRepo.listRewardProductsForPricing(client, shopId, injectIds)
-          : [];
+      const rows = await catalogRepo.listRewardProductsForPricing(client, shopId, injectIds);
       for (const row of rows) {
         const imageRaw =
           typeof row.image_url === "string" && row.image_url.trim() ? row.image_url.trim() : null;
@@ -281,13 +286,10 @@ export function createPriceStorefrontLines({
       }
     }
 
-    const categoryParentById =
-      catalogRepo && typeof catalogRepo.listCategoryParents === "function"
-        ? await catalogRepo.listCategoryParents(
-            client,
-            pricedLines.map((l) => l.categoryId)
-          )
-        : new Map();
+    const categoryParentById = await catalogRepo.listCategoryParents(
+      client,
+      pricedLines.map((l) => l.categoryId)
+    );
 
     const { bundleDiscountMinor, appliedByPromotion } = evaluateBundleDiscounts(pricedLines, bundleRulesRaw, {
       allowCombineAutoCampaigns,

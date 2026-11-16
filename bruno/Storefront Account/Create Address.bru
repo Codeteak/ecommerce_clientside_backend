@@ -27,4 +27,5 @@ body:json {
 
 docs {
   line1 is required, 1 to 200 characters. Do not send state, postalCode, country, or zipCode. Those keys are rejected.
+  The first save creates the address and returns 201 with a Location header. A later save updates that same address and returns 204.
 }

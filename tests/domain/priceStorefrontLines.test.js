@@ -7,6 +7,16 @@ const fakeClient = /** @type {any} */ ({});
 const shopId = "00000000-0000-4000-8000-000000000001";
 const productId = "11111111-1111-4111-8111-111111111111";
 
+function createPrice(deps) {
+  return createPriceStorefrontLines({
+    catalogRepo: {
+      listCategoryParents: vi.fn(async () => new Map()),
+      listRewardProductsForPricing: vi.fn(async () => [])
+    },
+    ...deps
+  });
+}
+
 function basePromotionRepo(overrides = {}) {
   return {
     getShopPromotionSettings: vi.fn().mockResolvedValue({
@@ -29,7 +39,7 @@ function basePromotionRepo(overrides = {}) {
 
 describe("createPriceStorefrontLines", () => {
   it("prices lines with catalog offer baseline", async () => {
-    const price = createPriceStorefrontLines({ promotionRepo: basePromotionRepo() });
+    const price = createPrice({ promotionRepo: basePromotionRepo() });
     const out = await price(fakeClient, {
       shopId,
       lines: [{ productId, quantity: 2, listMinor: 1000, offerMinor: 800 }]
@@ -39,7 +49,7 @@ describe("createPriceStorefrontLines", () => {
   });
 
   it("bills a packed line once per pack and ignores unit size", async () => {
-    const price = createPriceStorefrontLines({ promotionRepo: basePromotionRepo() });
+    const price = createPrice({ promotionRepo: basePromotionRepo() });
     const onePack = await price(fakeClient, {
       shopId,
       lines: [{ productId, quantity: 1, listMinor: 10000, offerMinor: null, unitSize: 0.25 }]
@@ -71,7 +81,7 @@ describe("createPriceStorefrontLines", () => {
   });
 
   it("bills 255 g at the same per-kg price", async () => {
-    const price = createPriceStorefrontLines({ promotionRepo: basePromotionRepo() });
+    const price = createPrice({ promotionRepo: basePromotionRepo() });
     const out = await price(fakeClient, {
       shopId,
       lines: [{ productId, quantity: 0.255, listMinor: 10000, offerMinor: null, unitSize: 1, soldByWeight: true }]
@@ -81,7 +91,7 @@ describe("createPriceStorefrontLines", () => {
   });
 
   it("ignores SKU promo overlays while coupons-only is on", async () => {
-    const price = createPriceStorefrontLines({
+    const price = createPrice({
       promotionRepo: basePromotionRepo({
         listActivePromotionProductOverlaysForShopProducts: vi.fn().mockResolvedValue([
           {
@@ -105,14 +115,14 @@ describe("createPriceStorefrontLines", () => {
   });
 
   it("rejects empty cart with coupon code", async () => {
-    const price = createPriceStorefrontLines({ promotionRepo: basePromotionRepo() });
+    const price = createPrice({ promotionRepo: basePromotionRepo() });
     await expect(
       price(fakeClient, { shopId, lines: [], couponCode: "SAVE10" })
     ).rejects.toMatchObject({ code: "EMPTY_CART_WITH_COUPON" });
   });
 
   it("applies coupon percent off on priced subtotal", async () => {
-    const price = createPriceStorefrontLines({
+    const price = createPrice({
       promotionRepo: basePromotionRepo({
         findCouponByCodeForShop: vi.fn().mockResolvedValue({
           id: "coupon-1",
@@ -148,7 +158,7 @@ describe("createPriceStorefrontLines", () => {
   });
 
   it("does not add a free unit for buy 2 get 1 while coupons-only is on", async () => {
-    const price = createPriceStorefrontLines({
+    const price = createPrice({
       promotionRepo: basePromotionRepo({
         listActiveBundleRulesForShop: vi.fn().mockResolvedValue([
           {
@@ -174,7 +184,7 @@ describe("createPriceStorefrontLines", () => {
   });
 
   it("does not block a coupon because of a paused Buy X Get Y rule", async () => {
-    const price = createPriceStorefrontLines({
+    const price = createPrice({
       promotionRepo: basePromotionRepo({
         listActiveBundleRulesForShop: vi.fn().mockResolvedValue([
           {
@@ -209,7 +219,7 @@ describe("createPriceStorefrontLines", () => {
   });
 
   it("invalidCouponBehavior omit returns base pricing and couponRejected without second pricing pass", async () => {
-    const price = createPriceStorefrontLines({ promotionRepo: basePromotionRepo() });
+    const price = createPrice({ promotionRepo: basePromotionRepo() });
     const out = await price(fakeClient, {
       shopId,
       customerId: "cust-1",
@@ -224,7 +234,7 @@ describe("createPriceStorefrontLines", () => {
   });
 
   it("default throw on invalid coupon when omit not set", async () => {
-    const price = createPriceStorefrontLines({ promotionRepo: basePromotionRepo() });
+    const price = createPrice({ promotionRepo: basePromotionRepo() });
     await expect(
       price(fakeClient, {
         shopId,
@@ -244,7 +254,7 @@ describe("createPriceStorefrontLines", () => {
         priority: 1
       }
     ]);
-    const price = createPriceStorefrontLines({
+    const price = createPrice({
       promotionRepo: basePromotionRepo({
         listActivePromotionProductOverlaysForShopProducts: listOverlays,
         listActiveAutoCartRulesForShop: vi.fn().mockResolvedValue([
@@ -270,7 +280,7 @@ describe("createPriceStorefrontLines", () => {
   });
 
   it("keeps cart auto rules when the line only has a catalog offer (not SKU promo)", async () => {
-    const price = createPriceStorefrontLines({
+    const price = createPrice({
       promotionRepo: basePromotionRepo({
         listActiveAutoCartRulesForShop: vi.fn().mockResolvedValue([
           {
@@ -336,7 +346,7 @@ describe("createPriceStorefrontLines", () => {
       }
       return null;
     });
-    const price = createPriceStorefrontLines({
+    const price = createPrice({
       promotionRepo: basePromotionRepo({
         getShopPromotionSettings: vi.fn().mockResolvedValue({
           promotions_paused: false,
@@ -385,7 +395,7 @@ describe("createPriceStorefrontLines", () => {
       has_coupon_rules: true,
       promotion_rules: [{ rule_kind: "cart_fixed_off", amount_minor: 10 }]
     }));
-    const price = createPriceStorefrontLines({
+    const price = createPrice({
       promotionRepo: basePromotionRepo({
         getShopPromotionSettings: vi.fn().mockResolvedValue({
           promotions_paused: false,
@@ -432,7 +442,7 @@ describe("createPriceStorefrontLines", () => {
         promotion_rules: [{ rule_kind: "cart_fixed_off", amount_minor: 25 }]
       };
     });
-    const price = createPriceStorefrontLines({
+    const price = createPrice({
       promotionRepo: basePromotionRepo({
         getShopPromotionSettings: vi.fn().mockResolvedValue({
           promotions_paused: false,
@@ -465,7 +475,7 @@ describe("createPriceStorefrontLines", () => {
     const client = {
       query: vi.fn().mockResolvedValue({ rows: [] })
     };
-    const price = createPriceStorefrontLines({
+    const price = createPrice({
       promotionRepo: basePromotionRepo({
         listActiveBundleRulesForShop: vi.fn().mockResolvedValue([
           {
@@ -510,7 +520,7 @@ describe("createPriceStorefrontLines", () => {
         ]
       })
     };
-    const price = createPriceStorefrontLines({
+    const price = createPrice({
       promotionRepo: basePromotionRepo({
         listActiveBundleRulesForShop: vi.fn().mockResolvedValue([
           {
@@ -534,5 +544,29 @@ describe("createPriceStorefrontLines", () => {
     const freeLine = out.lines.find((l) => String(l.productId) === rewardId);
     expect(freeLine).toBeUndefined();
     expect(out.lines).toHaveLength(1);
+  });
+
+  it("asks the catalog repository for category parents", async () => {
+    const listCategoryParents = vi.fn(async () => new Map([["cat-1", "parent-1"]]));
+    const price = createPrice({
+      promotionRepo: basePromotionRepo(),
+      catalogRepo: {
+        listCategoryParents,
+        listRewardProductsForPricing: vi.fn(async () => [])
+      }
+    });
+
+    await price(fakeClient, {
+      shopId,
+      lines: [{ productId, quantity: 1, listMinor: 1000, offerMinor: null, categoryId: "cat-1" }]
+    });
+
+    expect(listCategoryParents).toHaveBeenCalledWith(fakeClient, ["cat-1"]);
+  });
+
+  it("refuses to price lines without a catalog repository", () => {
+    expect(() => createPriceStorefrontLines({ promotionRepo: basePromotionRepo() })).toThrow(
+      /catalogRepo/
+    );
   });
 });

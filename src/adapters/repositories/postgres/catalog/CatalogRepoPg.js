@@ -945,6 +945,9 @@ ${shopProductLeftJoinGlobal}
   async listRewardProductsForPricing(client, shopId, productIds) {
     const ids = [...new Set(productIds.map((id) => (id != null ? String(id).trim() : "")).filter(Boolean))];
     if (!ids.length) return [];
+    // A failed SELECT aborts the checkout transaction. Roll back to this
+    // savepoint so pricing can skip the free line and keep the order.
+    await client.query("SAVEPOINT sp_reward_products_for_pricing");
     try {
       const { rows } = await client.query(
         `SELECT sp.id,
@@ -963,8 +966,11 @@ ${shopProductLeftJoinGlobal}
             AND ${sellableAtPurchasePredicates}`,
         [shopId, ids]
       );
+      await client.query("RELEASE SAVEPOINT sp_reward_products_for_pricing");
       return rows;
     } catch {
+      await client.query("ROLLBACK TO SAVEPOINT sp_reward_products_for_pricing");
+      await client.query("RELEASE SAVEPOINT sp_reward_products_for_pricing");
       return [];
     }
   }

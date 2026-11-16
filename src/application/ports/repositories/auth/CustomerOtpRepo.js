@@ -3,12 +3,6 @@
  * CustomerAuthRepoPg implements this together with the other auth ports.
  */
 export class CustomerOtpRepo {
-  async getShopById(_client, _shopId) {
-    void _client;
-    void _shopId;
-    throw new Error("Not implemented");
-  }
-
   async insertOtpChallenge(_client, _row) {
     void _client;
     void _row;

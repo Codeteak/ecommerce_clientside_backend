@@ -14,6 +14,7 @@ import {
  * @param {{
  *   authRepo: import("../../ports/repositories/auth/CustomerProfileRepo.js").CustomerProfileRepo
  *     & import("../../ports/repositories/auth/CustomerOtpRepo.js").CustomerOtpRepo
+ *     & { getShopById(client: unknown, shopId: string): Promise<unknown> }
  * }} deps
  */
 export function createRequestPhoneChangeOtp({

@@ -10,7 +10,11 @@ import {
 } from "../../../domain/phone/normalizeCustomerPhone.js";
 
 /**
- * @param {{ authRepo: import("../../ports/repositories/auth/CustomerOtpRepo.js").CustomerOtpRepo }} deps
+ * @param {{
+ *   authRepo: import("../../ports/repositories/auth/CustomerOtpRepo.js").CustomerOtpRepo & {
+ *     getShopById(client: unknown, shopId: string): Promise<unknown>
+ *   }
+ * }} deps
  */
 export function createRequestCustomerOtp({
   authRepo,

@@ -293,4 +293,44 @@ describe("buildCheckoutOrderLines cross BXGY inject names", () => {
     expect(reward.unitLabel).toBe("pcs");
     expect(client.query).not.toHaveBeenCalled();
   });
+
+  it("names a free line from the product id when pricing stored no title", async () => {
+    const priceStorefrontLines = async () => ({
+      subtotalMinor: 100,
+      promotionDiscountTotalMinor: 0,
+      couponDiscountMinor: 0,
+      couponCodeNormalized: null,
+      couponCodesNormalized: [],
+      appliedPromotionIds: [],
+      lines: [
+        {
+          cartItemId: "inject:abcdef12-3456-4678-89ab-cdef01234567",
+          productId: "abcdef12-3456-4678-89ab-cdef01234567",
+          quantity: 1,
+          paid_quantity: 0,
+          free_quantity: 1,
+          display_quantity: 1,
+          final_price_minor: 0,
+          line_total_minor: 0,
+          list_price_minor: 50,
+          total_price_minor: 50,
+          applied_promotion_ids: []
+        }
+      ]
+    });
+
+    const { orderItems } = await buildCheckoutOrderLines({
+      cartRepo: { listLiveProductPricingByIds: async () => [] },
+      client: { query: vi.fn() },
+      shopId: "shop",
+      custKey: "cust",
+      items: [],
+      couponCode: null,
+      priceStorefrontLines
+    });
+
+    const reward = orderItems.find((it) => String(it.productId).startsWith("abcdef12"));
+    expect(reward.name).toBe("Product abcdef12");
+    expect(reward.unitLabel).toBe(null);
+  });
 });

@@ -228,7 +228,7 @@
               "raw": "{\n  \"displayName\": \"Updated Name\",\n  \"address\": {\n    \"line1\": \"10 Example Street\",\n    \"city\": \"London\",\n    \"postalCode\": \"SW1A 1AA\",\n    \"country\": \"GB\"\n  }\n}"
             },
             "url": "{{baseUrl}}/api/me/profile",
-            "description": "Partial update. Do not send **`address: {}`** (validation error). Address fields use API camelCase (`postalCode`, …)."
+            "description": "Partial update of display name, phone, or address. `email` is rejected. Do not send **`address: {}`** (validation error)."
           },
           "response": []
         }

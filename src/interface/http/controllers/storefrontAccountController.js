@@ -41,13 +41,18 @@ function postAddressHandler(ctx) {
     const shopId = requireShopId(req.shopId);
     const { userId, customerId } = req.customerAuth;
     await withClient((c) => ctx.assertCustomerShopAccess(c, shopId, customerId));
-    await withTx((c) =>
+    const { created } = await withTx((c) =>
       ctx.storefrontAddress.patchAddress(c, {
         customerId,
         userId,
         addressPatch: req.body
       })
     );
+    if (created) {
+      res.set("Location", req.originalUrl.split("?")[0]);
+      res.status(201).send();
+      return;
+    }
     res.status(204).send();
   });
 }

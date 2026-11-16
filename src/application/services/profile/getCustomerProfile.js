@@ -19,7 +19,6 @@ export function getCustomerProfile({ authRepo }) {
       user: {
         id: row.user_id,
         name: row.display_name ?? null,
-        email: row.email ?? null,
         phone: row.phone ?? null
       },
       customer: {

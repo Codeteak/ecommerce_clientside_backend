@@ -104,11 +104,12 @@ describe("CustomerAuthRepoPg.patchCustomerProfile address merge", () => {
       }
     ]);
 
-    await repo.patchCustomerProfile(client, {
+    const result = await repo.patchCustomerProfile(client, {
       customerId: "c1",
       userId: "u1",
       addressPatch: { landmark: "Near metro" }
     });
+    expect(result).toEqual({ created: false });
 
     expect(updates).toHaveLength(1);
     const [raw, lat, lng, id] = updates[0];
@@ -145,7 +146,7 @@ describe("CustomerAuthRepoPg.patchCustomerProfile address merge", () => {
       }
     ]);
 
-    await repo.patchCustomerProfile(client, {
+    const result = await repo.patchCustomerProfile(client, {
       customerId: "c1",
       userId: "u1",
       addressPatch: {
@@ -156,6 +157,7 @@ describe("CustomerAuthRepoPg.patchCustomerProfile address merge", () => {
         lng: 73.8
       }
     });
+    expect(result).toEqual({ created: true });
 
     expect(inserts).toHaveLength(1);
     expect(JSON.parse(inserts[0][0])).toEqual({

@@ -10,12 +10,13 @@ import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normaliz
  */
 export function createUpdateStorefrontProfile({ authRepo }) {
   return async function updateStorefrontProfile(client, { userId, customerId, displayName, phone }) {
-    const c = await authRepo.getCustomerProfileByCustomerId(client, customerId);
-    if (!c || c.user_id !== userId) {
-      throw new NotFoundError("Profile not found");
-    }
     if (displayName !== undefined) {
       await authRepo.patchCustomerProfile(client, { customerId, userId, displayName });
+    } else if (phone !== undefined) {
+      const c = await authRepo.getCustomerProfileByCustomerId(client, customerId);
+      if (!c || c.user_id !== userId) {
+        throw new NotFoundError("Profile not found");
+      }
     }
     if (phone !== undefined) {
       const storedPhone = phone == null ? null : normalizeCustomerPhoneForStorage(phone);

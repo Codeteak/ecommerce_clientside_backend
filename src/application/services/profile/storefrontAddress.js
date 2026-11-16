@@ -10,7 +10,8 @@ export function createStorefrontAddress({ authRepo }) {
     },
 
     async patchAddress(client, { customerId, userId, addressPatch }) {
-      await authRepo.patchCustomerProfile(client, { customerId, userId, addressPatch });
+      const result = await authRepo.patchCustomerProfile(client, { customerId, userId, addressPatch });
+      return { created: result?.created === true };
     },
 
     async clearAddress(client, { customerId, userId }) {
