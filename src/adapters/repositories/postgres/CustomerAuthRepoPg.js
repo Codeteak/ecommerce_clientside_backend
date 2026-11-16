@@ -1,4 +1,5 @@
 import { CustomerAuthRepo } from "../../../application/ports/repositories/CustomerAuthRepo.js";
+import { AuthError } from "../../../domain/errors/AuthError.js";
 import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 import { pool } from "../../../infra/db/pool.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
@@ -376,17 +377,24 @@ export class CustomerAuthRepoPg extends CustomerAuthRepo {
     };
   }
 
-  async patchCustomerProfile(client, { customerId, userId, displayName, addressPatch }) {
+  async patchCustomerProfile(client, { customerId, userId, displayName, addressPatch, rejectInactive = false }) {
     const custRes = await client.query(
-      `SELECT id, address_id, display_name, status
-         FROM customers
-        WHERE id = $1 AND user_id = $2
-        FOR UPDATE`,
+      `SELECT c.id, c.address_id, c.display_name, c.status
+         FROM customers c
+         JOIN users u ON u.id = c.user_id
+        WHERE c.id = $1 AND c.user_id = $2
+        FOR UPDATE OF c`,
       [customerId, userId]
     );
     const c = custRes.rows[0];
     if (!c) {
       throw new NotFoundError("Profile not found");
+    }
+    if (rejectInactive) {
+      const flagged = withCustomerFlags(c);
+      if (flagged.is_blocked || flagged.is_deleted) {
+        throw new AuthError("Invalid credentials");
+      }
     }
 
     if (displayName !== undefined) {

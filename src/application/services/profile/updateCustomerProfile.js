@@ -11,14 +11,6 @@ export function updateCustomerProfile({ authRepo }) {
   const getProfile = getCustomerProfile({ authRepo });
 
   return async function execute(client, { customerId, userId, patch }) {
-    const existing = await authRepo.getCustomerProfileByCustomerId(client, customerId);
-    if (!existing || existing.user_id !== userId) {
-      throw new NotFoundError("Profile not found");
-    }
-    if (existing.is_blocked || existing.is_deleted) {
-      throw new AuthError("Invalid credentials");
-    }
-
     const addressPatch =
       patch.address !== undefined && patch.address != null && Object.keys(patch.address).length > 0
         ? patch.address
@@ -31,12 +23,23 @@ export function updateCustomerProfile({ authRepo }) {
     const hasEmail = patch.email !== undefined;
 
     if (hasDisplay || hasAddress) {
+      // The locked customer row is the existence and blocked check. The profile
+      // is read once after the write so the response matches what was saved.
       await authRepo.patchCustomerProfile(client, {
         customerId,
         userId,
         displayName,
-        addressPatch
+        addressPatch,
+        rejectInactive: true
       });
+    } else {
+      const existing = await authRepo.getCustomerProfileByCustomerId(client, customerId);
+      if (!existing || existing.user_id !== userId) {
+        throw new NotFoundError("Profile not found");
+      }
+      if (existing.is_blocked || existing.is_deleted) {
+        throw new AuthError("Invalid credentials");
+      }
     }
     if (hasPhone) {
       const storedPhone =
