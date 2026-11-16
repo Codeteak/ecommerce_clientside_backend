@@ -5,7 +5,8 @@ import { getCustomerProfile } from "./getCustomerProfile.js";
 import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normalizeCustomerPhone.js";
 
 /**
- * Purpose: Partially update display name and/or nested address fields; returns the same shape as GET.
+ * Purpose: Partially update display name, phone, and/or nested address fields; returns the same shape as GET.
+ * @param {{ authRepo: import("../../ports/repositories/auth/CustomerProfileRepo.js").CustomerProfileRepo }} deps
  */
 export function updateCustomerProfile({ authRepo }) {
   const getProfile = getCustomerProfile({ authRepo });
@@ -20,7 +21,6 @@ export function updateCustomerProfile({ authRepo }) {
     const hasDisplay = displayName !== undefined;
     const hasAddress = addressPatch !== undefined;
     const hasPhone = patch.phone !== undefined;
-    const hasEmail = patch.email !== undefined;
 
     if (hasDisplay || hasAddress) {
       // The locked customer row is the existence and blocked check. The profile
@@ -49,16 +49,6 @@ export function updateCustomerProfile({ authRepo }) {
       } catch (err) {
         if (err?.code === "23505" && err?.constraint === "users_phone_key") {
           throw new ConflictError("Phone number is already in use");
-        }
-        throw err;
-      }
-    }
-    if (hasEmail) {
-      try {
-        await authRepo.updateUserEmail(client, userId, patch.email ?? null);
-      } catch (err) {
-        if (err?.code === "23505" && err?.constraint === "users_email_key") {
-          throw new ConflictError("Email is already in use");
         }
         throw err;
       }

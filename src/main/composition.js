@@ -1,11 +1,11 @@
 // Purpose: This file builds the app context by creating and wiring repos, services, and middleware..
-import { CatalogRepoPg } from "../adapters/repositories/postgres/CatalogRepoPg.js";
-import { CartRepoPg } from "../adapters/repositories/postgres/CartRepoPg.js";
-import { CustomerAuthRepoPg } from "../adapters/repositories/postgres/CustomerAuthRepoPg.js";
-import { OrderRepoPg } from "../adapters/repositories/postgres/OrderRepoPg.js";
-import { ShopLookupRepoPg } from "../adapters/repositories/postgres/ShopLookupRepoPg.js";
-import { ShopServiceAreaRepoPg } from "../adapters/repositories/postgres/ShopServiceAreaRepoPg.js";
-import { PromotionRepoPg } from "../adapters/repositories/postgres/PromotionRepoPg.js";
+import { CatalogRepoPg } from "../adapters/repositories/postgres/catalog/CatalogRepoPg.js";
+import { CartRepoPg } from "../adapters/repositories/postgres/cart/CartRepoPg.js";
+import { CustomerAuthRepoPg } from "../adapters/repositories/postgres/auth/CustomerAuthRepoPg.js";
+import { OrderRepoPg } from "../adapters/repositories/postgres/orders/OrderRepoPg.js";
+import { ShopLookupRepoPg } from "../adapters/repositories/postgres/shops/ShopLookupRepoPg.js";
+import { ShopServiceAreaRepoPg } from "../adapters/repositories/postgres/shops/ShopServiceAreaRepoPg.js";
+import { PromotionRepoPg } from "../adapters/repositories/postgres/promotions/PromotionRepoPg.js";
 import { env } from "../config/env.js";
 import { effectiveReadCacheTtlSec } from "../config/env/readCacheTtl.js";
 import { createShopResolver } from "../interface/http/middleware/shopResolver.js";
@@ -29,6 +29,7 @@ import { createRotateCustomerRefreshToken } from "../application/services/auth/r
 import { getCustomerProfile } from "../application/services/profile/getCustomerProfile.js";
 import { updateCustomerProfile } from "../application/services/profile/updateCustomerProfile.js";
 import { createUpdateStorefrontProfile } from "../application/services/profile/updateStorefrontProfile.js";
+import { createStorefrontAddress } from "../application/services/profile/storefrontAddress.js";
 import { createRequestPhoneChangeOtp } from "../application/services/profile/requestPhoneChangeOtp.js";
 import { createVerifyPhoneChangeOtp } from "../application/services/profile/verifyPhoneChangeOtp.js";
 import { createCheckShopServiceArea } from "../application/services/shops/checkShopServiceArea.js";
@@ -219,7 +220,8 @@ export function createAppContext() {
     promotionRepo,
     shopPromotionCache,
     authRepo,
-    orderRepo
+    orderRepo,
+    catalogRepo
   });
   const listApplicableCoupons = createListApplicableCoupons({
     promotionRepo,
@@ -244,6 +246,7 @@ export function createAppContext() {
   const assertCustomerShopAccess = createAssertCustomerShopAccess({ authRepo });
   const requireCustomerShopAccess = createRequireCustomerShopAccess({ authRepo });
   const updateStorefrontProfile = createUpdateStorefrontProfile({ authRepo });
+  const storefrontAddress = createStorefrontAddress({ authRepo });
   const msg91Key = env.MSG_AUTH_KEY?.trim() || "";
   const smsSender = msg91Key
     ? new Msg91SmsSender({
@@ -360,6 +363,7 @@ export function createAppContext() {
     storefrontCartPreview,
     assertCustomerShopAccess,
     updateStorefrontProfile,
+    storefrontAddress,
     listApplicableCoupons,
     checkoutStorefront,
     storefrontCatalogHttpCacheSec,

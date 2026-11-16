@@ -1,11 +1,12 @@
-import { CatalogRepo } from "../../../application/ports/repositories/CatalogRepo.js";
-import { pool } from "../../../infra/db/pool.js";
-import { setTenantContext } from "../../../infra/db/tenantContext.js";
-import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
-import { storefrontProductsOrderByClause } from "../../../application/services/catalog/catalogSearchOrder.js";
-import { buildListProductsStorefrontQuery } from "./queries/buildListProductsStorefrontQuery.js";
-import { buildListSellableProductsBySectionCategoriesQuery } from "./queries/buildListSellableProductsBySectionCategoriesQuery.js";
-import { categoryImageLateralJoinSql } from "./queries/categoryImageSql.js";
+import { CatalogRepo } from "../../../../application/ports/repositories/CatalogRepo.js";
+import { pool } from "../../../../infra/db/pool.js";
+import { setTenantContext } from "../../../../infra/db/tenantContext.js";
+import { toPublicMediaUrl } from "../../../../infra/media/publicMediaUrl.js";
+import { storefrontProductsOrderByClause } from "../../../../application/services/catalog/catalogSearchOrder.js";
+import { buildListProductsStorefrontQuery } from "../queries/buildListProductsStorefrontQuery.js";
+import { buildListSellableProductsBySectionCategoriesQuery } from "../queries/buildListSellableProductsBySectionCategoriesQuery.js";
+import { categoryImageLateralJoinSql } from "../queries/categoryImageSql.js";
+import { sellableAtPurchasePredicates } from "../queries/sellableShopProductSql.js";
 import {
   shopProductBaseUnitSql,
   shopProductCategoryIdSql,
@@ -18,8 +19,9 @@ import {
   shopProductSlugSql,
   shopProductSoldByWeightSql,
   shopProductStockQuantitySql,
+  shopProductThumbJoinSql,
   shopProductUnitSizeSql
-} from "./queries/shopProductCatalogSql.js";
+} from "../queries/shopProductCatalogSql.js";
 
 /** Exclude categories the shop opted out of via shop_catalog_hides. */
 const categoryNotHiddenSql = `
@@ -907,6 +909,63 @@ ${shopProductLeftJoinGlobal}
       return rows[0] ?? null;
     } finally {
       client.release();
+    }
+  }
+
+  async listCategoryParents(client, categoryIds) {
+    const ids = [
+      ...new Set(
+        [...categoryIds].map((id) => (id != null ? String(id).trim() : "")).filter(Boolean)
+      )
+    ];
+    /** @type {Map<string, string | null>} */
+    const out = new Map();
+    if (!ids.length) return out;
+    const { rows } = await client.query(
+      `WITH RECURSIVE chain AS (
+         SELECT id, parent_id
+           FROM global_categories
+          WHERE id = ANY($1::uuid[])
+         UNION ALL
+         SELECT p.id, p.parent_id
+           FROM global_categories p
+           JOIN chain c ON c.parent_id = p.id
+          WHERE c.parent_id IS NOT NULL
+       )
+       SELECT id::text AS id, parent_id::text AS parent_id
+         FROM chain`,
+      [ids]
+    );
+    for (const row of rows) {
+      out.set(String(row.id), row.parent_id != null ? String(row.parent_id) : null);
+    }
+    return out;
+  }
+
+  async listRewardProductsForPricing(client, shopId, productIds) {
+    const ids = [...new Set(productIds.map((id) => (id != null ? String(id).trim() : "")).filter(Boolean))];
+    if (!ids.length) return [];
+    try {
+      const { rows } = await client.query(
+        `SELECT sp.id,
+                sp.price_minor_per_unit,
+                sp.offer_price_minor_per_unit,
+                sp.global_category_id,
+                ${shopProductNameSql} AS name,
+                ${shopProductImageUrlSql} AS image_url,
+                pm.storage_key AS thumb_storage_key,
+                ${shopProductBaseUnitSql} AS base_unit
+           FROM shop_products sp
+           ${shopProductLeftJoinGlobal}
+           ${shopProductThumbJoinSql("sp", "pm")}
+          WHERE sp.shop_id = $1::uuid
+            AND sp.id = ANY($2::uuid[])
+            AND ${sellableAtPurchasePredicates}`,
+        [shopId, ids]
+      );
+      return rows;
+    } catch {
+      return [];
     }
   }
 }

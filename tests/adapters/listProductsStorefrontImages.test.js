@@ -6,7 +6,7 @@ vi.mock("../../src/infra/db/pool.js", () => ({
   pool: { connect }
 }));
 
-const { CatalogRepoPg } = await import("../../src/adapters/repositories/postgres/CatalogRepoPg.js");
+const { CatalogRepoPg } = await import("../../src/adapters/repositories/postgres/catalog/CatalogRepoPg.js");
 
 const shopId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const categoryId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";

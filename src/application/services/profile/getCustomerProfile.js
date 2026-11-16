@@ -3,6 +3,7 @@ import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
 
 /**
  * Purpose: Load the authenticated storefront customer profile (display name + linked address).
+ * @param {{ authRepo: import("../../ports/repositories/auth/CustomerProfileRepo.js").CustomerProfileRepo }} deps
  */
 export function getCustomerProfile({ authRepo }) {
   return async function execute(client, { customerId, userId }) {

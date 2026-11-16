@@ -1,7 +1,8 @@
 /**
- * Purpose: This file defines the customer auth repository contract.
- * It lists methods used for customer login, registration, memberships,
- * and profile updates, while adapters implement the database logic.
+ * Purpose: Full customer auth contract implemented by CustomerAuthRepoPg.
+ * Callers should depend on the smaller ports in ./auth/:
+ * CustomerSessionRepo (JWT), CustomerProfileRepo (profile and phone),
+ * and CustomerOtpRepo (login and phone-change codes).
  */
 
 export class CustomerAuthRepo {

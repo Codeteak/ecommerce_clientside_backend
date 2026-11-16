@@ -9,6 +9,9 @@ import {
   normalizeCustomerPhoneForStorage
 } from "../../../domain/phone/normalizeCustomerPhone.js";
 
+/**
+ * @param {{ authRepo: import("../../ports/repositories/auth/CustomerOtpRepo.js").CustomerOtpRepo }} deps
+ */
 export function createRequestCustomerOtp({
   authRepo,
   smsSender,

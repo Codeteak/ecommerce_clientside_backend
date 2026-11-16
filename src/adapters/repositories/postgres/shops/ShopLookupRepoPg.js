@@ -1,5 +1,5 @@
-import { ShopLookupRepo } from "../../../application/ports/repositories/ShopLookupRepo.js";
-import { pool } from "../../../infra/db/pool.js";
+import { ShopLookupRepo } from "../../../../application/ports/repositories/ShopLookupRepo.js";
+import { pool } from "../../../../infra/db/pool.js";
 
 // Purpose: This file gets shop IDs from PostgreSQL using slug or custom domain.
 export class ShopLookupRepoPg extends ShopLookupRepo {

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { getSharedRedisClient } from "../../../infra/redis/sharedRedis.js";
+import { getSharedRedisClient } from "../../../../infra/redis/sharedRedis.js";
 
 const CART_TTL_SEC = 60 * 60 * 24 * 30;
 const memoryByShopCustomer = new Map();

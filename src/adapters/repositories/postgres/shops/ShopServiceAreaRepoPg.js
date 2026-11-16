@@ -1,5 +1,5 @@
-import { pool } from "../../../infra/db/pool.js";
-import { ShopServiceAreaRepo } from "../../../application/ports/repositories/ShopServiceAreaRepo.js";
+import { pool } from "../../../../infra/db/pool.js";
+import { ShopServiceAreaRepo } from "../../../../application/ports/repositories/ShopServiceAreaRepo.js";
 
 export class ShopServiceAreaRepoPg extends ShopServiceAreaRepo {
   /** @param {string} shopId */

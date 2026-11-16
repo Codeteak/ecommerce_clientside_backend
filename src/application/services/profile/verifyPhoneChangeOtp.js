@@ -5,6 +5,12 @@ import { ConflictError } from "../../../domain/errors/ConflictError.js";
 import { verifyOtpCode } from "../../../infra/security/otpHasher.js";
 import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normalizeCustomerPhone.js";
 
+/**
+ * @param {{
+ *   authRepo: import("../../ports/repositories/auth/CustomerProfileRepo.js").CustomerProfileRepo
+ *     & import("../../ports/repositories/auth/CustomerOtpRepo.js").CustomerOtpRepo
+ * }} deps
+ */
 export function createVerifyPhoneChangeOtp({ authRepo, buildStorefrontSession, otpMaxAttempts = 5 }) {
   return async function verifyPhoneChangeOtp(client, input) {
     const userId = input.userId;

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { CustomerAuthRepoPg } from "../../src/adapters/repositories/postgres/CustomerAuthRepoPg.js";
+import { CustomerAuthRepoPg } from "../../src/adapters/repositories/postgres/auth/CustomerAuthRepoPg.js";
 
 const shopId = "c0000001-0000-4000-8000-000000000001";
 

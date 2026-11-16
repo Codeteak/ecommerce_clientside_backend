@@ -1,7 +1,7 @@
-import { PromotionRepo } from "../../../application/ports/repositories/PromotionRepo.js";
-import { AppError } from "../../../domain/errors/AppError.js";
-import { setTenantContext } from "../../../infra/db/tenantContext.js";
-import { shopProductThumbJoinSql } from "./queries/shopProductCatalogSql.js";
+import { PromotionRepo } from "../../../../application/ports/repositories/PromotionRepo.js";
+import { AppError } from "../../../../domain/errors/AppError.js";
+import { setTenantContext } from "../../../../infra/db/tenantContext.js";
+import { shopProductThumbJoinSql } from "../queries/shopProductCatalogSql.js";
 
 /** Weekly recurrence (IST DOW); null recurrence_rule keeps starts_at/ends_at-only behavior. */
 const ACTIVE_PROMOTION_RECURRENCE_SQL = `

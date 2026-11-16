@@ -6,6 +6,7 @@ import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normaliz
  * Purpose: This file updates storefront profile data for a customer.
  * It verifies profile ownership and updates customer display name
  * and user phone fields when new values are provided.
+ * @param {{ authRepo: import("../../ports/repositories/auth/CustomerProfileRepo.js").CustomerProfileRepo }} deps
  */
 export function createUpdateStorefrontProfile({ authRepo }) {
   return async function updateStorefrontProfile(client, { userId, customerId, displayName, phone }) {
@@ -14,10 +15,7 @@ export function createUpdateStorefrontProfile({ authRepo }) {
       throw new NotFoundError("Profile not found");
     }
     if (displayName !== undefined) {
-      await client.query(`UPDATE customers SET display_name = $1, updated_at = now() WHERE id = $2`, [
-        displayName,
-        customerId
-      ]);
+      await authRepo.patchCustomerProfile(client, { customerId, userId, displayName });
     }
     if (phone !== undefined) {
       const storedPhone = phone == null ? null : normalizeCustomerPhoneForStorage(phone);

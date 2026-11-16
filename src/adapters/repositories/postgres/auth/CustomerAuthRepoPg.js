@@ -1,10 +1,10 @@
-import { CustomerAuthRepo } from "../../../application/ports/repositories/CustomerAuthRepo.js";
-import { AuthError } from "../../../domain/errors/AuthError.js";
-import { NotFoundError } from "../../../domain/errors/NotFoundError.js";
-import { pool } from "../../../infra/db/pool.js";
-import { ValidationError } from "../../../domain/errors/ValidationError.js";
-import { phoneMatchesStorage } from "./phoneMatchSql.js";
-import { encodeAddressRaw, parseAddressRow } from "./addressShape.js";
+import { CustomerAuthRepo } from "../../../../application/ports/repositories/CustomerAuthRepo.js";
+import { AuthError } from "../../../../domain/errors/AuthError.js";
+import { NotFoundError } from "../../../../domain/errors/NotFoundError.js";
+import { pool } from "../../../../infra/db/pool.js";
+import { ValidationError } from "../../../../domain/errors/ValidationError.js";
+import { phoneMatchesStorage } from "../shared/phoneMatchSql.js";
+import { encodeAddressRaw, parseAddressRow } from "../shared/addressShape.js";
 
 /**
  * Purpose: This file is the PostgreSQL implementation of customer auth data access.

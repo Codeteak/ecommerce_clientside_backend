@@ -11,14 +11,6 @@ import {
   minorToApiString,
   parseMinor
 } from "./resolveStorefrontSkuUnitPrices.js";
-import {
-  shopProductBaseUnitSql,
-  shopProductImageUrlSql,
-  shopProductLeftJoinGlobal,
-  shopProductNameSql,
-  shopProductThumbJoinSql
-} from "../../../adapters/repositories/postgres/queries/shopProductCatalogSql.js";
-import { sellableAtPurchasePredicates } from "../../../adapters/repositories/postgres/queries/sellableShopProductSql.js";
 import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
 import { couponFailureMessage, couponZeroDiscountFailure } from "../storefront/cart/cartLineRules.js";
 
@@ -68,52 +60,21 @@ function resolveStackFlag(campaignValue, shopDefault) {
 }
 
 /**
- * Walk parents for product category ids so aisle-level promo rules match leaf SKUs.
- * @param {import("pg").PoolClient} client
- * @param {Iterable<string | null | undefined>} categoryIds
- * @returns {Promise<Map<string, string | null>>}
- */
-async function loadCategoryParentById(client, categoryIds) {
-  const ids = [
-    ...new Set(
-      [...categoryIds]
-        .map((id) => (id != null ? String(id).trim() : ""))
-        .filter(Boolean)
-    )
-  ];
-  /** @type {Map<string, string | null>} */
-  const out = new Map();
-  if (!ids.length) return out;
-  const { rows } = await client.query(
-    `WITH RECURSIVE chain AS (
-       SELECT id, parent_id
-         FROM global_categories
-        WHERE id = ANY($1::uuid[])
-       UNION ALL
-       SELECT p.id, p.parent_id
-         FROM global_categories p
-         JOIN chain c ON c.parent_id = p.id
-        WHERE c.parent_id IS NOT NULL
-     )
-     SELECT id::text AS id, parent_id::text AS parent_id
-       FROM chain`,
-    [ids]
-  );
-  for (const row of rows) {
-    out.set(String(row.id), row.parent_id != null ? String(row.parent_id) : null);
-  }
-  return out;
-}
-
-/**
  * @param {{
  *   promotionRepo: import("../../ports/repositories/PromotionRepo.js").PromotionRepo,
  *   shopPromotionCache?: ReturnType<import("../../../infra/cache/shopPromotionCache.js").createShopPromotionCache>,
  *   authRepo?: import("../../ports/repositories/CustomerAuthRepo.js").CustomerAuthRepo,
- *   orderRepo?: import("../../ports/repositories/OrderRepo.js").OrderRepo
+ *   orderRepo?: import("../../ports/repositories/OrderRepo.js").OrderRepo,
+ *   catalogRepo?: import("../../ports/repositories/CatalogRepo.js").CatalogRepo
  * }} deps
  */
-export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, authRepo, orderRepo }) {
+export function createPriceStorefrontLines({
+  promotionRepo,
+  shopPromotionCache,
+  authRepo,
+  orderRepo,
+  catalogRepo
+}) {
   const promoReads = shopPromotionCache ?? promotionRepo;
   /**
    * @param {import("pg").PoolClient} client
@@ -274,42 +235,23 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
       const injectIds = [...new Set(injections.map((i) => i.productId))];
       /** @type {Map<string, { listMinor: number, offerMinor: number | null, categoryId: string | null, name: string | null, imageUrl: string | null, baseUnit: string | null }>} */
       const injectPricing = new Map();
-      try {
-        const { rows } = await client.query(
-          `SELECT sp.id,
-                  sp.price_minor_per_unit,
-                  sp.offer_price_minor_per_unit,
-                  sp.global_category_id,
-                  ${shopProductNameSql} AS name,
-                  ${shopProductImageUrlSql} AS image_url,
-                  pm.storage_key AS thumb_storage_key,
-                  ${shopProductBaseUnitSql} AS base_unit
-             FROM shop_products sp
-             ${shopProductLeftJoinGlobal}
-             ${shopProductThumbJoinSql("sp", "pm")}
-            WHERE sp.shop_id = $1::uuid
-              AND sp.id = ANY($2::uuid[])
-              AND ${sellableAtPurchasePredicates}`,
-          [shopId, injectIds]
-        );
-        for (const row of rows) {
-          const imageRaw =
-            typeof row.image_url === "string" && row.image_url.trim() ? row.image_url.trim() : null;
-          const thumbUrl = toPublicMediaUrl(row.thumb_storage_key);
-          injectPricing.set(String(row.id), {
-            listMinor: parseMinor(row.price_minor_per_unit),
-            offerMinor:
-              row.offer_price_minor_per_unit != null
-                ? parseMinor(row.offer_price_minor_per_unit)
-                : null,
-            categoryId: row.global_category_id != null ? String(row.global_category_id) : null,
-            name: typeof row.name === "string" && row.name.trim() ? row.name.trim() : null,
-            imageUrl: imageRaw || thumbUrl || null,
-            baseUnit: typeof row.base_unit === "string" && row.base_unit.trim() ? row.base_unit.trim() : null
-          });
-        }
-      } catch {
-        /* products table shape may differ; skip injection */
+      const rows =
+        catalogRepo && typeof catalogRepo.listRewardProductsForPricing === "function"
+          ? await catalogRepo.listRewardProductsForPricing(client, shopId, injectIds)
+          : [];
+      for (const row of rows) {
+        const imageRaw =
+          typeof row.image_url === "string" && row.image_url.trim() ? row.image_url.trim() : null;
+        const thumbUrl = toPublicMediaUrl(row.thumb_storage_key);
+        injectPricing.set(String(row.id), {
+          listMinor: parseMinor(row.price_minor_per_unit),
+          offerMinor:
+            row.offer_price_minor_per_unit != null ? parseMinor(row.offer_price_minor_per_unit) : null,
+          categoryId: row.global_category_id != null ? String(row.global_category_id) : null,
+          name: typeof row.name === "string" && row.name.trim() ? row.name.trim() : null,
+          imageUrl: imageRaw || thumbUrl || null,
+          baseUnit: typeof row.base_unit === "string" && row.base_unit.trim() ? row.base_unit.trim() : null
+        });
       }
 
       for (const inj of injections) {
@@ -339,10 +281,13 @@ export function createPriceStorefrontLines({ promotionRepo, shopPromotionCache, 
       }
     }
 
-    const categoryParentById = await loadCategoryParentById(
-      client,
-      pricedLines.map((l) => l.categoryId)
-    );
+    const categoryParentById =
+      catalogRepo && typeof catalogRepo.listCategoryParents === "function"
+        ? await catalogRepo.listCategoryParents(
+            client,
+            pricedLines.map((l) => l.categoryId)
+          )
+        : new Map();
 
     const { bundleDiscountMinor, appliedByPromotion } = evaluateBundleDiscounts(pricedLines, bundleRulesRaw, {
       allowCombineAutoCampaigns,

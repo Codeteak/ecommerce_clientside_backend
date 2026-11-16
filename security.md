@@ -23,7 +23,7 @@ This is a **Node.js 22 + Express** ecommerce API with a **clean hexagonal layout
 ## 1. Debug telemetry posts order data to localhost
 
 - **Severity:** Critical  
-- **File:** `src/adapters/repositories/postgres/OrderRepoPg.js` (`debugLog` ~14–21); `src/interface/http/controllers/storefrontOrdersController.js` (~20–38)  
+- **File:** `src/adapters/repositories/postgres/orders/OrderRepoPg.js` (`debugLog` ~14–21); `src/interface/http/controllers/storefrontOrdersController.js` (~20–38)  
 - **Problem:** Production code calls `fetch("http://127.0.0.1:7565/ingest/...")` with order/customer metadata.  
 - **Risk:** Unreviewed outbound I/O; data leakage if anything listens on that port; compliance and latency impact.  
 - **Recommended fix:** Remove all `#region agent log` blocks before any production deploy.

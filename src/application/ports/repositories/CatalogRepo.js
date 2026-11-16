@@ -128,4 +128,32 @@ export class CatalogRepo {
     void _slug;
     throw new Error("Not implemented");
   }
+
+  /**
+   * Parent id for each category in the walk, including the starting ids.
+   * Uses the caller's transaction client.
+   * @param {import("pg").PoolClient} _client
+   * @param {Iterable<string | null | undefined>} _categoryIds
+   * @returns {Promise<Map<string, string | null>>}
+   */
+  async listCategoryParents(_client, _categoryIds) {
+    void _client;
+    void _categoryIds;
+    throw new Error("Not implemented");
+  }
+
+  /**
+   * Sellable reward SKUs for cross buy-x-get-y injection.
+   * A query failure returns an empty list so checkout can skip the free line.
+   * @param {import("pg").PoolClient} _client
+   * @param {string} _shopId
+   * @param {string[]} _productIds
+   * @returns {Promise<object[]>}
+   */
+  async listRewardProductsForPricing(_client, _shopId, _productIds) {
+    void _client;
+    void _shopId;
+    void _productIds;
+    throw new Error("Not implemented");
+  }
 }

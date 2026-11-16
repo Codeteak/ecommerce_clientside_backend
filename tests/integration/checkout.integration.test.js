@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import pg from "pg";
 import { createCheckoutStorefront } from "../../src/application/services/checkout/checkoutStorefront.js";
-import { CartRepoPg } from "../../src/adapters/repositories/postgres/CartRepoPg.js";
-import { OrderRepoPg } from "../../src/adapters/repositories/postgres/OrderRepoPg.js";
-import { CustomerAuthRepoPg } from "../../src/adapters/repositories/postgres/CustomerAuthRepoPg.js";
+import { CartRepoPg } from "../../src/adapters/repositories/postgres/cart/CartRepoPg.js";
+import { OrderRepoPg } from "../../src/adapters/repositories/postgres/orders/OrderRepoPg.js";
+import { CustomerAuthRepoPg } from "../../src/adapters/repositories/postgres/auth/CustomerAuthRepoPg.js";
 import { defaultIntegrationDbUrl, integrationDescribe } from "../helpers/integrationEnv.js";
 
 const shopId = "c0000001-0000-4000-8000-000000000001";

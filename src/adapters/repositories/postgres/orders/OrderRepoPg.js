@@ -1,12 +1,12 @@
-import { OrderRepo } from "../../../application/ports/repositories/OrderRepo.js";
-import { mapStorefrontOrderRow } from "../../../application/services/storefront/formatStorefrontOrderResponse.js";
-import { setTenantContext } from "../../../infra/db/tenantContext.js";
-import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
+import { OrderRepo } from "../../../../application/ports/repositories/OrderRepo.js";
+import { mapStorefrontOrderRow } from "../../../../application/services/storefront/formatStorefrontOrderResponse.js";
+import { setTenantContext } from "../../../../infra/db/tenantContext.js";
+import { toPublicMediaUrl } from "../../../../infra/media/publicMediaUrl.js";
 import {
   shopProductImageUrlSql,
   shopProductSlugSql,
   shopProductSoldByWeightSql
-} from "./queries/shopProductCatalogSql.js";
+} from "../queries/shopProductCatalogSql.js";
 
 /** Coupon-only discount from promotion_redemptions; `ordersAlias` must match the orders table alias in the outer query. */
 const COUPON_DISCOUNT_SELECT = (ordersAlias) => `

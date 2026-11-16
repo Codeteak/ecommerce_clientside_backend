@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { CustomerAuthRepoPg } from "../../src/adapters/repositories/postgres/CustomerAuthRepoPg.js";
+import { CustomerAuthRepoPg } from "../../src/adapters/repositories/postgres/auth/CustomerAuthRepoPg.js";
 import { AuthError } from "../../src/domain/errors/AuthError.js";
 
 function mockClient(handlers) {

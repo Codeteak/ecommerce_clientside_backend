@@ -21,7 +21,6 @@ export const patchProfileBodySchema = z
   .object({
     name: z.string().max(120).nullable().optional(),
     displayName: z.string().max(120).nullable().optional(),
-    email: z.string().email().nullable().optional(),
     phone: z.string().max(32).nullable().optional(),
     address: addressPatchSchema.optional()
   })
@@ -30,7 +29,6 @@ export const patchProfileBodySchema = z
     if (
       val.name === undefined &&
       val.displayName === undefined &&
-      val.email === undefined &&
       val.phone === undefined &&
       val.address === undefined
     ) {

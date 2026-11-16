@@ -1,17 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { CartRepo } from "../../../application/ports/repositories/CartRepo.js";
-import { AppError } from "../../../domain/errors/AppError.js";
+import { CartRepo } from "../../../../application/ports/repositories/CartRepo.js";
+import { AppError } from "../../../../domain/errors/AppError.js";
 import {
   MAX_LINE_QUANTITY,
   hasEnoughStock,
   normalizeCheckoutLineQuantity
-} from "../../../application/services/storefront/cart/cartLineRules.js";
-import { setTenantContext } from "../../../infra/db/tenantContext.js";
-import { toPublicMediaUrl } from "../../../infra/media/publicMediaUrl.js";
+} from "../../../../application/services/storefront/cart/cartLineRules.js";
+import { setTenantContext } from "../../../../infra/db/tenantContext.js";
+import { toPublicMediaUrl } from "../../../../infra/media/publicMediaUrl.js";
 import {
   sellableAtPurchasePredicates,
   sellableShopProductJoin
-} from "./queries/sellableShopProductSql.js";
+} from "../queries/sellableShopProductSql.js";
 import {
   shopProductBaseUnitSql,
   shopProductCategoryIdSql,
@@ -21,7 +21,7 @@ import {
   shopProductSoldByWeightSql,
   shopProductStockQuantitySql,
   shopProductUnitSizeSql
-} from "./queries/shopProductCatalogSql.js";
+} from "../queries/shopProductCatalogSql.js";
 import {
   deleteCartRecord,
   loadCartById,
