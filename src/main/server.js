@@ -25,7 +25,14 @@ export function createExpressApp(ctx) {
   app.set("trust proxy", env.TRUST_PROXY ? env.TRUST_PROXY_HOPS : false);
 
   app.disable("x-powered-by");
-  app.use(helmet());
+  app.use(
+    helmet({
+      // Storefront (localhost:3000) reads this API cross-origin. Helmet's default
+      // same-origin resource policy makes browsers drop the response and report
+      // a missing Access-Control-Allow-Origin header.
+      crossOriginResourcePolicy: { policy: "cross-origin" }
+    })
+  );
   app.use(requestMetricsMiddleware);
   app.use(
     pinoHttp({
@@ -119,15 +126,20 @@ export function createExpressApp(ctx) {
     cors({
       origin: createCorsOriginDelegate(env.CORS_ORIGIN, env.STOREFRONT_ROOT_DOMAIN),
       credentials: true,
+      methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
       allowedHeaders: [
+        "accept",
         "content-type",
         "authorization",
         "x-shop-id",
         "x-tenant-id",
         "x-request-id",
         "x-metrics-token",
-        "idempotency-key"
-      ]
+        "idempotency-key",
+        // ngrok free returns a browser warning with no CORS headers unless this is sent.
+        "ngrok-skip-browser-warning"
+      ],
+      optionsSuccessStatus: 204
     })
   );
 
