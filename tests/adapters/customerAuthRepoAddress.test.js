@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { CustomerAuthRepoPg } from "../../src/adapters/repositories/postgres/CustomerAuthRepoPg.js";
+import { CustomerAuthRepoPg } from "../../src/adapters/repositories/postgres/auth/CustomerAuthRepoPg.js";
+import { AuthError } from "../../src/domain/errors/AuthError.js";
 
 function mockClient(handlers) {
   return {
@@ -103,11 +104,12 @@ describe("CustomerAuthRepoPg.patchCustomerProfile address merge", () => {
       }
     ]);
 
-    await repo.patchCustomerProfile(client, {
+    const result = await repo.patchCustomerProfile(client, {
       customerId: "c1",
       userId: "u1",
       addressPatch: { landmark: "Near metro" }
     });
+    expect(result).toEqual({ created: false });
 
     expect(updates).toHaveLength(1);
     const [raw, lat, lng, id] = updates[0];
@@ -144,7 +146,7 @@ describe("CustomerAuthRepoPg.patchCustomerProfile address merge", () => {
       }
     ]);
 
-    await repo.patchCustomerProfile(client, {
+    const result = await repo.patchCustomerProfile(client, {
       customerId: "c1",
       userId: "u1",
       addressPatch: {
@@ -155,6 +157,7 @@ describe("CustomerAuthRepoPg.patchCustomerProfile address merge", () => {
         lng: 73.8
       }
     });
+    expect(result).toEqual({ created: true });
 
     expect(inserts).toHaveLength(1);
     expect(JSON.parse(inserts[0][0])).toEqual({
@@ -179,5 +182,25 @@ describe("CustomerAuthRepoPg.patchCustomerProfile address merge", () => {
         addressPatch: { line1: "x", lat: 12.9 }
       })
     ).rejects.toMatchObject({ message: expect.stringMatching(/lat and lng/i) });
+  });
+
+  it("rejects a blocked customer before writing when asked", async () => {
+    const client = mockClient([
+      {
+        match: (sql) => sql.includes("FROM customers") && sql.includes("FOR UPDATE"),
+        result: () => ({
+          rows: [{ id: "c1", address_id: null, display_name: "A", status: "blocked" }]
+        })
+      }
+    ]);
+    await expect(
+      repo.patchCustomerProfile(client, {
+        customerId: "c1",
+        userId: "u1",
+        displayName: "New",
+        rejectInactive: true
+      })
+    ).rejects.toBeInstanceOf(AuthError);
+    expect(client.query).toHaveBeenCalledTimes(1);
   });
 });

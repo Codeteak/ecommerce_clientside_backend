@@ -1,0 +1,29 @@
+meta {
+  name: Update Cart Item
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/api/storefront/cart/items/:itemId
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+params:path {
+  itemId: {{cartItemId}}
+}
+
+body:json {
+  {
+    "quantity": 2
+  }
+}
+
+docs {
+  Retired. Expect 410 CART_SERVER_RETIRED. itemId must be a UUID. Body needs quantity or delta.
+}

@@ -1,0 +1,23 @@
+meta {
+  name: Get Cart
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/storefront/cart
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+params:query {
+  ~couponCode: {{couponCode}}
+}
+
+docs {
+  Returns an empty cart view. The Redis cart is retired. Enable couponCode to pass a code through the query string.
+}

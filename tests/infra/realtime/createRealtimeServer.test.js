@@ -8,8 +8,10 @@ const SHOP_ID = "00000000-0000-4000-8000-000000000001";
 
 vi.mock("../../../src/config/env.js", () => ({
   env: {
+    NODE_ENV: "test",
     STOREFRONT_CATALOG_REALTIME_TOKEN: "catalog-storefront-test-token",
-    REALTIME_CONNECT_TOKEN: "staff-connect-test-token"
+    REALTIME_CONNECT_TOKEN: "staff-connect-test-token",
+    REALTIME_ALLOW_SHARED_CONNECT_TOKEN: false
   }
 }));
 
@@ -22,6 +24,7 @@ vi.mock("../../../src/infra/auth/jwt.js", () => ({
 const { createRealtimeServer, shopRoom, shopCatalogRoom } = await import(
   "../../../src/infra/realtime/createRealtimeServer.js"
 );
+const { verifyStaffAccessToken } = await import("../../../src/infra/auth/jwt.js");
 
 function waitForEvent(socket, eventName, timeoutMs = 3000) {
   return new Promise((resolve, reject) => {
@@ -156,6 +159,89 @@ describe("createRealtimeServer catalog.invalidated", () => {
     expect(storefrontGotOrder).toBe(false);
 
     storefront.close();
+    staff.close();
+  });
+});
+
+describe("createRealtimeServer staff JWT shop scoping", () => {
+  /** @type {import("node:http").Server | null} */
+  let httpServer = null;
+  /** @type {Awaited<ReturnType<typeof createRealtimeServer>> | null} */
+  let realtime = null;
+  let port = 0;
+  const OTHER_SHOP = "00000000-0000-4000-8000-000000000099";
+
+  beforeEach(async () => {
+    verifyStaffAccessToken.mockReset();
+    verifyStaffAccessToken.mockImplementation(() => {
+      throw new Error("not staff");
+    });
+    httpServer = http.createServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    realtime = await createRealtimeServer(httpServer, { redis: null, logger: null });
+    await new Promise((resolve) => {
+      httpServer.listen(0, "127.0.0.1", () => {
+        port = httpServer.address().port;
+        resolve();
+      });
+    });
+  });
+
+  afterEach(async () => {
+    await realtime?.close?.();
+    await new Promise((resolve) => httpServer?.close(() => resolve()));
+    httpServer = null;
+    realtime = null;
+  });
+
+  it("rejects staff JWT without shopId claim", async () => {
+    verifyStaffAccessToken.mockReturnValue({ sub: "u1", role: "manager" });
+    const socket = ioc(`http://127.0.0.1:${port}`, {
+      path: "/socket.io",
+      transports: ["websocket"],
+      auth: { shopId: SHOP_ID, token: "staff-jwt" }
+    });
+    await expect(waitForConnect(socket, 1500)).rejects.toThrow();
+    socket.close();
+  });
+
+  it("rejects staff JWT for a different shop", async () => {
+    verifyStaffAccessToken.mockReturnValue({
+      sub: "u1",
+      role: "manager",
+      shopId: OTHER_SHOP
+    });
+    const socket = ioc(`http://127.0.0.1:${port}`, {
+      path: "/socket.io",
+      transports: ["websocket"],
+      auth: { shopId: SHOP_ID, token: "staff-jwt" }
+    });
+    await expect(waitForConnect(socket, 1500)).rejects.toThrow();
+    socket.close();
+  });
+
+  it("accepts staff JWT when shopId matches and receives order.placed", async () => {
+    verifyStaffAccessToken.mockReturnValue({
+      sub: "u1",
+      role: "manager",
+      shopId: SHOP_ID
+    });
+    const staff = ioc(`http://127.0.0.1:${port}`, {
+      path: "/socket.io",
+      transports: ["websocket"],
+      auth: { shopId: SHOP_ID, token: "staff-jwt" }
+    });
+    await waitForConnect(staff);
+    const orderPromise = waitForEvent(staff, "order.placed");
+    realtime.emitOrderPlaced({
+      shopId: SHOP_ID,
+      orderId: "order-jwt",
+      orderNumber: "2002"
+    });
+    const payload = await orderPromise;
+    expect(payload.orderId).toBe("order-jwt");
     staff.close();
   });
 });

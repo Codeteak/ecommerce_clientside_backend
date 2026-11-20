@@ -19,8 +19,8 @@ export function getProductionDefaults() {
     STOREFRONT_ENFORCE_SERVICEABILITY: "true",
     SERVICEABILITY_COOKIE_SAMESITE: "none",
     SERVICEABILITY_COOKIE_SECURE: "true",
-    ENABLE_API_DOCS: "false",
-    ALLOW_API_DOCS_IN_PRODUCTION: "false"
+    DATABASE_SSL_REJECT_UNAUTHORIZED: "true",
+    ACCESS_JTI_DB_FALLBACK_ENABLED: "false"
   };
 }
 

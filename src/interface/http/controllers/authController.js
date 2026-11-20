@@ -50,27 +50,6 @@ function otpVerifyHandler(ctx) {
   );
 }
 
-function emailOtpRequestHandler(ctx) {
-  return withSecurityAudit(
-    "otp.email.requested",
-    "otp.email.request.failed",
-    (req) => ({ email: req.body?.email ? "provided" : "missing" }),
-    (req) => withClient((client) => ctx.requestCustomerEmailOtp(client, req.body))
-  );
-}
-
-function emailOtpVerifyHandler(ctx) {
-  return withSecurityAudit("otp.email.verified", "otp.email.verify.failed", null, (req) =>
-    withTx((client) =>
-      ctx.verifyCustomerEmailOtp(client, {
-        ...req.body,
-        ip: req.ip,
-        userAgent: req.get("user-agent") || null
-      })
-    )
-  );
-}
-
 function refreshHandler(ctx) {
   return withSecurityAudit("auth.refresh.succeeded", "auth.refresh.failed", null, (req) =>
     withTx((client) =>
@@ -100,8 +79,6 @@ export const authController = {
   otpRequest: (ctx) => otpRequestHandler(ctx),
   otpVerify: (ctx) => otpVerifyHandler(ctx),
   refresh: (ctx) => refreshHandler(ctx),
-  emailOtpRequest: (ctx) => emailOtpRequestHandler(ctx),
-  emailOtpVerify: (ctx) => emailOtpVerifyHandler(ctx),
   logout: (ctx) => logoutHandler(ctx),
 
   forCtx(ctx) {
@@ -109,8 +86,6 @@ export const authController = {
       otpRequest: otpRequestHandler(ctx),
       otpVerify: otpVerifyHandler(ctx),
       refresh: refreshHandler(ctx),
-      emailOtpRequest: emailOtpRequestHandler(ctx),
-      emailOtpVerify: emailOtpVerifyHandler(ctx),
       logout: logoutHandler(ctx)
     };
   }

@@ -4,6 +4,14 @@ import { patchRequestContext } from "../../../infra/logging/requestContext.js";
 // Purpose: Resolves shop ID from x-shop-id header, then subdomain, then custom domain (no query params).
 const uuidSchema = z.string().uuid();
 
+function isDottedQuad(host) {
+  const parts = host.split(".");
+  if (parts.length !== 4) return false;
+  return parts.every(
+    (part) => part.length >= 1 && part.length <= 3 && [...part].every((ch) => ch >= "0" && ch <= "9")
+  );
+}
+
 /**
  * @param {{
  *   shopResolveCache?: {
@@ -34,7 +42,7 @@ export function createShopResolver({ shopResolveCache, shopLookupRepo, storefron
     if (!host) return true;
     if (host === "localhost" || host === "[::1]" || host === "::1") return true;
     if (host.startsWith("127.")) return true;
-    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
+    if (isDottedQuad(host)) return true;
     return false;
   }
 

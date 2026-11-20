@@ -1,0 +1,19 @@
+meta {
+  name: Metrics
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/metrics
+  body: none
+  auth: none
+}
+
+headers {
+  X-Metrics-Token: {{metricsToken}}
+}
+
+docs {
+  Prometheus text. Send `metricsToken` when METRICS_SCRAPE_TOKEN is configured. Leave the header value unused if the server has no scrape token.
+}

@@ -56,6 +56,15 @@ describe("PATCH /api/me/profile (validation)", () => {
     expect(res.body.error?.code).toBe("VALIDATION_ERROR");
   });
 
+  it("returns 400 when email is sent", async () => {
+    const res = await request(app)
+      .patch("/api/me/profile")
+      .set("Authorization", `Bearer ${customerBearer()}`)
+      .send({ displayName: "ok", email: "buyer@example.com" })
+      .expect(400);
+    expect(res.body.error?.code).toBe("VALIDATION_ERROR");
+  });
+
   it("returns 400 for unknown top-level body key", async () => {
     const res = await request(app)
       .patch("/api/me/profile")

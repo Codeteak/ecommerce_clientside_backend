@@ -5,6 +5,12 @@ import { ConflictError } from "../../../domain/errors/ConflictError.js";
 import { verifyOtpCode } from "../../../infra/security/otpHasher.js";
 import { normalizeCustomerPhoneForStorage } from "../../../domain/phone/normalizeCustomerPhone.js";
 
+/**
+ * @param {{
+ *   authRepo: import("../../ports/repositories/auth/CustomerProfileRepo.js").CustomerProfileRepo
+ *     & import("../../ports/repositories/auth/CustomerOtpRepo.js").CustomerOtpRepo
+ * }} deps
+ */
 export function createVerifyPhoneChangeOtp({ authRepo, buildStorefrontSession, otpMaxAttempts = 5 }) {
   return async function verifyPhoneChangeOtp(client, input) {
     const userId = input.userId;
@@ -15,8 +21,8 @@ export function createVerifyPhoneChangeOtp({ authRepo, buildStorefrontSession, o
     const ip = input.ip ?? null;
     const userAgent = input.userAgent ?? null;
 
-    if (!/^\d{6}$/.test(code)) {
-      throw new ValidationError("OTP code must be 6 digits");
+    if (!/^\d{4}$/.test(code)) {
+      throw new ValidationError("OTP code must be 4 digits");
     }
 
     const profile = await authRepo.getCustomerProfileByCustomerId(client, customerId);

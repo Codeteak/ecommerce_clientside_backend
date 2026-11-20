@@ -143,7 +143,9 @@ export function createCheckoutStorefront({
       if (!clientLines.length) {
         throw new AppError("Cart is empty", { statusCode: 400, code: "CART_EMPTY" });
       }
-      const items = await cartRepo.validateClientLinesForCheckout(client, shopId, clientLines);
+      const items = await cartRepo.validateClientLinesForCheckout(client, shopId, clientLines, {
+        reserveStock: true
+      });
 
       const {
         subtotal,

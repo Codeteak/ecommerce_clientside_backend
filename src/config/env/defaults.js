@@ -51,8 +51,6 @@ export function getDevLikeDefaults(nodeEnv) {
     DISABLE_RATE_LIMITING: "true",
     CACHE_ON: "true",
     OBJECT_STORAGE_PUBLIC_BASE_URL: objectStoragePublicBaseUrl,
-    ENABLE_API_DOCS: "true",
-    ALLOW_API_DOCS_IN_PRODUCTION: "false",
     TRUST_PROXY: "false",
     TRUST_PROXY_HOPS: "1",
     JWT_ACCESS_EXPIRES_IN: "15m",
@@ -92,6 +90,7 @@ export function getDevLikeDefaults(nodeEnv) {
     ACCESS_JTI_DB_FALLBACK_ENABLED: "true",
     REALTIME_ENABLED: "false",
     REALTIME_CONNECT_TOKEN: "",
+    REALTIME_ALLOW_SHARED_CONNECT_TOKEN: "false",
     STOREFRONT_CATALOG_REALTIME_TOKEN: "",
     SEARCH_USE_TRGM: "false"
   };

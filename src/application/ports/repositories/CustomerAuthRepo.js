@@ -1,7 +1,8 @@
 /**
- * Purpose: This file defines the customer auth repository contract.
- * It lists methods used for customer login, registration, memberships,
- * and profile updates, while adapters implement the database logic.
+ * Purpose: Full customer auth contract implemented by CustomerAuthRepoPg.
+ * Callers should depend on the smaller ports in ./auth/:
+ * CustomerSessionRepo (JWT), CustomerProfileRepo (profile and phone),
+ * and CustomerOtpRepo (login and phone-change codes).
  */
 
 export class CustomerAuthRepo {
@@ -163,6 +164,18 @@ export class CustomerAuthRepo {
     throw new Error("Not implemented");
   }
 
+  /**
+   * Latest OTP challenge + count since window start (one round-trip).
+   * @returns {Promise<{ latestChallenge: object | null, sentCountInWindow: number }>}
+   */
+  async getOtpRequestGate(_client, _phone, _shopId, _sinceIso) {
+    void _client;
+    void _phone;
+    void _shopId;
+    void _sinceIso;
+    throw new Error("Not implemented");
+  }
+
   async countOtpChallengesSince(_client, _phone, _shopId, _sinceIso) {
     void _client;
     void _phone;
@@ -193,39 +206,6 @@ export class CustomerAuthRepo {
   }
 
   async consumeOtpChallenge(_client, _challengeId) {
-    void _client;
-    void _challengeId;
-    throw new Error("Not implemented");
-  }
-
-  async insertEmailOtpChallenge(_client, _row) {
-    void _client;
-    void _row;
-    throw new Error("Not implemented");
-  }
-
-  async countEmailOtpChallengesSince(_client, _email, _shopId, _sinceIso) {
-    void _client;
-    void _email;
-    void _shopId;
-    void _sinceIso;
-    throw new Error("Not implemented");
-  }
-
-  async findLatestEmailOtpChallenge(_client, _email, _shopId) {
-    void _client;
-    void _email;
-    void _shopId;
-    throw new Error("Not implemented");
-  }
-
-  async incrementEmailOtpChallengeAttempts(_client, _challengeId) {
-    void _client;
-    void _challengeId;
-    throw new Error("Not implemented");
-  }
-
-  async consumeEmailOtpChallenge(_client, _challengeId) {
     void _client;
     void _challengeId;
     throw new Error("Not implemented");

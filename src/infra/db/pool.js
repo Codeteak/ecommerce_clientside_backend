@@ -21,11 +21,11 @@ const caPem =
   typeof env.DATABASE_SSL_CA_PEM === "string" && env.DATABASE_SSL_CA_PEM.trim()
     ? env.DATABASE_SSL_CA_PEM.replace(/\\n/g, "\n")
     : undefined;
-const hasCustomCa = Boolean(caPem);
+const insecureOptIn = env.ALLOW_INSECURE_DB_SSL_IN_PRODUCTION === true;
 const rejectUnauthorized =
   env.NODE_ENV === "production"
-    ? (hasCustomCa ? env.DATABASE_SSL_REJECT_UNAUTHORIZED : false)
-    : env.DATABASE_SSL_REJECT_UNAUTHORIZED;
+    ? !insecureOptIn
+    : Boolean(env.DATABASE_SSL_REJECT_UNAUTHORIZED);
 
 export const pool = new Pool({
   connectionString: sanitizeConnectionString(env.DATABASE_URL),

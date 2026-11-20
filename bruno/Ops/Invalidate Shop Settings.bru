@@ -1,0 +1,26 @@
+meta {
+  name: Invalidate Shop Settings
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/storefront/shop/settings/invalidate
+  body: json
+  auth: none
+}
+
+headers {
+  X-Catalog-Cache-Invalidate: {{catalogCacheToken}}
+}
+
+body:json {
+  {
+    "shopId": "{{shopId}}",
+    "minPurchaseMinor": 0
+  }
+}
+
+docs {
+  Drops cached shop settings. minPurchaseMinor is an optional non-negative integer. Returns 204.
+}

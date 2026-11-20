@@ -1,0 +1,20 @@
+meta {
+  name: List Categories
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/storefront/categories
+  body: none
+  auth: none
+}
+
+params:query {
+  ~parent_id: {{categoryId}}
+  ~all: true
+}
+
+docs {
+  Public. Enable `all` to list every category. Do not send parent_id together with all=true. Enable parent_id alone to list children of one category.
+}

@@ -45,7 +45,6 @@ try {
     }
     const sql = fs.readFileSync(sqlPath, "utf8");
     await pool.query(sql);
-    // eslint-disable-next-line no-console
     console.log("Applied schema: migrations/001_full_schema.sql (DB_MIGRATE_FULL_SCHEMA=1)");
   } else {
     const files = listDeploymentSqlPaths();
@@ -55,7 +54,6 @@ try {
     for (const sqlPath of files) {
       const sql = fs.readFileSync(sqlPath, "utf8");
       await pool.query(sql);
-      // eslint-disable-next-line no-console
       console.log("Applied:", path.relative(repoRoot, sqlPath));
     }
   }

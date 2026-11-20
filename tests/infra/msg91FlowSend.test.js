@@ -96,23 +96,56 @@ describe("Msg91SmsSender wiring", () => {
     }));
     const { Msg91SmsSender } = await import("../../src/adapters/sms/msg91SmsSender.js");
 
+    const { logger } = await import("../../src/config/logger.js");
+    const logSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
     const sender = new Msg91SmsSender({
       authKey: "k-1",
       templateId: "tpl-1",
       shortUrl: "1",
-      timeoutMs: 12_000
+      timeoutMs: 12_000,
+      nodeEnv: "development",
+      logOtpInDev: true
     });
-    await sender.sendOtp({ to: "+919876543210", code: "123456", shopName: "Demo Shop" });
+    await sender.sendOtp({ to: "+919876543210", code: "1234", shopName: "Demo Shop" });
 
     expect(sendMsg91FlowOtpMock).toHaveBeenCalledWith({
       authKey: "k-1",
       templateId: "tpl-1",
       mobileRaw: "+919876543210",
-      otp: "123456",
+      otp: "1234",
       shopDisplayName: "Demo Shop",
       shortUrl: "1",
       timeoutMs: 12_000
     });
+    expect(logSpy.mock.calls[0][0]).toMatchObject({
+      event: "api.auth.otp.sent",
+      provider: "msg91",
+      code: "1234",
+      phoneMasked: "*********3210"
+    });
+    logSpy.mockRestore();
+  });
+
+  it("omits OTP code from success logs in production", async () => {
+    vi.resetModules();
+    const sendMsg91FlowOtpMock = vi.fn().mockResolvedValue({ type: "success" });
+    vi.doMock("../../src/infra/msg91/msg91FlowSend.js", () => ({
+      sendMsg91FlowOtp: sendMsg91FlowOtpMock
+    }));
+    const { Msg91SmsSender } = await import("../../src/adapters/sms/msg91SmsSender.js");
+    const { logger } = await import("../../src/config/logger.js");
+    const logSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    const sender = new Msg91SmsSender({
+      authKey: "k-1",
+      templateId: "tpl-1",
+      nodeEnv: "production",
+      logOtpInDev: false
+    });
+    await sender.sendOtp({ to: "+919876543210", code: "1234", shopName: "Demo Shop" });
+    expect(logSpy.mock.calls[0][0].code).toBeUndefined();
+    expect(logSpy.mock.calls[0][0].phoneMasked).toBe("*********3210");
+    logSpy.mockRestore();
   });
 
   it("maps provider failures to service-unavailable error", async () => {

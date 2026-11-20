@@ -2,7 +2,6 @@
 
 import { z } from "zod";
 import { env } from "../../../config/env.js";
-import { validate } from "../middleware/validate.js";
 import { ForbiddenError } from "../../../domain/errors/ForbiddenError.js";
 import { ValidationError } from "../../../domain/errors/ValidationError.js";
 import {
@@ -102,11 +101,6 @@ export function mountStorefrontRoutes(r, deps) {
       `${prefix}/products/:slug`,
       validate({ params: storefrontProductSlugParamSchema }),
       storefrontCat.getProductBySlug
-    );
-    r.get(
-      `${prefix}/products/id/:id`,
-      validate({ params: storefrontProductIdParamSchema }),
-      storefrontCat.getProductById
     );
     r.get(`${prefix}/home-sections`, storefrontCat.listHomeSections);
     r.get(

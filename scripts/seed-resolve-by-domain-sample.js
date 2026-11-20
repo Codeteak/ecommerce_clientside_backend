@@ -39,31 +39,24 @@ try {
   );
 
   const row = rows[0];
-  // eslint-disable-next-line no-console
   console.log("Seed applied:", sqlPath);
-  // eslint-disable-next-line no-console
   console.log("Shop for domain:", row ?? "(not found)");
-  // eslint-disable-next-line no-console
   console.log(
     "Try:",
     `${env.API_PUBLIC_URL}/api/shops/resolve-by-domain?domain=${sampleDomain}`
   );
   if (row?.storage_key && env.OBJECT_STORAGE_PUBLIC_BASE_URL) {
     const base = env.OBJECT_STORAGE_PUBLIC_BASE_URL.replace(/\/$/, "");
-    // eslint-disable-next-line no-console
     console.log("Expected shop_image:", `${base}/${row.storage_key}`);
   } else if (row?.storage_key) {
-    // eslint-disable-next-line no-console
     console.warn(
       "OBJECT_STORAGE_PUBLIC_BASE_URL is unset — API returns shop_image: null until set in env"
     );
   } else {
-    // eslint-disable-next-line no-console
     console.warn("No entity_images row for shop logo — check entity_images + media_assets");
   }
 } catch (err) {
   if (err?.code === "23505" && /shops_domain|shops_custom_domain/i.test(String(err.constraint))) {
-    // eslint-disable-next-line no-console
     console.error(
       `Domain "${sampleDomain}" conflict on another shop. Fix shops.domain/custom_domain, then re-run.`
     );

@@ -31,8 +31,8 @@ function getAddressHandler(ctx) {
     const shopId = requireShopId(req.shopId);
     const { customerId } = req.customerAuth;
     await withClient((c) => ctx.assertCustomerShopAccess(c, shopId, customerId));
-    const profile = await withClient((c) => ctx.authRepo.getCustomerProfileByCustomerId(c, customerId));
-    res.json({ address: profile?.address ?? null });
+    const { address } = await withClient((c) => ctx.storefrontAddress.getAddress(c, customerId));
+    res.json({ address });
   });
 }
 
@@ -41,13 +41,18 @@ function postAddressHandler(ctx) {
     const shopId = requireShopId(req.shopId);
     const { userId, customerId } = req.customerAuth;
     await withClient((c) => ctx.assertCustomerShopAccess(c, shopId, customerId));
-    await withTx((c) =>
-      ctx.authRepo.patchCustomerProfile(c, {
+    const { created } = await withTx((c) =>
+      ctx.storefrontAddress.patchAddress(c, {
         customerId,
         userId,
         addressPatch: req.body
       })
     );
+    if (created) {
+      res.set("Location", req.originalUrl.split("?")[0]);
+      res.status(201).send();
+      return;
+    }
     res.status(204).send();
   });
 }
@@ -58,7 +63,7 @@ function patchAddressHandler(ctx) {
     const { userId, customerId } = req.customerAuth;
     await withClient((c) => ctx.assertCustomerShopAccess(c, shopId, customerId));
     await withTx((c) =>
-      ctx.authRepo.patchCustomerProfile(c, {
+      ctx.storefrontAddress.patchAddress(c, {
         customerId,
         userId,
         addressPatch: req.body
@@ -74,7 +79,7 @@ function deleteAddressHandler(ctx) {
     const { userId, customerId } = req.customerAuth;
     await withClient((c) => ctx.assertCustomerShopAccess(c, shopId, customerId));
     const cleared = await withTx((c) =>
-      ctx.authRepo.clearCustomerAddress(c, { customerId, userId })
+      ctx.storefrontAddress.clearAddress(c, { customerId, userId })
     );
     if (!cleared) {
       throw new AppError("No address is linked to this account", {

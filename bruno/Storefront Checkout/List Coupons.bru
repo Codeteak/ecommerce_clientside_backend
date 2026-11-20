@@ -1,0 +1,25 @@
+meta {
+  name: List Coupons
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/storefront/coupons
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+params:query {
+  ~code: {{couponCode}}
+  ~cartSubtotalMinor: 50000
+  ~onlyApplicable: true
+}
+
+docs {
+  Requires a customer token and shop access. Enable code to look up one coupon. cartSubtotalMinor is an integer in minor units. onlyApplicable defaults to false.
+}

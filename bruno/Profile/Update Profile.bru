@@ -1,0 +1,25 @@
+meta {
+  name: Update Profile
+  type: http
+  seq: 2
+}
+
+patch {
+  url: {{baseUrl}}/api/me/profile
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "displayName": "{{displayName}}"
+  }
+}
+
+docs {
+  Partial update. Send at least one of displayName, phone, or address. Address may include line1, line2, landmark, city, lat, lng, and raw.
+}

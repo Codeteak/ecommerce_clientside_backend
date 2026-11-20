@@ -23,7 +23,7 @@ This is a **Node.js 22 + Express** ecommerce API with a **clean hexagonal layout
 ## 1. Debug telemetry posts order data to localhost
 
 - **Severity:** Critical  
-- **File:** `src/adapters/repositories/postgres/OrderRepoPg.js` (`debugLog` ~14–21); `src/interface/http/controllers/storefrontOrdersController.js` (~20–38)  
+- **File:** `src/adapters/repositories/postgres/orders/OrderRepoPg.js` (`debugLog` ~14–21); `src/interface/http/controllers/storefrontOrdersController.js` (~20–38)  
 - **Problem:** Production code calls `fetch("http://127.0.0.1:7565/ingest/...")` with order/customer metadata.  
 - **Risk:** Unreviewed outbound I/O; data leakage if anything listens on that port; compliance and latency impact.  
 - **Recommended fix:** Remove all `#region agent log` blocks before any production deploy.
@@ -133,13 +133,11 @@ store: new RedisStore({ sendCommand: (...args) => redis.call(...args) })
 - **Risk:** `phone`, `email`, `otp` not redacted if body logging expands.  
 - **Recommended fix:** Extend redact paths; never log raw auth bodies.
 
-## Issue: Deploy script forces API docs on in production
+## Issue: Deploy script used to force API docs on in production
 
 - **Severity:** Medium  
-- **File:** `scripts/cicd/application_start.sh` ~29–34  
-- **Problem:** Prepends `ENABLE_API_DOCS=true` and `ALLOW_API_DOCS_IN_PRODUCTION=true`.  
-- **Risk:** OpenAPI/Swagger exposed in production unless overridden elsewhere.  
-- **Recommended fix:** Remove those lines; keep docs dev/staging only.
+- **File:** `scripts/cicd/application_start.sh`  
+- **Status:** Closed. `GET /openapi.json` and `GET /api-docs` are removed, along with `ENABLE_API_DOCS`.
 
 ### What is already secure
 

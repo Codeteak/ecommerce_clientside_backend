@@ -1,6 +1,5 @@
 // Purpose: Root and health endpoints.
 
-import { getMetricsSnapshot } from "../../../infra/metrics/requestMetrics.js";
 import {
   getPrometheusContentType,
   getPrometheusMetricsText
@@ -12,27 +11,10 @@ import { asyncHandler } from "../asyncHandler.js";
 export function mountCoreRoutes(r, deps) {
   const { healthGet, healthReadyGet } = deps;
 
-  r.get("/", (_req, res) => {
-    const body = {
-      ok: true,
-      service: "clientside-ecommerce-api",
-      health: "/health",
-      healthReady: "/health/ready",
-      metrics: "/metrics",
-      metricsJson: "/metrics/json"
-    };
-    if (env.ENABLE_API_DOCS) {
-      body.openapi = "/openapi.json";
-      body.swaggerUi = "/api-docs";
-    }
-    res.json(body);
-  });
-
   r.get("/health", healthGet);
   r.get("/health/ready", healthReadyGet);
 
   r.get("/metrics", asyncHandler(prometheusMetricsGet));
-  r.get("/metrics/json", jsonMetricsGet);
 }
 
 function assertMetricsAuth(req, next) {
@@ -59,10 +41,4 @@ async function prometheusMetricsGet(req, res, next) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Content-Type", getPrometheusContentType());
   res.send(await getPrometheusMetricsText());
-}
-
-function jsonMetricsGet(req, res, next) {
-  if (!assertMetricsAuth(req, next)) return;
-  res.setHeader("Cache-Control", "no-store");
-  res.json(getMetricsSnapshot());
 }

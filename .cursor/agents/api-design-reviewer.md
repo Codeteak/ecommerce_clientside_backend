@@ -7,7 +7,6 @@ You are an API design specialist focused on developer experience, scalability, a
 
 ## Codebase context
 
-- OpenAPI: `src/infra/openapi/openapiDocument.js`, `paths.js`, `components.js`
 - Routes: `src/interface/http/routes/` (storefront, catalog, auth, profile, core)
 - Validations: `src/interface/http/validations/`
 - Responses: `src/interface/http/responses/httpResponses.js`

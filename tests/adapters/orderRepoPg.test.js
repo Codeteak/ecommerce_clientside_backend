@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { OrderRepoPg } from "../../src/adapters/repositories/postgres/OrderRepoPg.js";
+import { OrderRepoPg } from "../../src/adapters/repositories/postgres/orders/OrderRepoPg.js";
 
 const baseRow = {
   id: "00000000-0000-0000-0000-0000000000a1",

@@ -71,6 +71,8 @@ export const envSchema = z
     DATABASE_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(10_000),
     DATABASE_CONNECTION_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(0),
     DATABASE_SSL_REJECT_UNAUTHORIZED: z.preprocess(boolFromEnv, z.boolean()),
+    /** Production escape hatch only — prefer DATABASE_SSL_CA_PEM + verify. */
+    ALLOW_INSECURE_DB_SSL_IN_PRODUCTION: z.preprocess(boolFromEnv, z.boolean()).default(false),
     JWT_SECRET: z.string().min(16),
     JWT_REFRESH_SECRET: z.string().min(16),
     JWT_PREVIOUS_SECRET: z.string().optional().default(""),
@@ -98,11 +100,6 @@ export const envSchema = z
           .filter(Boolean)
       )
       .pipe(z.array(z.string().min(1)).min(1)),
-    ENABLE_API_DOCS: z.preprocess((val) => {
-      if (val === undefined || val === null || val === "") return false;
-      return boolFromEnv(val);
-    }, z.boolean()),
-    ALLOW_API_DOCS_IN_PRODUCTION: z.preprocess(boolFromEnv, z.boolean()).default(false),
     TRUST_PROXY: z.preprocess(boolFromEnv, z.boolean()),
     TRUST_PROXY_HOPS: z.coerce.number().int().positive().default(1),
     SERVICE_AREA_RADIUS_METERS: z.coerce.number().int().positive().default(5000),
@@ -150,6 +147,8 @@ export const envSchema = z
     ACCESS_JTI_DB_FALLBACK_ENABLED: z.preprocess(boolFromEnv, z.boolean()).default(true),
     REALTIME_ENABLED: z.preprocess(boolFromEnv, z.boolean()).default(false),
     REALTIME_CONNECT_TOKEN: z.string().optional().default(""),
+    /** When true, REALTIME_CONNECT_TOKEN may join staff rooms in production (not recommended). */
+    REALTIME_ALLOW_SHARED_CONNECT_TOKEN: z.preprocess(boolFromEnv, z.boolean()).default(false),
     STOREFRONT_CATALOG_REALTIME_TOKEN: z.string().optional().default(""),
     SEARCH_USE_TRGM: z.preprocess(boolFromEnv, z.boolean()).default(false)
   })
@@ -181,14 +180,6 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ["LOG_OTP_IN_DEV"],
         message: "LOG_OTP_IN_DEV must be false in production"
-      });
-    }
-    if (val.NODE_ENV === "production" && val.ENABLE_API_DOCS && !val.ALLOW_API_DOCS_IN_PRODUCTION) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["ENABLE_API_DOCS"],
-        message:
-          "ENABLE_API_DOCS is blocked in production unless ALLOW_API_DOCS_IN_PRODUCTION=true"
       });
     }
     if (val.NODE_ENV === "production" && !val.TRUST_PROXY) {
@@ -233,6 +224,18 @@ export const envSchema = z
         path: ["REDIS_URL"],
         message:
           "REDIS_URL is required in production for shared rate limits, catalog cache, and session cache"
+      });
+    }
+    if (
+      val.NODE_ENV === "production" &&
+      !val.DATABASE_SSL_REJECT_UNAUTHORIZED &&
+      !val.ALLOW_INSECURE_DB_SSL_IN_PRODUCTION
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["DATABASE_SSL_REJECT_UNAUTHORIZED"],
+        message:
+          "DATABASE_SSL_REJECT_UNAUTHORIZED must be true in production (or set ALLOW_INSECURE_DB_SSL_IN_PRODUCTION=true)"
       });
     }
     if (val.NODE_ENV === "production") {

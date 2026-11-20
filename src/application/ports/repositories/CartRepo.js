@@ -11,39 +11,10 @@ export class CartRepo {
     throw new Error("Not implemented");
   }
 
-  async insertCart(_client, _shopId, _customerIdText) {
-    void _client;
-    void _shopId;
-    void _customerIdText;
-    throw new Error("Not implemented");
-  }
-
   async listCartItems(_client, _shopId, _cartId) {
     void _client;
     void _shopId;
     void _cartId;
-    throw new Error("Not implemented");
-  }
-
-  async insertCartItem(_client, _row) {
-    void _client;
-    void _row;
-    throw new Error("Not implemented");
-  }
-
-  async updateCartItemQuantity(_client, _shopId, _cartItemId, _quantity) {
-    void _client;
-    void _shopId;
-    void _cartItemId;
-    void _quantity;
-    throw new Error("Not implemented");
-  }
-
-  async updateCartItemSnapshot(_client, _shopId, _cartItemId, _snapshot) {
-    void _client;
-    void _shopId;
-    void _cartItemId;
-    void _snapshot;
     throw new Error("Not implemented");
   }
 
@@ -139,11 +110,13 @@ export class CartRepo {
   /**
    * Checkout from client lines `{ productId, quantity }[]`. Locks catalog rows and prices from Postgres.
    * Client unit prices are ignored.
+   * @param {{ reserveStock?: boolean }} [_options] Pass `{ reserveStock: true }` only inside checkout commit.
    */
-  async validateClientLinesForCheckout(_client, _shopId, _items) {
+  async validateClientLinesForCheckout(_client, _shopId, _items, _options) {
     void _client;
     void _shopId;
     void _items;
+    void _options;
     throw new Error("Not implemented");
   }
 

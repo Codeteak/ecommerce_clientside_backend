@@ -1,0 +1,19 @@
+meta {
+  name: Resolve By Domain
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/shops/resolve-by-domain
+  body: none
+  auth: none
+}
+
+params:query {
+  domain: {{domain}}
+}
+
+docs {
+  Query `domain` is required, 1 to 255 characters. Copy the returned shop id into the Local `shopId` variable.
+}

@@ -3,7 +3,6 @@ This file builds SQL for storefront product listing with cursor and offset pagin
 */
 
 import { SHOP_PRODUCT_BASELINE_UNIT_MINOR_SQL } from "../../../../application/services/catalog/catalogBaselineUnitSql.js";
-import { categoryImageLateralJoinSql } from "./categoryImageSql.js";
 import {
   shopProductBaseUnitSql,
   shopProductBrandIdSql,
@@ -58,7 +57,9 @@ export function buildListProductsStorefrontQuery({
     offsetClause = `OFFSET $${values.length}`;
   }
 
-  const text = `WITH RECURSIVE category_descendants AS (
+  const hasCategory = categoryId != null && String(categoryId).trim() !== "";
+  const categoryCtes = hasCategory
+    ? `WITH RECURSIVE category_descendants AS (
       SELECT c.id, c.parent_id
         FROM global_categories c
        WHERE c.id = $2::uuid
@@ -93,7 +94,13 @@ export function buildListProductsStorefrontQuery({
          AND cd.id <> $2::uuid`
       }
     )
-    SELECT sp.id,
+    `
+    : "";
+  const categoryPredicate = hasCategory
+    ? `AND ${shopProductCategoryIdSql} IN (SELECT id FROM effective_categories)`
+    : "";
+
+  const text = `${categoryCtes}SELECT sp.id,
           ${shopProductCategoryIdSql} AS category_id,
           ${shopProductNameSql} AS name,
           ${shopProductSlugSql} AS slug,
@@ -114,10 +121,7 @@ export function buildListProductsStorefrontQuery({
           thumb.content_type AS thumb_content_type,
           c.parent_id AS category_parent_id,
           c.name AS category_name,
-          c.slug AS category_slug,
-          cma.id AS category_image_media_id,
-          cma.storage_key AS category_image_storage_key,
-          cma.content_type AS category_image_content_type
+          c.slug AS category_slug
      FROM shop_products sp
      ${shopProductLeftJoinGlobal}
      LEFT JOIN LATERAL (
@@ -142,13 +146,9 @@ export function buildListProductsStorefrontQuery({
         LIMIT 1
      ) thumb ON true
      LEFT JOIN global_categories c ON c.id = ${shopProductCategoryIdSql}
-     ${categoryImageLateralJoinSql({ lateralAlias: "cimg", mediaAlias: "cma" })}
     WHERE sp.shop_id = $1::uuid
       AND sp.status = 'active'
-      AND (
-        $2::uuid IS NULL
-        OR ${shopProductCategoryIdSql} IN (SELECT id FROM effective_categories)
-      )
+      ${categoryPredicate}
       AND ($3::uuid IS NULL OR ${shopProductBrandIdSql} = $3)
       AND ($4::text IS NULL OR ${shopProductNameSql} ILIKE $4 ESCAPE '\\' OR ${shopProductSlugSql} ILIKE $4 ESCAPE '\\')
       AND ($5::text IS NULL OR sp.availability = $5)

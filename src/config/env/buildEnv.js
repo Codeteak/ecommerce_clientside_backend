@@ -152,10 +152,15 @@ export const env = {
         ? false
         : true
       : parsed.data.ACCESS_JTI_REDIS_REQUIRED ?? false,
-  ACCESS_JTI_DB_FALLBACK_ENABLED: parsed.data.ACCESS_JTI_DB_FALLBACK_ENABLED ?? true,
+  ACCESS_JTI_DB_FALLBACK_ENABLED:
+    parsed.data.NODE_ENV === "production"
+      ? process.env.ACCESS_JTI_DB_FALLBACK_ENABLED === "true"
+      : parsed.data.ACCESS_JTI_DB_FALLBACK_ENABLED ?? true,
   REALTIME_ENABLED: parsed.data.REALTIME_ENABLED ?? false,
   REALTIME_CONNECT_TOKEN: parsed.data.REALTIME_CONNECT_TOKEN?.trim() || "",
+  REALTIME_ALLOW_SHARED_CONNECT_TOKEN: parsed.data.REALTIME_ALLOW_SHARED_CONNECT_TOKEN ?? false,
   STOREFRONT_CATALOG_REALTIME_TOKEN: parsed.data.STOREFRONT_CATALOG_REALTIME_TOKEN?.trim() || "",
+  ALLOW_INSECURE_DB_SSL_IN_PRODUCTION: parsed.data.ALLOW_INSECURE_DB_SSL_IN_PRODUCTION ?? false,
   SEARCH_USE_TRGM: parsed.data.SEARCH_USE_TRGM ?? false
 };
 

@@ -1,0 +1,19 @@
+meta {
+  name: Get Category By Slug
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/storefront/categories/:slug
+  body: none
+  auth: none
+}
+
+params:path {
+  slug: {{categorySlug}}
+}
+
+docs {
+  Public. Slug is 1 to 128 characters.
+}

@@ -1,0 +1,26 @@
+meta {
+  name: Verify Phone Change OTP
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/storefront/phone/change/verify-otp
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "newPhone": "{{phone}}",
+    "code": "{{otpCode}}"
+  }
+}
+
+docs {
+  Confirms the phone change. code is 4 digits. newPhone must match the number that received the OTP.
+}

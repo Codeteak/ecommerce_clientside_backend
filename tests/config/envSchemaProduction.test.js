@@ -7,6 +7,7 @@ const baseProductionEnv = {
   CORS_ORIGIN: "https://example.com",
   API_PUBLIC_URL: "https://api.example.com",
   DATABASE_URL: "postgresql://localhost:5432/postgres",
+  DATABASE_SSL_REJECT_UNAUTHORIZED: true,
   JWT_SECRET: "production_jwt_secret_16",
   JWT_REFRESH_SECRET: "production_refresh_secret_16",
   JWT_ISSUER: "clientside-ecommerce",
@@ -28,8 +29,7 @@ const baseProductionEnv = {
   GOOGLE_OAUTH_SCOPE: "openid email profile",
   SMTP_SECURE: false,
   STOREFRONT_ENFORCE_SERVICEABILITY: true,
-  DISABLE_CUSTOMER_AUTH: false,
-  ENABLE_API_DOCS: false
+  DISABLE_CUSTOMER_AUTH: false
 };
 
 describe("envSchema production", () => {
@@ -66,24 +66,4 @@ describe("envSchema production", () => {
     }
   });
 
-  it("accepts production when ENABLE_API_DOCS is omitted (defaults to false)", () => {
-    const { ENABLE_API_DOCS: _removed, ...withoutDocsFlag } = baseProductionEnv;
-    const result = envSchema.safeParse(withoutDocsFlag);
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.ENABLE_API_DOCS).toBe(false);
-    }
-  });
-
-  it("rejects production when ENABLE_API_DOCS is true without ALLOW_API_DOCS_IN_PRODUCTION", () => {
-    const result = envSchema.safeParse({
-      ...baseProductionEnv,
-      ENABLE_API_DOCS: true,
-      ALLOW_API_DOCS_IN_PRODUCTION: false
-    });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.flatten().fieldErrors.ENABLE_API_DOCS).toBeDefined();
-    }
-  });
 });

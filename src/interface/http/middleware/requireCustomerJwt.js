@@ -20,7 +20,7 @@ function setCustomerAuth(req, auth) {
 
 /**
  * @param {{
- *   authRepo: import("../../../application/ports/repositories/CustomerAuthRepo.js").CustomerAuthRepo,
+ *   authRepo: import("../../../application/ports/repositories/auth/CustomerSessionRepo.js").CustomerSessionRepo,
  *   accessTokenRegistry?: ReturnType<import("../../../infra/auth/accessTokenRegistry.js").createAccessTokenRegistry>,
  *   skipDbSessionCheck: boolean,
  *   sessionValidityCache?: { get: (key: string) => Promise<boolean | undefined> | boolean | undefined, set: (key: string, valid: boolean, ttlMs?: number) => Promise<void> | void },

@@ -1,0 +1,36 @@
+meta {
+  name: Verify Phone OTP
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/auth/otp/verify
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "phone": "{{phone}}",
+    "shopId": "{{shopId}}",
+    "code": "{{otpCode}}"
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (res.getStatus() !== 200 || !body) return;
+  if (body.accessToken) {
+    bru.setEnvVar("accessToken", body.accessToken);
+    bru.setVar("accessToken", body.accessToken);
+  }
+  if (body.refreshToken) {
+    bru.setEnvVar("refreshToken", body.refreshToken);
+    bru.setVar("refreshToken", body.refreshToken);
+  }
+}
+
+docs {
+  `code` must be exactly 4 digits. A 200 response stores accessToken and refreshToken for later requests. Select the Local environment before sending, or the script cannot persist the tokens.
+}

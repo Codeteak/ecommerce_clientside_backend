@@ -85,10 +85,7 @@ else:
         if isinstance(v, (dict, list)):
             continue
         out[str(k)] = str(v)
-skip = {"ENABLE_API_DOCS", "ALLOW_API_DOCS_IN_PRODUCTION"}
 for k in sorted(out):
-    if k in skip:
-        continue
     print(f"{k}={out[k]}")
 ' | tr -d '\r' > .env
 
@@ -100,11 +97,10 @@ echo "[application_start] Appending runtime overrides..."
 {
   echo "NODE_ENV=production"
   echo "CUSTOMER_PORT=${APP_PORT}"
-  echo "DATABASE_SSL_REJECT_UNAUTHORIZED=${DATABASE_SSL_REJECT_UNAUTHORIZED:-false}"
+  # Production schema requires true (or ALLOW_INSECURE_DB_SSL_IN_PRODUCTION).
+  # Default true so a later .env line does not undo Secrets Manager / wipe to false.
+  echo "DATABASE_SSL_REJECT_UNAUTHORIZED=${DATABASE_SSL_REJECT_UNAUTHORIZED:-true}"
   echo "TRUST_PROXY=true"
-  # Stripped from Secrets Manager above; schema defaults missing ENABLE_API_DOCS to true.
-  echo "ENABLE_API_DOCS=false"
-  echo "ALLOW_API_DOCS_IN_PRODUCTION=false"
 } >> .env
 
 if ! grep -q '^JWT_REFRESH_SECRET=' .env; then

@@ -61,7 +61,7 @@ export async function buildCheckoutOrderLines({
   /** @type {string[]} */
   let appliedPromotionIds = [];
   /** @type {Array<Record<string, unknown>>} */
-  let orderItems = [];
+  let orderItems;
   /** @type {Awaited<ReturnType<NonNullable<typeof priceStorefrontLines>>> | null} */
   let pricedResult = null;
 
@@ -165,56 +165,11 @@ export async function buildCheckoutOrderLines({
         !knownCartIds.has(String(l.cartItemId))
     );
     if (injected.length) {
-      const injectProductIds = [...new Set(injected.map((l) => String(l.productId)))];
-      /** @type {Map<string, { name: string, unitLabel: string | null }>} */
-      const nameById = new Map();
-      // Must use SAVEPOINT: a failed SELECT aborts the whole checkout txn (25P02).
-      // shop_products / global_products use `base_unit`, not `unit_label`.
-      await client.query("SAVEPOINT sp_bxgy_inject_names");
-      try {
-        const { rows } = await client.query(
-          `SELECT sp.id,
-                  COALESCE(sp.name, gp.name) AS name,
-                  COALESCE(sp.base_unit, gp.base_unit) AS unit_label
-             FROM shop_products sp
-             LEFT JOIN global_products gp ON gp.id = sp.global_product_id
-            WHERE sp.shop_id = $1::uuid
-              AND sp.id = ANY($2::uuid[])`,
-          [shopId, injectProductIds]
-        );
-        for (const row of rows) {
-          nameById.set(String(row.id), {
-            name: String(row.name || "").trim() || `Product ${String(row.id).slice(0, 8)}`,
-            unitLabel: row.unit_label != null ? String(row.unit_label) : null
-          });
-        }
-        await client.query("RELEASE SAVEPOINT sp_bxgy_inject_names");
-      } catch {
-        await client.query("ROLLBACK TO SAVEPOINT sp_bxgy_inject_names");
-        await client.query("SAVEPOINT sp_bxgy_inject_names_fallback");
-        try {
-          const { rows } = await client.query(
-            `SELECT sp.id, COALESCE(sp.name, gp.name) AS name
-               FROM shop_products sp
-               LEFT JOIN global_products gp ON gp.id = sp.global_product_id
-              WHERE sp.shop_id = $1::uuid
-                AND sp.id = ANY($2::uuid[])`,
-            [shopId, injectProductIds]
-          );
-          for (const row of rows) {
-            nameById.set(String(row.id), {
-              name: String(row.name || "").trim() || `Product ${String(row.id).slice(0, 8)}`,
-              unitLabel: null
-            });
-          }
-          await client.query("RELEASE SAVEPOINT sp_bxgy_inject_names_fallback");
-        } catch {
-          await client.query("ROLLBACK TO SAVEPOINT sp_bxgy_inject_names_fallback");
-          /* best-effort names — checkout can still proceed without labels */
-        }
-      }
       for (const p of injected) {
-        const live = nameById.get(String(p.productId));
+        const snapshotName = typeof p.title_snapshot === "string" ? p.title_snapshot.trim() : "";
+        const name = snapshotName || `Product ${String(p.productId).slice(0, 8)}`;
+        const unitLabel =
+          p.unit_label != null && String(p.unit_label).trim() !== "" ? String(p.unit_label) : null;
         const { quantity, paidQuantity, freeQuantity } = orderLineQuantitiesFromPriced(
           p,
           p.display_quantity ?? p.free_quantity ?? p.quantity
@@ -225,8 +180,8 @@ export async function buildCheckoutOrderLines({
         const compareTotal = Math.round(Number(p.total_price_minor) * Math.max(1, quantity));
         orderItems.push({
           productId: p.productId,
-          name: live?.name ?? `Product ${String(p.productId).slice(0, 8)}`,
-          unitLabel: live?.unitLabel ?? null,
+          name,
+          unitLabel,
           quantity,
           paidQuantity,
           freeQuantity,
