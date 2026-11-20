@@ -31,6 +31,32 @@ describe("buildListProductsStorefrontQuery", () => {
     expect(out.text).not.toContain("c.scope = 'private' AND c.owner_shop_id = $1::uuid");
     expect(out.text).not.toContain("OFFSET $");
     expect(out.values).toHaveLength(10);
+    // Unused null $2 must still be cast so Postgres can type the bind.
+    expect(out.text).toContain("AND $2::uuid IS NULL");
+    expect(out.values[1]).toBeNull();
+  });
+
+  it("types unused category bind when listing without category_id", () => {
+    const out = buildListProductsStorefrontQuery({
+      shopId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      categoryId: null,
+      brandId: null,
+      qPattern: null,
+      availability: null,
+      minPriceMinor: null,
+      maxPriceMinor: null,
+      limit: 5,
+      offset: null,
+      cursorCreatedAt: null,
+      cursorId: null,
+      sortOrder: "desc",
+      orderBySql: "sp.created_at DESC, sp.id DESC"
+    });
+
+    expect(out.text).not.toContain("category_descendants");
+    expect(out.text).toContain("AND $2::uuid IS NULL");
+    expect(out.values[1]).toBeNull();
+    expect(out.values).toHaveLength(8);
   });
 
   it("filters category tree existence by availability when set", () => {
