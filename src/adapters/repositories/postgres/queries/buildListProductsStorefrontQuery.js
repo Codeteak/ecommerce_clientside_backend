@@ -96,9 +96,11 @@ export function buildListProductsStorefrontQuery({
     )
     `
     : "";
+  // Keep $2 typed when category is omitted — otherwise node-pg binds null as
+  // an unused $2 and Postgres raises 42P18 (INTERNAL_ERROR on the API).
   const categoryPredicate = hasCategory
     ? `AND ${shopProductCategoryIdSql} IN (SELECT id FROM effective_categories)`
-    : "";
+    : `AND $2::uuid IS NULL`;
 
   const text = `${categoryCtes}SELECT sp.id,
           ${shopProductCategoryIdSql} AS category_id,
