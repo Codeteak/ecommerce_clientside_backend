@@ -1,0 +1,978 @@
+import { CatalogRepo } from "../../../../application/ports/repositories/CatalogRepo.js";
+import { pool } from "../../../../infra/db/pool.js";
+import { setTenantContext } from "../../../../infra/db/tenantContext.js";
+import { toPublicMediaUrl } from "../../../../infra/media/publicMediaUrl.js";
+import { storefrontProductsOrderByClause } from "../../../../application/services/catalog/catalogSearchOrder.js";
+import { buildListProductsStorefrontQuery } from "../queries/buildListProductsStorefrontQuery.js";
+import { buildListSellableProductsBySectionCategoriesQuery } from "../queries/buildListSellableProductsBySectionCategoriesQuery.js";
+import { categoryImageLateralJoinSql } from "../queries/categoryImageSql.js";
+import { sellableAtPurchasePredicates } from "../queries/sellableShopProductSql.js";
+import {
+  shopProductBaseUnitSql,
+  shopProductCategoryIdSql,
+  shopProductDescriptionSql,
+  shopProductImageUrlSql,
+  shopProductLeftJoinGlobal,
+  shopProductNameSql,
+  shopProductSeoDescriptionSql,
+  shopProductSeoTitleSql,
+  shopProductSlugSql,
+  shopProductSoldByWeightSql,
+  shopProductStockQuantitySql,
+  shopProductThumbJoinSql,
+  shopProductUnitSizeSql
+} from "../queries/shopProductCatalogSql.js";
+
+/** Exclude categories the shop opted out of via shop_catalog_hides. */
+const categoryNotHiddenSql = `
+            AND NOT EXISTS (
+              SELECT 1 FROM shop_catalog_hides h
+              WHERE h.shop_id = $1::uuid
+                AND h.entity_type = 'category'
+                AND h.entity_id = c.id
+            )`;
+
+/**
+ * Purpose: This file is the PostgreSQL implementation of catalog data access.
+ * It reads storefront and admin catalog data (products, categories, images)
+ * using tenant-aware SQL queries scoped to one shop.
+ */
+export class CatalogRepoPg extends CatalogRepo {
+  async listProducts(shopId, filters = {}) {
+    const categoryId = filters.categoryId ?? null;
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id, ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit,
+                ${shopProductUnitSizeSql}::text AS unit_size, ${shopProductStockQuantitySql} AS stock_quantity, ${shopProductSoldByWeightSql} AS sold_by_weight, sp.status,
+                sp.price_minor_per_unit::text AS price_minor_per_unit,
+                sp.created_at, sp.updated_at,
+                ${shopProductImageUrlSql} AS global_image_url,
+                pm.id AS image_media_id,
+                pm.storage_key AS image_storage_key,
+                pm.content_type AS image_content_type,
+                c.parent_id AS category_parent_id,
+                c.name AS category_name,
+                c.slug AS category_slug,
+                cm.id AS category_image_media_id,
+                cm.storage_key AS category_image_storage_key,
+                cm.content_type AS category_image_content_type
+           FROM shop_products sp
+${shopProductLeftJoinGlobal}
+           LEFT JOIN LATERAL (
+             WITH chosen_images AS (
+               SELECT spi.media_asset_id, spi.sort_order
+                 FROM shop_product_images spi
+                WHERE spi.shop_product_id = sp.id
+               UNION ALL
+               SELECT gpi.media_asset_id, gpi.sort_order
+                 FROM global_product_images gpi
+                WHERE gpi.global_product_id = sp.global_product_id
+                  AND NOT EXISTS (
+                    SELECT 1 FROM shop_product_images spi2 WHERE spi2.shop_product_id = sp.id
+                  )
+             )
+             SELECT ci.media_asset_id
+               FROM chosen_images ci
+              ORDER BY ci.sort_order ASC
+              LIMIT 1
+           ) pimg ON true
+           LEFT JOIN media_assets pm ON pm.id = pimg.media_asset_id
+           LEFT JOIN global_categories c ON c.id = ${shopProductCategoryIdSql}
+           ${categoryImageLateralJoinSql({ lateralAlias: "cimg", mediaAlias: "cm" })}
+          WHERE sp.shop_id = $1::uuid
+            AND sp.status = 'active'
+            AND ($2::uuid IS NULL OR ${shopProductCategoryIdSql} = $2)
+          ORDER BY ${shopProductNameSql} ASC
+          LIMIT 100`,
+        [shopId, categoryId]
+      );
+      return rows.map((r) => ({
+        ...r,
+        image:
+          typeof r.global_image_url === "string" && r.global_image_url !== ""
+            ? { url: r.global_image_url }
+            : r.image_storage_key != null
+              ? {
+                  mediaAssetId: r.image_media_id,
+                  storageKey: r.image_storage_key,
+                  contentType: r.image_content_type,
+                  url: toPublicMediaUrl(r.image_storage_key)
+                }
+              : null,
+        category:
+          r.category_slug != null
+            ? {
+                parent_id: r.category_parent_id,
+                name: r.category_name,
+                slug: r.category_slug,
+                image:
+                  r.category_image_storage_key != null
+                    ? {
+                        mediaAssetId: r.category_image_media_id,
+                        storageKey: r.category_image_storage_key,
+                        contentType: r.category_image_content_type,
+                        url: toPublicMediaUrl(r.category_image_storage_key)
+                      }
+                    : null
+              }
+            : null
+      }));
+    } finally {
+      client.release();
+    }
+  }
+
+  async listCategories(shopId, filters = {}) {
+    const parentId = filters.parentId !== undefined ? filters.parentId : null;
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `SELECT c.id, $1::uuid AS shop_id, c.parent_id, c.name, c.slug, c.sort_order, c.is_active,
+                ma.id AS image_media_id,
+                ma.storage_key AS image_storage_key,
+                ma.content_type AS image_content_type
+           FROM global_categories c
+           ${categoryImageLateralJoinSql()}
+          WHERE c.is_active = true
+            AND (
+              c.scope = 'shared'
+              OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
+            )
+            ${categoryNotHiddenSql}
+            AND (
+              ($2::uuid IS NULL AND c.parent_id IS NULL)
+              OR ($2::uuid IS NOT NULL AND c.parent_id = $2)
+            )
+          ORDER BY c.sort_order ASC, c.name ASC
+          LIMIT 500`,
+        [shopId, parentId]
+      );
+      return rows.map((r) => ({
+        id: r.id,
+        shop_id: r.shop_id,
+        parent_id: r.parent_id,
+        name: r.name,
+        slug: r.slug,
+        sort_order: r.sort_order,
+        is_active: r.is_active,
+        image:
+          r.image_storage_key != null
+            ? {
+                mediaAssetId: r.image_media_id,
+                storageKey: r.image_storage_key,
+                contentType: r.image_content_type,
+                url: toPublicMediaUrl(r.image_storage_key)
+              }
+            : null
+      }));
+    } finally {
+      client.release();
+    }
+  }
+
+  async searchProducts(shopId, params) {
+    const {
+      categoryId,
+      availability,
+      qPattern,
+      qRaw = null,
+      useTrgm = false,
+      orderBySql,
+      limit,
+      offset
+    } = params;
+    const textFilter = useTrgm && qRaw ? qRaw : qPattern;
+    const textClause =
+      useTrgm && qRaw
+        ? `($4::text IS NULL OR ${shopProductNameSql} % $4 OR ${shopProductSlugSql} % $4)`
+        : `($4::text IS NULL OR ${shopProductNameSql} ILIKE $4 ESCAPE '\\' OR ${shopProductSlugSql} ILIKE $4 ESCAPE '\\')`;
+    const orderClause =
+      useTrgm && qRaw ? `similarity(${shopProductNameSql}, $4) DESC, ${orderBySql}` : orderBySql;
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id, ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit,
+                ${shopProductUnitSizeSql}::text AS unit_size, ${shopProductStockQuantitySql} AS stock_quantity, ${shopProductSoldByWeightSql} AS sold_by_weight, sp.status, sp.availability,
+                sp.price_minor_per_unit::text AS price_minor_per_unit,
+                sp.created_at, sp.updated_at,
+                ${shopProductImageUrlSql} AS global_image_url,
+                pm.id AS image_media_id,
+                pm.storage_key AS image_storage_key,
+                pm.content_type AS image_content_type,
+                c.parent_id AS category_parent_id,
+                c.name AS category_name,
+                c.slug AS category_slug,
+                cm.id AS category_image_media_id,
+                cm.storage_key AS category_image_storage_key,
+                cm.content_type AS category_image_content_type
+           FROM shop_products sp
+${shopProductLeftJoinGlobal}
+           LEFT JOIN LATERAL (
+             WITH chosen_images AS (
+               SELECT spi.media_asset_id, spi.sort_order
+                 FROM shop_product_images spi
+                WHERE spi.shop_product_id = sp.id
+               UNION ALL
+               SELECT gpi.media_asset_id, gpi.sort_order
+                 FROM global_product_images gpi
+                WHERE gpi.global_product_id = sp.global_product_id
+                  AND NOT EXISTS (
+                    SELECT 1 FROM shop_product_images spi2 WHERE spi2.shop_product_id = sp.id
+                  )
+             )
+             SELECT ci.media_asset_id
+               FROM chosen_images ci
+              ORDER BY ci.sort_order ASC
+              LIMIT 1
+           ) pimg ON true
+           LEFT JOIN media_assets pm ON pm.id = pimg.media_asset_id
+           LEFT JOIN global_categories c ON c.id = ${shopProductCategoryIdSql}
+           ${categoryImageLateralJoinSql({ lateralAlias: "cimg", mediaAlias: "cm" })}
+          WHERE sp.shop_id = $1::uuid
+            AND sp.status = 'active'
+            AND ($2::uuid IS NULL OR ${shopProductCategoryIdSql} = $2)
+            AND ($3::text IS NULL OR sp.availability = $3)
+            AND ${textClause}
+          ORDER BY ${orderClause}
+          LIMIT $5 OFFSET $6`,
+        [shopId, categoryId, availability, textFilter, limit, offset]
+      );
+      return rows.map((r) => ({
+        ...r,
+        image:
+          typeof r.global_image_url === "string" && r.global_image_url !== ""
+            ? { url: r.global_image_url }
+            : r.image_storage_key != null
+              ? {
+                  mediaAssetId: r.image_media_id,
+                  storageKey: r.image_storage_key,
+                  contentType: r.image_content_type,
+                  url: toPublicMediaUrl(r.image_storage_key)
+                }
+              : null,
+        category:
+          r.category_slug != null
+            ? {
+                parent_id: r.category_parent_id,
+                name: r.category_name,
+                slug: r.category_slug,
+                image:
+                  r.category_image_storage_key != null
+                    ? {
+                        mediaAssetId: r.category_image_media_id,
+                        storageKey: r.category_image_storage_key,
+                        contentType: r.category_image_content_type,
+                        url: toPublicMediaUrl(r.category_image_storage_key)
+                      }
+                    : null
+              }
+            : null
+      }));
+    } finally {
+      client.release();
+    }
+  }
+
+  async searchCategories(shopId, params) {
+    const {
+      parentId,
+      qPattern,
+      qRaw = null,
+      useTrgm = false,
+      orderBySql,
+      limit,
+      offset
+    } = params;
+    const textFilter = useTrgm && qRaw ? qRaw : qPattern;
+    const textClause =
+      useTrgm && qRaw
+        ? `($3::text IS NULL OR c.name % $3 OR c.slug % $3)`
+        : `($3::text IS NULL OR c.name ILIKE $3 ESCAPE '\\' OR c.slug ILIKE $3 ESCAPE '\\')`;
+    const orderClause =
+      useTrgm && qRaw ? `similarity(c.name, $3) DESC, ${orderBySql}` : orderBySql;
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `SELECT c.id, $1::uuid AS shop_id, c.parent_id, c.name, c.slug, c.sort_order, c.is_active,
+                ma.id AS image_media_id,
+                ma.storage_key AS image_storage_key,
+                ma.content_type AS image_content_type
+           FROM global_categories c
+           ${categoryImageLateralJoinSql()}
+          WHERE c.is_active = true
+            AND (
+              c.scope = 'shared'
+              OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
+            )
+            AND (
+              ($2::uuid IS NULL AND c.parent_id IS NULL)
+              OR ($2::uuid IS NOT NULL AND c.parent_id = $2)
+            )
+            AND ${textClause}
+          ORDER BY ${orderClause}
+          LIMIT $4 OFFSET $5`,
+        [shopId, parentId, textFilter, limit, offset]
+      );
+      return rows.map((r) => ({
+        id: r.id,
+        shop_id: r.shop_id,
+        parent_id: r.parent_id,
+        name: r.name,
+        slug: r.slug,
+        sort_order: r.sort_order,
+        is_active: r.is_active,
+        image:
+          r.image_storage_key != null
+            ? {
+                mediaAssetId: r.image_media_id,
+                storageKey: r.image_storage_key,
+                contentType: r.image_content_type,
+                url: toPublicMediaUrl(r.image_storage_key)
+              }
+            : null
+      }));
+    } finally {
+      client.release();
+    }
+  }
+
+  async listCategoryIdsWithSellableProducts(shopId) {
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `WITH RECURSIVE category_ancestors AS (
+           SELECT DISTINCT ${shopProductCategoryIdSql} AS id
+             FROM shop_products sp
+             ${shopProductLeftJoinGlobal}
+            WHERE sp.shop_id = $1::uuid
+              AND sp.status = 'active'
+              AND sp.availability = 'in_stock'
+              AND ${shopProductCategoryIdSql} IS NOT NULL
+           UNION
+           SELECT c.parent_id
+             FROM global_categories c
+             JOIN category_ancestors ca ON c.id = ca.id
+            WHERE c.parent_id IS NOT NULL
+         )
+         SELECT DISTINCT id::text AS id
+           FROM category_ancestors
+          WHERE id IS NOT NULL`,
+        [shopId]
+      );
+      return rows.map((r) => String(r.id));
+    } finally {
+      client.release();
+    }
+  }
+
+  async listCategoriesStorefront(shopId, filters = {}) {
+    const parentId = filters.parentId !== undefined ? filters.parentId : null;
+    const sellableCategoryIds = Array.isArray(filters.sellableCategoryIds)
+      ? filters.sellableCategoryIds.map((id) => String(id)).filter(Boolean)
+      : null;
+
+    if (sellableCategoryIds && sellableCategoryIds.length === 0) {
+      return [];
+    }
+
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const sellableFilter =
+        sellableCategoryIds != null ? `AND c.id = ANY($3::uuid[])` : "";
+      const params =
+        sellableCategoryIds != null ? [shopId, parentId, sellableCategoryIds] : [shopId, parentId];
+
+      const { rows } = await client.query(
+        `SELECT c.id, c.parent_id, c.name, c.slug, c.sort_order,
+                ma.id AS image_media_id,
+                ma.storage_key AS image_storage_key,
+                ma.content_type AS image_content_type
+           FROM global_categories c
+           ${categoryImageLateralJoinSql()}
+          WHERE c.is_active = true
+            AND (
+              c.scope = 'shared'
+              OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
+            )
+            ${categoryNotHiddenSql}
+            ${sellableFilter}
+            AND (
+              ($2::uuid IS NULL AND c.parent_id IS NULL)
+              OR ($2::uuid IS NOT NULL AND c.parent_id = $2)
+            )
+          ORDER BY c.sort_order ASC, c.name ASC
+          LIMIT 500`,
+        params
+      );
+      return rows;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listAllCategoriesStorefront(shopId, filters = {}) {
+    const sellableCategoryIds = Array.isArray(filters.sellableCategoryIds)
+      ? filters.sellableCategoryIds.map((id) => String(id)).filter(Boolean)
+      : null;
+
+    if (sellableCategoryIds && sellableCategoryIds.length === 0) {
+      return [];
+    }
+
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const sellableFilter =
+        sellableCategoryIds != null ? `AND c.id = ANY($2::uuid[])` : "";
+      const params = sellableCategoryIds != null ? [shopId, sellableCategoryIds] : [shopId];
+
+      const { rows } = await client.query(
+        `SELECT c.id, c.parent_id, c.name, c.slug, c.sort_order,
+                ma.id AS image_media_id,
+                ma.storage_key AS image_storage_key,
+                ma.content_type AS image_content_type
+           FROM global_categories c
+           ${categoryImageLateralJoinSql()}
+          WHERE c.is_active = true
+            AND (
+              c.scope = 'shared'
+              OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
+            )
+            ${categoryNotHiddenSql}
+            ${sellableFilter}
+          ORDER BY c.sort_order ASC, c.name ASC
+          LIMIT 5000`,
+        params
+      );
+      return rows;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * One image lookup per category on the page, using the same picture rules
+   * as the previous per-product join.
+   */
+  async #attachCategoryImages(client, shopId, rows) {
+    for (const row of rows) {
+      row.category_image_media_id = null;
+      row.category_image_storage_key = null;
+      row.category_image_content_type = null;
+    }
+    const ids = [
+      ...new Set(
+        rows
+          .map((row) => (row.category_id != null ? String(row.category_id) : ""))
+          .filter(Boolean)
+      )
+    ];
+    if (ids.length === 0) return;
+
+    const { rows: images } = await client.query(
+      `SELECT c.id,
+              ma.id AS image_media_id,
+              ma.storage_key AS image_storage_key,
+              ma.content_type AS image_content_type
+         FROM global_categories c
+         ${categoryImageLateralJoinSql()}
+        WHERE c.id = ANY($2::uuid[])`,
+      [shopId, ids]
+    );
+    const byId = new Map(images.map((image) => [String(image.id), image]));
+    for (const row of rows) {
+      if (row.category_id == null) continue;
+      const image = byId.get(String(row.category_id));
+      if (!image) continue;
+      row.category_image_media_id = image.image_media_id ?? null;
+      row.category_image_storage_key = image.image_storage_key ?? null;
+      row.category_image_content_type = image.image_content_type ?? null;
+    }
+  }
+
+  async listProductsStorefront(shopId, params) {
+    const {
+      categoryId,
+      brandId,
+      qPattern,
+      limit,
+      offset,
+      cursorCreatedAt,
+      cursorId,
+      availability,
+      minPriceMinor,
+      maxPriceMinor,
+      sortBy,
+      sortOrder,
+      includeDescendants
+    } = params;
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const orderBySql = storefrontProductsOrderByClause(sortBy, sortOrder);
+      const query = buildListProductsStorefrontQuery({
+        shopId,
+        categoryId,
+        brandId,
+        qPattern,
+        availability,
+        minPriceMinor,
+        maxPriceMinor,
+        limit,
+        offset,
+        cursorCreatedAt,
+        cursorId,
+        sortOrder,
+        orderBySql,
+        includeDescendants: includeDescendants === true
+      });
+      const { rows } = await client.query(query);
+      await this.#attachCategoryImages(client, shopId, rows);
+      return rows;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getProductSeoBySlugStorefront(shopId, slug) {
+    const norm = String(slug || "").trim().toLowerCase();
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows: prodRows } = await client.query(
+        `SELECT sp.id, sp.availability,
+                ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductDescriptionSql} AS description,
+                ${shopProductSeoTitleSql} AS seo_title, ${shopProductSeoDescriptionSql} AS seo_description, ${shopProductImageUrlSql} AS global_image_url,
+                sp.price_minor_per_unit::text AS price_minor_per_unit,
+                sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit
+           FROM shop_products sp
+           ${shopProductLeftJoinGlobal}
+          WHERE sp.shop_id = $1::uuid
+            AND lower(${shopProductSlugSql}) = $2
+            AND sp.status = 'active'
+            AND sp.availability = 'in_stock'
+          LIMIT 1`,
+        [shopId, norm]
+      );
+      const product = prodRows[0];
+      if (!product) return null;
+
+      const { rows: imgRows } = await client.query(
+        `SELECT m.storage_key
+           FROM shop_product_images spi
+           JOIN media_assets m ON m.id = spi.media_asset_id
+          WHERE spi.shop_product_id = $1::uuid
+          ORDER BY spi.sort_order ASC
+          LIMIT 1`,
+        [product.id]
+      );
+      const primary_image_storage_key = imgRows[0]?.storage_key ?? null;
+      return { product, primary_image_storage_key };
+    } finally {
+      client.release();
+    }
+  }
+
+  async getProductBySlugStorefront(shopId, slug) {
+    const norm = String(slug || "").trim().toLowerCase();
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows: prodRows } = await client.query(
+        `SELECT sp.id, sp.shop_id, ${shopProductCategoryIdSql} AS category_id,
+                ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug, ${shopProductBaseUnitSql} AS base_unit, ${shopProductUnitSizeSql}::text AS unit_size, ${shopProductStockQuantitySql} AS stock_quantity,
+                ${shopProductSoldByWeightSql} AS sold_by_weight,
+                ${shopProductDescriptionSql} AS description, ${shopProductSeoTitleSql} AS seo_title, ${shopProductSeoDescriptionSql} AS seo_description,
+                sp.status, sp.availability,
+                sp.price_minor_per_unit::text AS price_minor_per_unit,
+                sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
+                sp.created_at, sp.updated_at, sp.global_product_id, ${shopProductImageUrlSql} AS global_image_url
+           FROM shop_products sp
+           ${shopProductLeftJoinGlobal}
+          WHERE sp.shop_id = $1::uuid
+            AND lower(${shopProductSlugSql}) = $2
+            AND sp.status = 'active'
+            AND sp.availability = 'in_stock'
+          LIMIT 1`,
+        [shopId, norm]
+      );
+      const product = prodRows[0];
+      if (!product) return null;
+
+      const { rows: galRows } = await client.query(
+        `SELECT spi.media_asset_id, spi.sort_order,
+                m.storage_key, m.content_type
+           FROM shop_product_images spi
+           JOIN media_assets m ON m.id = spi.media_asset_id
+          WHERE spi.shop_product_id = $1::uuid
+          ORDER BY spi.sort_order ASC
+          LIMIT 6`,
+        [product.id]
+      );
+
+      let gallery = galRows;
+      if (gallery.length === 0) {
+        const { rows: fb } = await client.query(
+          `SELECT unnest(app.find_fallback_product_gallery_ids_by_slug_and_shop($1::uuid, $2::text)) AS media_asset_id`,
+          [shopId, slug]
+        );
+        const ids = fb.map((r) => r.media_asset_id).filter(Boolean);
+        if (ids.length > 0) {
+          const { rows: assets } = await client.query(
+            `SELECT id AS media_asset_id, storage_key, content_type
+               FROM media_assets
+              WHERE id = ANY($1::uuid[])
+              ORDER BY array_position($1::uuid[], id)`,
+            [ids]
+          );
+          gallery = assets.map((a, i) => ({
+            media_asset_id: a.media_asset_id,
+            sort_order: i,
+            storage_key: a.storage_key,
+            content_type: a.content_type
+          }));
+        }
+      }
+
+      return { product, gallery };
+    } finally {
+      client.release();
+    }
+  }
+
+  async listEnabledHomeSectionsStorefront(shopId) {
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `SELECT id, title, type, sort_order, starts_at, ends_at,
+                product_ids, category_ids, buy_product_ids, get_product_ids,
+                buy_qty, get_qty, promotion_id
+           FROM shop_home_sections
+          WHERE shop_id = $1::uuid
+            AND deleted_at IS NULL
+            AND is_enabled = true
+            AND (starts_at IS NULL OR starts_at <= now())
+            AND (ends_at IS NULL OR ends_at >= now())
+          ORDER BY sort_order ASC, created_at ASC`,
+        [shopId]
+      );
+      return rows;
+    } catch (err) {
+      if (err && err.code === "42P01") return [];
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listSellableProductsByIdsStorefront(shopId, ids) {
+    const productIds = Array.isArray(ids) ? ids.map((id) => String(id)).filter(Boolean) : [];
+    if (productIds.length === 0) return [];
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `SELECT sp.id, ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug,
+                ${shopProductCategoryIdSql} AS category_id,
+                ${shopProductStockQuantitySql} AS stock_quantity,
+                sp.price_minor_per_unit::text AS price_minor_per_unit,
+                sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
+                ${shopProductImageUrlSql} AS global_image_url,
+                pm.id AS thumb_media_id,
+                pm.storage_key AS thumb_storage_key,
+                pm.content_type AS thumb_content_type
+           FROM shop_products sp
+           ${shopProductLeftJoinGlobal}
+           LEFT JOIN LATERAL (
+             WITH chosen_images AS (
+               SELECT spi.media_asset_id, spi.sort_order
+                 FROM shop_product_images spi
+                WHERE spi.shop_product_id = sp.id
+               UNION ALL
+               SELECT gpi.media_asset_id, gpi.sort_order
+                 FROM global_product_images gpi
+                WHERE gpi.global_product_id = sp.global_product_id
+                  AND NOT EXISTS (
+                    SELECT 1 FROM shop_product_images spi2 WHERE spi2.shop_product_id = sp.id
+                  )
+             )
+             SELECT ci.media_asset_id
+               FROM chosen_images ci
+              ORDER BY ci.sort_order ASC
+              LIMIT 1
+           ) pimg ON true
+           LEFT JOIN media_assets pm ON pm.id = pimg.media_asset_id
+          WHERE sp.shop_id = $1::uuid
+            AND sp.id = ANY($2::uuid[])
+            AND sp.status = 'active'
+            AND sp.availability = 'in_stock'`,
+        [shopId, productIds]
+      );
+      return rows;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listSellableProductsByCategoryIdsStorefront(shopId, categoryIds, limit = 50) {
+    const cats = Array.isArray(categoryIds)
+      ? [...new Set(categoryIds.map((id) => String(id)).filter(Boolean))]
+      : [];
+    if (cats.length === 0) return [];
+    const cap = Math.min(Math.max(1, Number(limit) || 50), 50);
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `WITH RECURSIVE category_tree AS (
+           SELECT c.id
+             FROM global_categories c
+            WHERE c.id = ANY($2::uuid[])
+           UNION ALL
+           SELECT child.id
+             FROM global_categories child
+             JOIN category_tree ct ON child.parent_id = ct.id
+         )
+         SELECT sp.id, ${shopProductNameSql} AS name, ${shopProductSlugSql} AS slug,
+                ${shopProductCategoryIdSql} AS category_id,
+                ${shopProductStockQuantitySql} AS stock_quantity,
+                sp.price_minor_per_unit::text AS price_minor_per_unit,
+                sp.offer_price_minor_per_unit::text AS offer_price_minor_per_unit,
+                ${shopProductImageUrlSql} AS global_image_url,
+                pm.id AS thumb_media_id,
+                pm.storage_key AS thumb_storage_key,
+                pm.content_type AS thumb_content_type
+           FROM shop_products sp
+           ${shopProductLeftJoinGlobal}
+           LEFT JOIN LATERAL (
+             WITH chosen_images AS (
+               SELECT spi.media_asset_id, spi.sort_order
+                 FROM shop_product_images spi
+                WHERE spi.shop_product_id = sp.id
+               UNION ALL
+               SELECT gpi.media_asset_id, gpi.sort_order
+                 FROM global_product_images gpi
+                WHERE gpi.global_product_id = sp.global_product_id
+                  AND NOT EXISTS (
+                    SELECT 1 FROM shop_product_images spi2 WHERE spi2.shop_product_id = sp.id
+                  )
+             )
+             SELECT ci.media_asset_id
+               FROM chosen_images ci
+              ORDER BY ci.sort_order ASC
+              LIMIT 1
+           ) pimg ON true
+           LEFT JOIN media_assets pm ON pm.id = pimg.media_asset_id
+          WHERE sp.shop_id = $1::uuid
+            AND sp.status = 'active'
+            AND sp.availability = 'in_stock'
+            AND ${shopProductCategoryIdSql} IN (SELECT id FROM category_tree)
+          ORDER BY sp.updated_at DESC NULLS LAST, sp.id ASC
+          LIMIT $3`,
+        [shopId, cats, cap]
+      );
+      return rows;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listSellableProductsBySectionCategoriesStorefront(shopId, sections, limit = 50) {
+    const sectionIds = [];
+    const categoryIds = [];
+    for (const section of Array.isArray(sections) ? sections : []) {
+      const sectionId = String(section?.sectionId || "").trim();
+      const cats = Array.isArray(section?.categoryIds) ? section.categoryIds : [];
+      for (const categoryId of cats) {
+        const id = String(categoryId || "").trim();
+        if (!sectionId || !id) continue;
+        sectionIds.push(sectionId);
+        categoryIds.push(id);
+      }
+    }
+    if (sectionIds.length === 0) return [];
+    const cap = Math.min(Math.max(1, Number(limit) || 50), 50);
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(buildListSellableProductsBySectionCategoriesQuery(), [
+        shopId,
+        sectionIds,
+        categoryIds,
+        cap
+      ]);
+      return rows;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getHomeSectionByIdStorefront(shopId, sectionId) {
+    const id = String(sectionId || "").trim();
+    if (!id) return null;
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `SELECT id, title, type, sort_order, starts_at, ends_at, is_enabled,
+                product_ids, category_ids, buy_product_ids, get_product_ids,
+                buy_qty, get_qty, promotion_id, deleted_at
+           FROM shop_home_sections
+          WHERE shop_id = $1::uuid
+            AND id = $2::uuid
+          LIMIT 1`,
+        [shopId, id]
+      );
+      return rows[0] ?? null;
+    } catch (err) {
+      if (err && err.code === "42P01") return null;
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listActiveCategoriesByIdsStorefront(shopId, ids) {
+    const categoryIds = Array.isArray(ids) ? ids.map((id) => String(id)).filter(Boolean) : [];
+    if (categoryIds.length === 0) return [];
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `SELECT c.id, c.name, c.slug,
+                ma.id AS image_media_id,
+                ma.storage_key AS image_storage_key,
+                ma.content_type AS image_content_type
+           FROM global_categories c
+           ${categoryImageLateralJoinSql()}
+          WHERE c.is_active = true
+            AND c.id = ANY($2::uuid[])
+            AND (
+              c.scope = 'shared'
+              OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
+            )
+            ${categoryNotHiddenSql}`,
+        [shopId, categoryIds]
+      );
+      return rows;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getCategoryBySlugStorefront(shopId, slug) {
+    const norm = String(slug || "").trim().toLowerCase();
+    const client = await pool.connect();
+    try {
+      await setTenantContext(client, shopId);
+      const { rows } = await client.query(
+        `SELECT c.id, c.parent_id, c.name, c.slug, c.sort_order,
+                ma.id AS image_media_id,
+                ma.storage_key AS image_storage_key,
+                ma.content_type AS image_content_type
+           FROM global_categories c
+           ${categoryImageLateralJoinSql()}
+          WHERE c.is_active = true
+            AND (
+              c.scope = 'shared'
+              OR (c.scope = 'private' AND c.owner_shop_id = $1::uuid)
+            )
+            ${categoryNotHiddenSql}
+            AND EXISTS (
+              WITH RECURSIVE category_tree AS (
+                SELECT c.id
+                UNION ALL
+                SELECT child.id
+                  FROM global_categories child
+                  JOIN category_tree ct ON child.parent_id = ct.id
+              )
+              SELECT 1
+                FROM shop_products sp
+     ${shopProductLeftJoinGlobal}
+               WHERE sp.shop_id = $1::uuid
+                 AND sp.status = 'active'
+                 AND sp.availability = 'in_stock'
+                 AND ${shopProductCategoryIdSql} IN (SELECT id FROM category_tree)
+            )
+            AND lower(c.slug) = $2
+          LIMIT 1`,
+        [shopId, norm]
+      );
+      return rows[0] ?? null;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listCategoryParents(client, categoryIds) {
+    const ids = [
+      ...new Set(
+        [...categoryIds].map((id) => (id != null ? String(id).trim() : "")).filter(Boolean)
+      )
+    ];
+    /** @type {Map<string, string | null>} */
+    const out = new Map();
+    if (!ids.length) return out;
+    const { rows } = await client.query(
+      `WITH RECURSIVE chain AS (
+         SELECT id, parent_id
+           FROM global_categories
+          WHERE id = ANY($1::uuid[])
+         UNION ALL
+         SELECT p.id, p.parent_id
+           FROM global_categories p
+           JOIN chain c ON c.parent_id = p.id
+          WHERE c.parent_id IS NOT NULL
+       )
+       SELECT id::text AS id, parent_id::text AS parent_id
+         FROM chain`,
+      [ids]
+    );
+    for (const row of rows) {
+      out.set(String(row.id), row.parent_id != null ? String(row.parent_id) : null);
+    }
+    return out;
+  }
+
+  async listRewardProductsForPricing(client, shopId, productIds) {
+    const ids = [...new Set(productIds.map((id) => (id != null ? String(id).trim() : "")).filter(Boolean))];
+    if (!ids.length) return [];
+    // A failed SELECT aborts the checkout transaction. Roll back to this
+    // savepoint so pricing can skip the free line and keep the order.
+    await client.query("SAVEPOINT sp_reward_products_for_pricing");
+    try {
+      const { rows } = await client.query(
+        `SELECT sp.id,
+                sp.price_minor_per_unit,
+                sp.offer_price_minor_per_unit,
+                sp.global_category_id,
+                ${shopProductNameSql} AS name,
+                ${shopProductImageUrlSql} AS image_url,
+                pm.storage_key AS thumb_storage_key,
+                ${shopProductBaseUnitSql} AS base_unit
+           FROM shop_products sp
+           ${shopProductLeftJoinGlobal}
+           ${shopProductThumbJoinSql("sp", "pm")}
+          WHERE sp.shop_id = $1::uuid
+            AND sp.id = ANY($2::uuid[])
+            AND ${sellableAtPurchasePredicates}`,
+        [shopId, ids]
+      );
+      await client.query("RELEASE SAVEPOINT sp_reward_products_for_pricing");
+      return rows;
+    } catch {
+      await client.query("ROLLBACK TO SAVEPOINT sp_reward_products_for_pricing");
+      await client.query("RELEASE SAVEPOINT sp_reward_products_for_pricing");
+      return [];
+    }
+  }
+}
+

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { encodeAddressRaw, parseAddressRow } from "../../src/adapters/repositories/postgres/addressShape.js";
+import { encodeAddressRaw, parseAddressRow } from "../../src/adapters/repositories/postgres/shared/addressShape.js";
 import { customerAddressSnapshot } from "../../src/application/services/checkout/checkoutInput.js";
 import {
   storefrontAddressPostSchema,

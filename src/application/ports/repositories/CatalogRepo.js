@@ -73,12 +73,6 @@ export class CatalogRepo {
     throw new Error("Not implemented");
   }
 
-  async getProductByIdStorefront(_shopId, _id) {
-    void _shopId;
-    void _id;
-    throw new Error("Not implemented");
-  }
-
   async listEnabledHomeSectionsStorefront(_shopId) {
     void _shopId;
     throw new Error("Not implemented");
@@ -101,6 +95,21 @@ export class CatalogRepo {
     throw new Error("Not implemented");
   }
 
+  /**
+   * Same shelf fill as listSellableProductsByCategoryIdsStorefront, one query for every shelf.
+   * Each section keeps its own newest rows, capped per shelf.
+   * @param {string} _shopId
+   * @param {{ sectionId: string, categoryIds: string[] }[]} _sections
+   * @param {number} [_limit]
+   * @returns {Promise<object[]>} rows include section_id
+   */
+  async listSellableProductsBySectionCategoriesStorefront(_shopId, _sections, _limit) {
+    void _shopId;
+    void _sections;
+    void _limit;
+    throw new Error("Not implemented");
+  }
+
   /** Any non-deleted home section row (ignores enabled / date window). */
   async getHomeSectionByIdStorefront(_shopId, _sectionId) {
     void _shopId;
@@ -117,6 +126,34 @@ export class CatalogRepo {
   async getCategoryBySlugStorefront(_shopId, _slug) {
     void _shopId;
     void _slug;
+    throw new Error("Not implemented");
+  }
+
+  /**
+   * Parent id for each category in the walk, including the starting ids.
+   * Uses the caller's transaction client.
+   * @param {import("pg").PoolClient} _client
+   * @param {Iterable<string | null | undefined>} _categoryIds
+   * @returns {Promise<Map<string, string | null>>}
+   */
+  async listCategoryParents(_client, _categoryIds) {
+    void _client;
+    void _categoryIds;
+    throw new Error("Not implemented");
+  }
+
+  /**
+   * Sellable reward SKUs for cross buy-x-get-y injection.
+   * A query failure returns an empty list so checkout can skip the free line.
+   * @param {import("pg").PoolClient} _client
+   * @param {string} _shopId
+   * @param {string[]} _productIds
+   * @returns {Promise<object[]>}
+   */
+  async listRewardProductsForPricing(_client, _shopId, _productIds) {
+    void _client;
+    void _shopId;
+    void _productIds;
     throw new Error("Not implemented");
   }
 }

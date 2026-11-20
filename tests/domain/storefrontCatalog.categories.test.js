@@ -26,14 +26,6 @@ describe("storefrontCatalog categories", () => {
       wrap: vi.fn(async (_key, _ttl, fn) => fn()),
       shopKeyPrefix: vi.fn().mockResolvedValue(`shop:${shopId}:g1:`)
     };
-    const service = createStorefrontCatalog({
-      catalogRepo,
-      ensureShopForCatalog: vi.fn(),
-      catalogCache,
-      catalogCacheTtlSec: 60,
-      ...storefrontCatalogTestDeps()
-    });
-
     const shopLookupRepo = {
       findShopBrandingById: vi.fn().mockResolvedValue({
         id: shopId,

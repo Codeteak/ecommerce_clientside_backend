@@ -1,11 +1,11 @@
 // Purpose: This file builds the app context by creating and wiring repos, services, and middleware..
-import { CatalogRepoPg } from "../adapters/repositories/postgres/CatalogRepoPg.js";
-import { CartRepoPg } from "../adapters/repositories/postgres/CartRepoPg.js";
-import { CustomerAuthRepoPg } from "../adapters/repositories/postgres/CustomerAuthRepoPg.js";
-import { OrderRepoPg } from "../adapters/repositories/postgres/OrderRepoPg.js";
-import { ShopLookupRepoPg } from "../adapters/repositories/postgres/ShopLookupRepoPg.js";
-import { ShopServiceAreaRepoPg } from "../adapters/repositories/postgres/ShopServiceAreaRepoPg.js";
-import { PromotionRepoPg } from "../adapters/repositories/postgres/PromotionRepoPg.js";
+import { CatalogRepoPg } from "../adapters/repositories/postgres/catalog/CatalogRepoPg.js";
+import { CartRepoPg } from "../adapters/repositories/postgres/cart/CartRepoPg.js";
+import { CustomerAuthRepoPg } from "../adapters/repositories/postgres/auth/CustomerAuthRepoPg.js";
+import { OrderRepoPg } from "../adapters/repositories/postgres/orders/OrderRepoPg.js";
+import { ShopLookupRepoPg } from "../adapters/repositories/postgres/shops/ShopLookupRepoPg.js";
+import { ShopServiceAreaRepoPg } from "../adapters/repositories/postgres/shops/ShopServiceAreaRepoPg.js";
+import { PromotionRepoPg } from "../adapters/repositories/postgres/promotions/PromotionRepoPg.js";
 import { env } from "../config/env.js";
 import { effectiveReadCacheTtlSec } from "../config/env/readCacheTtl.js";
 import { createShopResolver } from "../interface/http/middleware/shopResolver.js";
@@ -25,12 +25,16 @@ import { provisionCustomerForOAuthShop } from "../application/services/auth/prov
 import { createAssertCustomerShopAccess } from "../application/services/auth/assertCustomerShopAccess.js";
 import { createRequestCustomerOtp } from "../application/services/auth/requestCustomerOtp.js";
 import { createVerifyCustomerOtp } from "../application/services/auth/verifyCustomerOtp.js";
-import { createRequestCustomerEmailOtp } from "../application/services/auth/requestCustomerEmailOtp.js";
-import { createVerifyCustomerEmailOtp } from "../application/services/auth/verifyCustomerEmailOtp.js";
 import { createRotateCustomerRefreshToken } from "../application/services/auth/rotateCustomerRefreshToken.js";
 import { getCustomerProfile } from "../application/services/profile/getCustomerProfile.js";
 import { updateCustomerProfile } from "../application/services/profile/updateCustomerProfile.js";
 import { createUpdateStorefrontProfile } from "../application/services/profile/updateStorefrontProfile.js";
+import { createStorefrontAddress } from "../application/services/profile/storefrontAddress.js";
+import {
+  bindCustomerOtpRepo,
+  bindCustomerProfileRepo,
+  bindCustomerSessionRepo
+} from "../application/ports/repositories/auth/bindAuthPorts.js";
 import { createRequestPhoneChangeOtp } from "../application/services/profile/requestPhoneChangeOtp.js";
 import { createVerifyPhoneChangeOtp } from "../application/services/profile/verifyPhoneChangeOtp.js";
 import { createCheckShopServiceArea } from "../application/services/shops/checkShopServiceArea.js";
@@ -57,7 +61,6 @@ import { createCheckoutStorefront } from "../application/services/checkout/check
 import { logger } from "../config/logger.js";
 import { ConsoleSmsSender } from "../adapters/sms/consoleSmsSender.js";
 import { Msg91SmsSender } from "../adapters/sms/msg91SmsSender.js";
-import { SmtpOtpSender } from "../adapters/sms/smtpOtpSender.js";
 import { createSessionCache } from "../utils/sessionCache.js";
 import { createAccessTokenRegistry } from "../infra/auth/accessTokenRegistry.js";
 import { createLogoutCustomer } from "../application/services/auth/logoutCustomer.js";
@@ -69,6 +72,18 @@ export function createAppContext() {
   const cartRepo = new CartRepoPg();
   const orderRepo = new OrderRepoPg();
   const authRepo = new CustomerAuthRepoPg();
+  const sessionRepo = bindCustomerSessionRepo(authRepo);
+  const profileRepo = bindCustomerProfileRepo(authRepo);
+  const otpRepo = bindCustomerOtpRepo(authRepo);
+  const otpWithShopRepo = {
+    ...otpRepo,
+    getShopById: (client, shopId) => authRepo.getShopById(client, shopId)
+  };
+  const phoneChangeRepo = {
+    ...profileRepo,
+    ...otpRepo,
+    getShopById: (client, shopId) => authRepo.getShopById(client, shopId)
+  };
   const shopLookupRepo = new ShopLookupRepoPg();
   const shopServiceAreaRepo = new ShopServiceAreaRepoPg();
   const promotionRepo = new PromotionRepoPg();
@@ -141,7 +156,7 @@ export function createAppContext() {
     }
   };
   const customerJwtMiddleware = createRequireCustomerJwt({
-    authRepo,
+    authRepo: sessionRepo,
     accessTokenRegistry,
     skipDbSessionCheck: env.NODE_ENV === "test",
     sessionValidityCache,
@@ -161,7 +176,7 @@ export function createAppContext() {
     : customerJwtMiddleware();
 
   const optionalCustomerJwtFactory = createOptionalCustomerJwt({
-    authRepo,
+    authRepo: sessionRepo,
     accessTokenRegistry,
     skipDbSessionCheck: env.NODE_ENV === "test",
     sessionValidityCache,
@@ -221,13 +236,14 @@ export function createAppContext() {
   const priceStorefrontLines = createPriceStorefrontLines({
     promotionRepo,
     shopPromotionCache,
-    authRepo,
-    orderRepo
+    authRepo: profileRepo,
+    orderRepo,
+    catalogRepo
   });
   const listApplicableCoupons = createListApplicableCoupons({
     promotionRepo,
     shopPromotionCache,
-    authRepo,
+    authRepo: profileRepo,
     orderRepo
   });
   const storefrontCart = createStorefrontCart({
@@ -246,35 +262,24 @@ export function createAppContext() {
   });
   const assertCustomerShopAccess = createAssertCustomerShopAccess({ authRepo });
   const requireCustomerShopAccess = createRequireCustomerShopAccess({ authRepo });
-  const updateStorefrontProfile = createUpdateStorefrontProfile({ authRepo });
+  const updateStorefrontProfile = createUpdateStorefrontProfile({ authRepo: profileRepo });
+  const storefrontAddress = createStorefrontAddress({ authRepo: profileRepo });
   const msg91Key = env.MSG_AUTH_KEY?.trim() || "";
   const smsSender = msg91Key
     ? new Msg91SmsSender({
         authKey: msg91Key,
         templateId: env.OTP_TEMPLATE_ID,
         shortUrl: env.MSG91_SHORT_URL,
-        timeoutMs: env.MSG91_REQUEST_TIMEOUT_MS
+        timeoutMs: env.MSG91_REQUEST_TIMEOUT_MS,
+        nodeEnv: env.NODE_ENV,
+        logOtpInDev: env.LOG_OTP_IN_DEV
       })
     : new ConsoleSmsSender({
         nodeEnv: env.NODE_ENV,
         logOtpInDev: env.LOG_OTP_IN_DEV
       });
-  const emailOtpSender = env.SMTP_HOST
-    ? new SmtpOtpSender({
-        host: env.SMTP_HOST,
-        port: env.SMTP_PORT,
-        user: env.SMTP_USER,
-        pass: env.SMTP_PASS,
-        fromEmail: env.OTP_FROM_EMAIL,
-        secure: env.SMTP_SECURE
-      })
-    : {
-        async sendOtp() {
-          throw new Error("Email OTP is not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS, and OTP_FROM_EMAIL.");
-        }
-      };
   const requestCustomerOtp = createRequestCustomerOtp({
-    authRepo,
+    authRepo: otpWithShopRepo,
     smsSender,
     otpTtlSeconds: env.OTP_TTL_SECONDS,
     otpResendSeconds: env.OTP_RESEND_SECONDS,
@@ -293,23 +298,10 @@ export function createAppContext() {
     buildStorefrontSession,
     otpMaxAttempts: env.OTP_MAX_ATTEMPTS
   });
-  const requestCustomerEmailOtp = createRequestCustomerEmailOtp({
-    authRepo,
-    otpSender: emailOtpSender,
-    otpTtlSeconds: env.OTP_TTL_SECONDS,
-    otpResendSeconds: env.OTP_RESEND_SECONDS,
-    otpRequestWindowSeconds: env.OTP_REQUEST_WINDOW_SECONDS,
-    otpMaxRequestsPerWindow: env.OTP_MAX_REQUESTS_PER_WINDOW
-  });
-  const verifyCustomerEmailOtp = createVerifyCustomerEmailOtp({
-    authRepo,
-    buildStorefrontSession,
-    otpMaxAttempts: env.OTP_MAX_ATTEMPTS
-  });
   const rotateCustomerRefreshToken = createRotateCustomerRefreshToken({ authRepo, accessTokenRegistry });
   const logoutCustomer = createLogoutCustomer({ authRepo, accessTokenRegistry });
   const requestPhoneChangeOtp = createRequestPhoneChangeOtp({
-    authRepo,
+    authRepo: phoneChangeRepo,
     smsSender,
     otpTtlSeconds: env.OTP_TTL_SECONDS,
     otpResendSeconds: env.OTP_RESEND_SECONDS,
@@ -317,7 +309,7 @@ export function createAppContext() {
     otpMaxRequestsPerWindow: env.OTP_MAX_REQUESTS_PER_WINDOW
   });
   const verifyPhoneChangeOtp = createVerifyPhoneChangeOtp({
-    authRepo,
+    authRepo: phoneChangeRepo,
     buildStorefrontSession,
     otpMaxAttempts: env.OTP_MAX_ATTEMPTS
   });
@@ -374,12 +366,10 @@ export function createAppContext() {
     verifyCustomerOtp,
     logoutCustomer,
     rotateCustomerRefreshToken,
-    requestCustomerEmailOtp,
-    verifyCustomerEmailOtp,
     requestPhoneChangeOtp,
     verifyPhoneChangeOtp,
-    getCustomerProfile: getCustomerProfile({ authRepo }),
-    updateCustomerProfile: updateCustomerProfile({ authRepo }),
+    getCustomerProfile: getCustomerProfile({ authRepo: profileRepo }),
+    updateCustomerProfile: updateCustomerProfile({ authRepo: profileRepo }),
     checkShopServiceArea,
     requireCustomerJwt,
     optionalCustomerJwt,
@@ -390,6 +380,7 @@ export function createAppContext() {
     storefrontCartPreview,
     assertCustomerShopAccess,
     updateStorefrontProfile,
+    storefrontAddress,
     listApplicableCoupons,
     checkoutStorefront,
     storefrontCatalogHttpCacheSec,

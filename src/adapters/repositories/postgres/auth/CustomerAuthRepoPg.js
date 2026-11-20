@@ -1,0 +1,784 @@
+import { CustomerAuthRepo } from "../../../../application/ports/repositories/CustomerAuthRepo.js";
+import { AuthError } from "../../../../domain/errors/AuthError.js";
+import { NotFoundError } from "../../../../domain/errors/NotFoundError.js";
+import { pool } from "../../../../infra/db/pool.js";
+import { ValidationError } from "../../../../domain/errors/ValidationError.js";
+import { phoneMatchesStorage } from "../shared/phoneMatchSql.js";
+import { encodeAddressRaw, parseAddressRow } from "../shared/addressShape.js";
+
+/**
+ * Purpose: This file is the PostgreSQL implementation of customer auth data access.
+ * It handles user/customer lookup, membership checks, profile updates, and
+ * account creation queries used by authentication and profile services.
+ */
+function registrationSourceFromUserRow(row) {
+  if (!row) return "password";
+  if (row.password_hash != null) return "password";
+  if (row.email != null) return "google";
+  return "phone_otp";
+}
+
+function withRegistrationSource(row) {
+  if (!row) return null;
+  return { ...row, registration_source: registrationSourceFromUserRow(row) };
+}
+
+function withCustomerFlags(row) {
+  if (!row) return null;
+  const status = row.status != null ? String(row.status).trim().toLowerCase() : "";
+  return {
+    ...row,
+    is_blocked: row.is_blocked === true || status === "blocked",
+    is_deleted: row.is_deleted === true || status === "deleted"
+  };
+}
+
+const ADDRESS_API_TO_DB = {
+  line1: "line1",
+  line2: "line2",
+  landmark: "landmark",
+  city: "city",
+  lat: "lat",
+  lng: "lng",
+  raw: "raw"
+};
+
+export class CustomerAuthRepoPg extends CustomerAuthRepo {
+  async getShopById(client, shopId) {
+    const { rows } = await client.query(
+      `SELECT id, name, status
+         FROM shops
+        WHERE id = $1`,
+      [shopId]
+    );
+    return rows[0] ?? null;
+  }
+
+  async isCustomerSessionValid(userId, customerId) {
+    const client = await pool.connect();
+    try {
+      const { rows } = await client.query(
+        `SELECT 1
+           FROM users u
+           JOIN customers c ON c.user_id = u.id
+          WHERE u.id = $1
+            AND c.id = $2
+            AND u.is_active = true
+            AND c.status = 'active'
+          LIMIT 1`,
+        [userId, customerId]
+      );
+      return rows.length > 0;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getUserById(client, userId) {
+    const { rows } = await client.query(
+      `SELECT id, email, phone, password_hash, is_active
+         FROM users
+        WHERE id = $1`,
+      [userId]
+    );
+    return withRegistrationSource(rows[0]);
+  }
+
+  async getUserByEmail(client, email) {
+    const { rows } = await client.query(
+      `SELECT id, email, phone, password_hash, is_active
+         FROM users
+        WHERE lower(email) = lower($1)`,
+      [email]
+    );
+    return withRegistrationSource(rows[0]);
+  }
+
+  async getUserByPhone(client, phone) {
+    const { rows } = await client.query(
+      `SELECT id, email, phone, password_hash, is_active
+         FROM users
+        WHERE ${phoneMatchesStorage("phone", 1)}
+        LIMIT 1`,
+      [phone]
+    );
+    return withRegistrationSource(rows[0]);
+  }
+
+  async getActiveShopStaffUserByPhone(client, phone) {
+    const normalized = String(phone || "").trim();
+    if (!normalized) return null;
+    const { rows } = await client.query(
+      `SELECT u.id, u.email, u.phone, u.password_hash, u.is_active
+         FROM users u
+         JOIN shop_staff ss ON ss.user_id = u.id
+        WHERE ${phoneMatchesStorage("u.phone", 1)}
+          AND ss.role IN ('owner', 'admin', 'manager', 'picker')
+          AND ss.status = 'active'
+        LIMIT 1`,
+      [normalized]
+    );
+    return withRegistrationSource(rows[0]);
+  }
+
+  async getActiveShopStaffUserByEmail(client, email) {
+    const normalized = String(email || "").trim().toLowerCase();
+    if (!normalized) return null;
+    const { rows } = await client.query(
+      `SELECT u.id, u.email, u.phone, u.password_hash, u.is_active
+         FROM users u
+         JOIN shop_staff ss ON ss.user_id = u.id
+        WHERE lower(u.email) = $1
+          AND ss.role IN ('owner', 'admin', 'manager', 'picker')
+          AND ss.status = 'active'
+        LIMIT 1`,
+      [normalized]
+    );
+    return withRegistrationSource(rows[0]);
+  }
+
+  async isEmailUsedByActiveShopStaff(client, email) {
+    const normalized = String(email || "").trim().toLowerCase();
+    if (!normalized) return false;
+    const { rows } = await client.query(
+      `SELECT 1
+         FROM users u
+         JOIN shop_staff ss ON ss.user_id = u.id
+        WHERE lower(u.email) = $1
+          AND ss.role IN ('owner', 'admin', 'manager', 'picker')
+          AND ss.status = 'active'
+        LIMIT 1`,
+      [normalized]
+    );
+    return rows.length > 0;
+  }
+
+  async isPhoneUsedByActiveShopStaff(client, phone) {
+    const normalized = String(phone || "").trim();
+    if (!normalized) return false;
+    const { rows } = await client.query(
+      `SELECT 1
+         FROM users u
+         JOIN shop_staff ss ON ss.user_id = u.id
+        WHERE ${phoneMatchesStorage("u.phone", 1)}
+          AND ss.role IN ('owner', 'admin', 'manager', 'picker')
+          AND ss.status = 'active'
+        LIMIT 1`,
+      [normalized]
+    );
+    return rows.length > 0;
+  }
+
+  async isPhoneUsedByAnotherActiveShopStaff(client, phone, excludeUserId) {
+    const normalized = String(phone || "").trim();
+    if (!normalized) return false;
+    const { rows } = await client.query(
+      `SELECT 1
+         FROM users u
+         JOIN shop_staff ss ON ss.user_id = u.id
+        WHERE ${phoneMatchesStorage("u.phone", 1)}
+          AND u.id <> $2::uuid
+          AND ss.role IN ('owner', 'admin', 'manager', 'picker')
+          AND ss.status = 'active'
+        LIMIT 1`,
+      [normalized, excludeUserId]
+    );
+    return rows.length > 0;
+  }
+
+  async isPhoneUsedByAnotherActiveCustomer(client, phone, excludeUserId) {
+    const normalized = String(phone || "").trim();
+    if (!normalized) return false;
+    const { rows } = await client.query(
+      `SELECT 1
+         FROM users u
+         JOIN customers c ON c.user_id = u.id
+        WHERE ${phoneMatchesStorage("u.phone", 1)}
+          AND u.id <> $2::uuid
+          AND u.is_active = true
+          AND c.status = 'active'
+        LIMIT 1`,
+      [normalized, excludeUserId]
+    );
+    return rows.length > 0;
+  }
+
+  async isUserActiveShopStaff(client, userId) {
+    const { rows } = await client.query(
+      `SELECT 1
+         FROM shop_staff ss
+        WHERE ss.user_id = $1::uuid
+          AND ss.role IN ('owner', 'admin', 'manager', 'picker')
+          AND ss.status = 'active'
+        LIMIT 1`,
+      [userId]
+    );
+    return rows.length > 0;
+  }
+
+  async getCustomerByUserId(client, userId, shopId = null) {
+    const shop = shopId != null && String(shopId).trim() !== "" ? String(shopId).trim() : null;
+    const { rows } = await client.query(
+      shop
+        ? `SELECT id, user_id, display_name, status, shop_id
+             FROM customers
+            WHERE user_id = $1
+              AND shop_id = $2::uuid
+            LIMIT 1`
+        : `SELECT id, user_id, display_name, status, shop_id
+             FROM customers
+            WHERE user_id = $1
+            ORDER BY created_at DESC
+            LIMIT 1`,
+      shop ? [userId, shop] : [userId]
+    );
+    return withCustomerFlags(rows[0]);
+  }
+
+  async findDisplayNameForUser(client, userId) {
+    const { rows } = await client.query(
+      `SELECT display_name
+         FROM customers
+        WHERE user_id = $1::uuid
+          AND display_name IS NOT NULL
+          AND btrim(display_name) <> ''
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC
+        LIMIT 1`,
+      [userId]
+    );
+    const name = rows[0]?.display_name != null ? String(rows[0].display_name).trim() : "";
+    return name || null;
+  }
+
+  async getCustomerCreatedAtById(client, customerId) {
+    const { rows } = await client.query(
+      `SELECT created_at
+         FROM customers
+        WHERE id = $1::uuid
+        LIMIT 1`,
+      [customerId]
+    );
+    return rows[0] ?? null;
+  }
+
+  async getMembershipByCustomerAndShop(client, customerId, shopId) {
+    const { rows } = await client.query(
+      `SELECT id, shop_id, customer_id, is_active, is_blocked, is_deleted
+         FROM customer_shop_memberships
+        WHERE customer_id = $1 AND shop_id = $2`,
+      [customerId, shopId]
+    );
+    return rows[0] ?? null;
+  }
+
+  async getMembershipWithShopForCustomer(client, customerId, shopId) {
+    const { rows } = await client.query(
+      `SELECT m.is_active AS membership_is_active,
+              m.is_blocked AS membership_is_blocked,
+              m.is_deleted AS membership_is_deleted,
+              s.id,
+              s.slug,
+              s.name,
+              s.status
+         FROM customer_shop_memberships m
+         JOIN shops s ON s.id = m.shop_id
+        WHERE m.customer_id = $1 AND m.shop_id = $2
+        LIMIT 1`,
+      [customerId, shopId]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      membership: {
+        is_active: row.membership_is_active,
+        is_blocked: row.membership_is_blocked,
+        is_deleted: row.membership_is_deleted
+      },
+      shop: {
+        id: row.id,
+        slug: row.slug,
+        name: row.name,
+        status: row.status
+      }
+    };
+  }
+
+  async listShopIdsForCustomer(client, customerId) {
+    const { rows } = await client.query(
+      `SELECT s.id
+         FROM customer_shop_memberships m
+         JOIN shops s ON s.id = m.shop_id
+        WHERE m.customer_id = $1
+          AND m.is_active = true
+          AND m.is_blocked = false
+          AND m.is_deleted = false
+          AND s.status = 'active'
+        ORDER BY s.id ASC`,
+      [customerId]
+    );
+    return rows.map((r) => r.id);
+  }
+
+  async listActiveShopsForCustomer(client, customerId) {
+    const { rows } = await client.query(
+      `SELECT s.id,
+              s.name,
+              s.slug,
+              s.status,
+              shop_img.storage_key AS shop_image_storage_key
+         FROM customer_shop_memberships m
+         JOIN shops s ON s.id = m.shop_id
+         LEFT JOIN LATERAL (
+           SELECT ma.storage_key
+             FROM entity_images ei
+             JOIN media_assets ma ON ma.id = ei.media_asset_id
+            WHERE ei.shop_id = s.id
+              AND ei.entity_type = 'shop'
+            ORDER BY ei.updated_at DESC NULLS LAST, ei.created_at DESC
+            LIMIT 1
+         ) shop_img ON true
+        WHERE m.customer_id = $1
+          AND m.is_active = true
+          AND m.is_blocked = false
+          AND m.is_deleted = false
+          AND s.status = 'active'
+        ORDER BY s.id ASC`,
+      [customerId]
+    );
+    return rows;
+  }
+
+  async getCustomerProfileByCustomerId(client, customerId) {
+    const { rows } = await client.query(
+      `SELECT c.id, c.user_id, c.display_name, c.status,
+              u.phone,
+              a.id AS a_id, a.lat, a.lng, a.raw
+         FROM customers c
+         JOIN users u ON u.id = c.user_id
+         LEFT JOIN addresses a ON a.id = c.address_id
+        WHERE c.id = $1`,
+      [customerId]
+    );
+    const r = rows[0];
+    if (!r) return null;
+
+    const flagged = withCustomerFlags(r);
+    return {
+      id: flagged.id,
+      user_id: flagged.user_id,
+      display_name: flagged.display_name,
+      phone: r.phone,
+      is_blocked: flagged.is_blocked,
+      is_deleted: flagged.is_deleted,
+      address: parseAddressRow(
+        { lat: r.lat, lng: r.lng, raw: r.raw },
+        r.a_id
+      )
+    };
+  }
+
+  async patchCustomerProfile(client, { customerId, userId, displayName, addressPatch, rejectInactive = false }) {
+    const custRes = await client.query(
+      `SELECT c.id, c.address_id, c.display_name, c.status
+         FROM customers c
+         JOIN users u ON u.id = c.user_id
+        WHERE c.id = $1 AND c.user_id = $2
+        FOR UPDATE OF c`,
+      [customerId, userId]
+    );
+    const c = custRes.rows[0];
+    if (!c) {
+      throw new NotFoundError("Profile not found");
+    }
+    if (rejectInactive) {
+      const flagged = withCustomerFlags(c);
+      if (flagged.is_blocked || flagged.is_deleted) {
+        throw new AuthError("Invalid credentials");
+      }
+    }
+
+    if (displayName !== undefined) {
+      await client.query(
+        `UPDATE customers SET display_name = $1, updated_at = now() WHERE id = $2`,
+        [displayName, customerId]
+      );
+    }
+
+    if (!addressPatch || Object.keys(addressPatch).length === 0) {
+      return { created: false };
+    }
+
+    let addrId = c.address_id;
+    let current = {
+      line1: null,
+      line2: null,
+      landmark: null,
+      city: null,
+      lat: null,
+      lng: null,
+      raw: null
+    };
+
+    if (addrId) {
+      const ar = await client.query(
+        `SELECT lat, lng, raw
+           FROM addresses
+          WHERE id = $1
+          FOR UPDATE`,
+        [addrId]
+      );
+      const a = ar.rows[0];
+      if (a) {
+        const parsed = parseAddressRow(a, addrId);
+        current = {
+          line1: parsed.line1,
+          line2: parsed.line2,
+          landmark: parsed.landmark,
+          city: parsed.city,
+          lat: parsed.lat,
+          lng: parsed.lng,
+          raw: parsed.raw
+        };
+      }
+    }
+
+    const merged = { ...current };
+    for (const [apiKey, val] of Object.entries(addressPatch)) {
+      const col = ADDRESS_API_TO_DB[apiKey];
+      if (!col) continue;
+      merged[col] = val;
+    }
+
+    const lat = merged.lat;
+    const lng = merged.lng;
+    if ((lat == null) !== (lng == null)) {
+      throw new ValidationError("lat and lng must both be set or both null");
+    }
+    if (lat != null && (lat < -90 || lat > 90 || lng < -180 || lng > 180)) {
+      throw new ValidationError("Invalid coordinates");
+    }
+
+    const raw = encodeAddressRaw(merged);
+
+    if (!addrId) {
+      const ins = await client.query(
+        `INSERT INTO addresses (raw, lat, lng)
+         VALUES ($1, $2, $3)
+         RETURNING id`,
+        [raw, merged.lat, merged.lng]
+      );
+      addrId = ins.rows[0].id;
+      await client.query(
+        `UPDATE customers SET address_id = $1, updated_at = now() WHERE id = $2`,
+        [addrId, customerId]
+      );
+      return { created: true };
+    }
+
+    await client.query(
+      `UPDATE addresses
+          SET raw = $1,
+              lat = $2,
+              lng = $3
+        WHERE id = $4`,
+      [raw, merged.lat, merged.lng, addrId]
+    );
+    return { created: false };
+  }
+
+  /**
+   * Unlink the customer's address and delete the row.
+   * @returns {Promise<boolean>} true if an address was cleared, false if none linked
+   */
+  async clearCustomerAddress(client, { customerId, userId }) {
+    const custRes = await client.query(
+      `SELECT id, address_id
+         FROM customers
+        WHERE id = $1 AND user_id = $2
+        FOR UPDATE`,
+      [customerId, userId]
+    );
+    const c = custRes.rows[0];
+    if (!c) {
+      throw new NotFoundError("Profile not found");
+    }
+    const addrId = c.address_id;
+    if (!addrId) {
+      return false;
+    }
+    await client.query(
+      `UPDATE customers SET address_id = NULL, updated_at = now() WHERE id = $1`,
+      [customerId]
+    );
+    await client.query(`DELETE FROM addresses WHERE id = $1`, [addrId]);
+    return true;
+  }
+
+  async insertUser(client, { email = null, phone = null, password_hash = null }) {
+    const { rows } = await client.query(
+      `INSERT INTO users (email, phone, password_hash)
+       VALUES ($1, $2, $3)
+       RETURNING id, email, phone, password_hash, is_active`,
+      [email, phone, password_hash]
+    );
+    return withRegistrationSource(rows[0]);
+  }
+
+  async insertOtpChallenge(client, { phone, shopId, codeHash, expiresAtIso }) {
+    // Phones are stored as normalized 10-digit values — exact match uses the lookup index.
+    await client.query(
+      `UPDATE customer_otp_challenges
+          SET consumed_at = now()
+        WHERE phone = $1
+          AND shop_id = $2::uuid
+          AND consumed_at IS NULL`,
+      [phone, shopId]
+    );
+    const { rows } = await client.query(
+      `INSERT INTO customer_otp_challenges (phone, shop_id, code_hash, expires_at)
+       VALUES ($1, $2::uuid, $3, $4::timestamptz)
+       RETURNING id, phone, shop_id, code_hash, attempts, consumed_at, expires_at, created_at`,
+      [phone, shopId, codeHash, expiresAtIso]
+    );
+    return rows[0];
+  }
+
+  /**
+   * One round-trip for OTP send gates: latest challenge + count in window.
+   * @returns {Promise<{ latestChallenge: object | null, sentCountInWindow: number }>}
+   */
+  async getOtpRequestGate(client, phone, shopId, sinceIso) {
+    const { rows } = await client.query(
+      `SELECT
+         (SELECT to_jsonb(t)
+            FROM (
+              SELECT id, phone, shop_id, code_hash, attempts, consumed_at, expires_at, created_at
+                FROM customer_otp_challenges
+               WHERE phone = $1
+                 AND shop_id = $2::uuid
+               ORDER BY created_at DESC
+               LIMIT 1
+            ) t
+         ) AS latest,
+         (SELECT count(*)::int
+            FROM customer_otp_challenges
+           WHERE phone = $1
+             AND shop_id = $2::uuid
+             AND created_at >= $3::timestamptz
+         ) AS sent_count`,
+      [phone, shopId, sinceIso]
+    );
+    const row = rows[0];
+    return {
+      latestChallenge: row?.latest ?? null,
+      sentCountInWindow: row?.sent_count ?? 0
+    };
+  }
+
+  async countOtpChallengesSince(client, phone, shopId, sinceIso) {
+    const { rows } = await client.query(
+      `SELECT count(*)::int AS cnt
+         FROM customer_otp_challenges
+        WHERE phone = $1
+          AND shop_id = $2::uuid
+          AND created_at >= $3::timestamptz`,
+      [phone, shopId, sinceIso]
+    );
+    return rows[0]?.cnt ?? 0;
+  }
+
+  async findLatestOtpChallenge(client, phone, shopId) {
+    const { rows } = await client.query(
+      `SELECT id, phone, shop_id, code_hash, attempts, consumed_at, expires_at, created_at
+         FROM customer_otp_challenges
+        WHERE phone = $1
+          AND shop_id = $2::uuid
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [phone, shopId]
+    );
+    return rows[0] ?? null;
+  }
+
+  async listRecentOtpChallenges(client, phone, shopId, limit = 5) {
+    const safeLimit = Math.max(1, Math.min(10, Number(limit) || 5));
+    const { rows } = await client.query(
+      `SELECT id, phone, shop_id, code_hash, attempts, consumed_at, expires_at, created_at
+         FROM customer_otp_challenges
+        WHERE phone = $1
+          AND shop_id = $2::uuid
+        ORDER BY created_at DESC
+        LIMIT $3::int`,
+      [phone, shopId, safeLimit]
+    );
+    return rows;
+  }
+
+  async getCustomerShopMembership(client, customerId, shopId) {
+    const { rows } = await client.query(
+      `SELECT id, shop_id, customer_id, is_active, is_blocked, is_deleted
+         FROM customer_shop_memberships
+        WHERE customer_id = $1::uuid
+          AND shop_id = $2::uuid
+        LIMIT 1`,
+      [customerId, shopId]
+    );
+    return rows[0] ?? null;
+  }
+
+  async incrementOtpChallengeAttempts(client, challengeId) {
+    const { rows } = await client.query(
+      `UPDATE customer_otp_challenges
+          SET attempts = attempts + 1
+        WHERE id = $1::uuid
+        RETURNING id, attempts`,
+      [challengeId]
+    );
+    return rows[0] ?? null;
+  }
+
+  async consumeOtpChallenge(client, challengeId) {
+    await client.query(
+      `UPDATE customer_otp_challenges
+          SET consumed_at = now()
+        WHERE id = $1::uuid
+          AND consumed_at IS NULL`,
+      [challengeId]
+    );
+  }
+
+  async insertCustomer(client, { user_id, display_name, shop_id = null }) {
+    if (!shop_id) {
+      throw new ValidationError("shop_id is required");
+    }
+    const { rows } = await client.query(
+      `INSERT INTO customers (user_id, shop_id, display_name, status)
+       VALUES ($1, $2, $3, 'active')
+       ON CONFLICT (shop_id, user_id) DO UPDATE SET
+         display_name = COALESCE(EXCLUDED.display_name, customers.display_name),
+         updated_at = now()
+       RETURNING id, user_id, display_name, status`,
+      [user_id, shop_id, display_name]
+    );
+    return withCustomerFlags(rows[0]);
+  }
+
+  async insertMembership(client, { shop_id, customer_id }) {
+    const { rows } = await client.query(
+      `INSERT INTO customer_shop_memberships (shop_id, customer_id, is_active)
+       VALUES ($1, $2, true)
+       RETURNING id`,
+      [shop_id, customer_id]
+    );
+    return rows[0];
+  }
+
+  async upsertCustomerShopMembership(client, { shop_id, customer_id }) {
+    const { rows } = await client.query(
+      `INSERT INTO customer_shop_memberships (shop_id, customer_id, is_active, is_blocked, is_deleted)
+       VALUES ($1::uuid, $2::uuid, true, false, false)
+       ON CONFLICT (shop_id, customer_id) DO UPDATE SET
+         is_active = true,
+         is_deleted = false,
+         deleted_at = NULL,
+         updated_at = now()
+       RETURNING id, shop_id, customer_id, is_active, is_blocked, is_deleted`,
+      [shop_id, customer_id]
+    );
+    return rows[0];
+  }
+
+  async reactivateMembership(client, membershipId) {
+    await client.query(
+      `UPDATE customer_shop_memberships
+          SET is_active = true,
+              is_blocked = false,
+              is_deleted = false,
+              updated_at = now()
+        WHERE id = $1`,
+      [membershipId]
+    );
+  }
+
+  async updateUserPhone(client, userId, phone) {
+    await client.query(`UPDATE users SET phone = $2 WHERE id = $1`, [userId, phone]);
+  }
+
+  async insertRefreshToken(
+    client,
+    { userId, customerId = null, shopId = null, subjectType = "customer", tokenHash, jti, expiresAtIso, issuedIp, userAgent }
+  ) {
+    const { rows: colRows } = await client.query(
+      `SELECT column_name
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'auth_refresh_tokens'
+          AND column_name IN ('jti', 'jwt_id')`
+    );
+    const cols = new Set(colRows.map((r) => r.column_name));
+    const hasJwtId = cols.has("jwt_id");
+    const hasJti = cols.has("jti");
+
+    if (hasJwtId && !hasJti) {
+      await client.query(
+        `INSERT INTO auth_refresh_tokens (
+           user_id, customer_id, shop_id, subject_type, token_hash, jwt_id, expires_at, issued_ip, user_agent
+         ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::text, $7::timestamptz, $8, $9)`,
+        [userId, customerId, shopId, subjectType, tokenHash, String(jti), expiresAtIso, issuedIp, userAgent]
+      );
+      return;
+    }
+
+    if (hasJwtId && hasJti) {
+      await client.query(
+        `INSERT INTO auth_refresh_tokens (
+           user_id, customer_id, shop_id, subject_type, token_hash, jti, jwt_id, expires_at, issued_ip, user_agent
+         ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::uuid, $6::text, $7::timestamptz, $8, $9)`,
+        [userId, customerId, shopId, subjectType, tokenHash, jti, expiresAtIso, issuedIp, userAgent]
+      );
+      return;
+    }
+
+    await client.query(
+      `INSERT INTO auth_refresh_tokens (
+         user_id, customer_id, shop_id, subject_type, token_hash, jti, expires_at, issued_ip, user_agent
+       ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7::timestamptz, $8, $9)`,
+      [userId, customerId, shopId, subjectType, tokenHash, jti, expiresAtIso, issuedIp, userAgent]
+    );
+  }
+
+  async consumeRefreshToken(client, currentTokenHash, nextTokenHash) {
+    const { rows } = await client.query(
+      `UPDATE auth_refresh_tokens
+          SET consumed_at = now(),
+              replaced_by_token_hash = $2
+        WHERE token_hash = $1
+          AND consumed_at IS NULL
+          AND expires_at > now()
+        RETURNING id`,
+      [currentTokenHash, nextTokenHash]
+    );
+    return rows[0] ?? null;
+  }
+
+  async findRefreshTokenByHash(client, tokenHash) {
+    const { rows } = await client.query(
+      `SELECT id, user_id, customer_id, consumed_at, expires_at
+         FROM auth_refresh_tokens
+        WHERE token_hash = $1
+        LIMIT 1`,
+      [tokenHash]
+    );
+    return rows[0] ?? null;
+  }
+
+  async revokeAllRefreshTokensForUser(client, userId) {
+    await client.query(
+      `UPDATE auth_refresh_tokens
+          SET consumed_at = now()
+        WHERE user_id = $1::uuid
+          AND consumed_at IS NULL`,
+      [userId]
+    );
+  }
+}

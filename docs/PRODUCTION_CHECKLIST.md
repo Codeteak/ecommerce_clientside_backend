@@ -45,7 +45,6 @@ These settings must stay off in production.
 | `DISABLE_CUSTOMER_AUTH` | Must be `false` |
 | `LOG_OTP_IN_DEV` | Must be `false` |
 | `DISABLE_RATE_LIMITING` | Must be `false` |
-| `ENABLE_API_DOCS` | Only allow if `ALLOW_API_DOCS_IN_PRODUCTION=true` |
 | Dev headers `x-dev-user-id` / `x-dev-customer-id` | Never use in production |
 
 ## 4. App Layout

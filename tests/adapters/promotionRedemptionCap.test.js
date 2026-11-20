@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { PromotionRepoPg } from "../../src/adapters/repositories/postgres/PromotionRepoPg.js";
+import { PromotionRepoPg } from "../../src/adapters/repositories/postgres/promotions/PromotionRepoPg.js";
 
 vi.mock("../../src/infra/db/tenantContext.js", () => ({
   setTenantContext: vi.fn().mockResolvedValue(undefined)

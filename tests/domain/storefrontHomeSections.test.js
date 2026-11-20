@@ -195,7 +195,117 @@ describe("resolveStorefrontHomeSections", () => {
     expect(sections[0].products[0].id).toBe(FROM_CAT);
     expect(catalogRepo.listSellableProductsByCategoryIdsStorefront).toHaveBeenCalled();
   });
+
+  it("skips the category search when 50 different products are already pinned", async () => {
+    const pins = Array.from({ length: 50 }, (_, index) => pinId(index + 1));
+    const catalogRepo = {
+      listEnabledHomeSectionsStorefront: vi.fn().mockResolvedValue([
+        shelf({ product_ids: pins, category_ids: [CATEGORY] })
+      ]),
+      listSellableProductsByIdsStorefront: vi.fn().mockResolvedValue(
+        pins.map((id) => ({ id, name: id, slug: id, price_minor_per_unit: "100" }))
+      ),
+      listSellableProductsBySectionCategoriesStorefront: vi.fn().mockResolvedValue([]),
+      listSellableProductsByCategoryIdsStorefront: vi.fn().mockResolvedValue([]),
+      listActiveCategoriesByIdsStorefront: vi.fn().mockResolvedValue([])
+    };
+
+    const sections = await resolveStorefrontHomeSections(catalogRepo, shopId);
+    expect(sections[0].products).toHaveLength(50);
+    expect(catalogRepo.listSellableProductsBySectionCategoriesStorefront).not.toHaveBeenCalled();
+    expect(catalogRepo.listSellableProductsByCategoryIdsStorefront).not.toHaveBeenCalled();
+  });
+
+  it("still searches categories when pin rows repeat and fewer than 50 are unique", async () => {
+    const pins = Array.from({ length: 50 }, () => pinId(1));
+    const catalogRepo = {
+      listEnabledHomeSectionsStorefront: vi.fn().mockResolvedValue([
+        shelf({ product_ids: pins, category_ids: [CATEGORY] })
+      ]),
+      listSellableProductsByIdsStorefront: vi.fn().mockResolvedValue([]),
+      listSellableProductsBySectionCategoriesStorefront: vi.fn().mockResolvedValue([]),
+      listSellableProductsByCategoryIdsStorefront: vi.fn(),
+      listActiveCategoriesByIdsStorefront: vi.fn().mockResolvedValue([])
+    };
+
+    await resolveStorefrontHomeSections(catalogRepo, shopId);
+    expect(catalogRepo.listSellableProductsBySectionCategoriesStorefront).toHaveBeenCalledTimes(1);
+    expect(catalogRepo.listSellableProductsByCategoryIdsStorefront).not.toHaveBeenCalled();
+  });
+
+  it("loads every open shelf in one category query and keeps each shelf's products", async () => {
+    const fruits = "11111111-1111-4111-8111-111111111111";
+    const dairy = "22222222-2222-4222-8222-222222222222";
+    const fruitProduct = pinId(2);
+    const dairyProduct = pinId(3);
+    const catalogRepo = {
+      listEnabledHomeSectionsStorefront: vi.fn().mockResolvedValue([
+        shelf({ id: fruits, title: "Fruits", category_ids: [CATEGORY] }),
+        shelf({
+          id: dairy,
+          title: "Dairy",
+          sort_order: 1,
+          category_ids: ["dddddddd-dddd-4ddd-8ddd-dddddddddddd"]
+        })
+      ]),
+      listSellableProductsByIdsStorefront: vi.fn().mockResolvedValue([]),
+      listSellableProductsBySectionCategoriesStorefront: vi.fn().mockResolvedValue([
+        {
+          section_id: fruits,
+          id: fruitProduct,
+          name: "Apple",
+          slug: "apple",
+          price_minor_per_unit: "2000"
+        },
+        {
+          section_id: dairy,
+          id: dairyProduct,
+          name: "Milk",
+          slug: "milk",
+          price_minor_per_unit: "4500"
+        }
+      ]),
+      listSellableProductsByCategoryIdsStorefront: vi.fn(),
+      listActiveCategoriesByIdsStorefront: vi.fn().mockResolvedValue([])
+    };
+
+    const sections = await resolveStorefrontHomeSections(catalogRepo, shopId);
+    expect(catalogRepo.listSellableProductsBySectionCategoriesStorefront).toHaveBeenCalledTimes(1);
+    expect(catalogRepo.listSellableProductsBySectionCategoriesStorefront).toHaveBeenCalledWith(
+      shopId,
+      [
+        { sectionId: fruits, categoryIds: [CATEGORY] },
+        { sectionId: dairy, categoryIds: ["dddddddd-dddd-4ddd-8ddd-dddddddddddd"] }
+      ],
+      50
+    );
+    expect(catalogRepo.listSellableProductsByCategoryIdsStorefront).not.toHaveBeenCalled();
+    expect(sections.map((section) => section.products[0].id)).toEqual([fruitProduct, dairyProduct]);
+  });
 });
+
+function pinId(n) {
+  return `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+}
+
+function shelf(overrides) {
+  return {
+    id: "33333333-3333-4333-8333-333333333333",
+    title: "Weekend deals",
+    type: "product_shelf",
+    sort_order: 0,
+    starts_at: null,
+    ends_at: null,
+    product_ids: [],
+    category_ids: [],
+    buy_product_ids: [],
+    get_product_ids: [],
+    buy_qty: null,
+    get_qty: null,
+    promotion_id: null,
+    ...overrides
+  };
+}
 
 describe("storefrontCatalog listHomeSections", () => {
   it("wraps resolved shelves in data.sections", async () => {

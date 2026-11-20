@@ -27,16 +27,6 @@
       "name": "Health",
       "item": [
         {
-          "name": "GET /",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/",
-            "description": "Service stub: `ok`, `service`, links to `/health`, `/openapi.json`, and `/api-docs`."
-          },
-          "response": []
-        },
-        {
           "name": "GET /health",
           "request": {
             "method": "GET",
@@ -177,49 +167,6 @@
             "description": "After Google callback, exchange `storefront_oauth_exchange` cookie for JWT. Body `{}` is valid.\n\nRequires a valid cookie; returns **401** if cookie is missing/invalid."
           },
           "response": []
-        },
-        {
-          "name": "POST /api/auth/email-otp/request",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"shopId\": \"{{shopId}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/email-otp/request",
-            "description": "Request an OTP for an email + shop."
-          },
-          "response": []
-        },
-        {
-          "name": "POST /api/auth/email-otp/verify",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "  const j = pm.response.json();",
-                  "  if (j.accessToken) pm.collectionVariables.set('accessToken', j.accessToken);",
-                  "  if (j.shopIds && j.shopIds[0]) pm.collectionVariables.set('shopId', j.shopIds[0]);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"shopId\": \"{{shopId}}\",\n  \"code\": \"123456\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/email-otp/verify",
-            "description": "Verify email OTP and issue customer JWT."
-          },
-          "response": []
         }
       ]
     },
@@ -281,7 +228,7 @@
               "raw": "{\n  \"displayName\": \"Updated Name\",\n  \"address\": {\n    \"line1\": \"10 Example Street\",\n    \"city\": \"London\",\n    \"postalCode\": \"SW1A 1AA\",\n    \"country\": \"GB\"\n  }\n}"
             },
             "url": "{{baseUrl}}/api/me/profile",
-            "description": "Partial update. Do not send **`address: {}`** (validation error). Address fields use API camelCase (`postalCode`, …)."
+            "description": "Partial update of display name, phone, or address. `email` is rejected. Do not send **`address: {}`** (validation error)."
           },
           "response": []
         }
@@ -429,16 +376,6 @@
             "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
             "url": "{{baseUrl}}/storefront/products/sample-slug",
             "description": "Product by slug. Active + in_stock only (404 if draft/archived/out_of_stock)."
-          },
-          "response": []
-        },
-        {
-          "name": "GET /storefront/products/id/:id",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "x-shop-id", "value": "{{shopId}}" }],
-            "url": "{{baseUrl}}/storefront/products/id/00000000-0000-0000-0000-000000000000",
-            "description": "Product by shop_products.id. Active + in_stock only."
           },
           "response": []
         },

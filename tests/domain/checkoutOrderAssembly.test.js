@@ -215,29 +215,8 @@ describe("buildCheckoutOrderLines sold-by-weight", () => {
 });
 
 describe("buildCheckoutOrderLines cross BXGY inject names", () => {
-  it("loads reward names with base_unit and keeps the checkout txn usable", async () => {
-    const queries = [];
-    const client = {
-      query: vi.fn(async (sql) => {
-        const text = String(sql);
-        queries.push(text);
-        if (
-          text.startsWith("SAVEPOINT") ||
-          text.startsWith("RELEASE") ||
-          text.startsWith("ROLLBACK")
-        ) {
-          return { rows: [] };
-        }
-        if (text.includes("base_unit")) {
-          return {
-            rows: [{ id: "reward-1", name: "Free Chips", unit_label: "pcs" }]
-          };
-        }
-        throw Object.assign(new Error('column "unit_label" does not exist'), {
-          code: "42703"
-        });
-      })
-    };
+  it("uses the reward name already priced onto the line", async () => {
+    const client = { query: vi.fn() };
 
     const priceStorefrontLines = async () => ({
       subtotalMinor: 100,
@@ -271,7 +250,9 @@ describe("buildCheckoutOrderLines cross BXGY inject names", () => {
           line_total_minor: 0,
           list_price_minor: 50,
           total_price_minor: 50,
-          applied_promotion_ids: ["promo-1"]
+          applied_promotion_ids: ["promo-1"],
+          title_snapshot: "Free Chips",
+          unit_label: "pcs"
         }
       ]
     });
@@ -310,7 +291,46 @@ describe("buildCheckoutOrderLines cross BXGY inject names", () => {
     const reward = orderItems.find((it) => String(it.productId) === "reward-1");
     expect(reward.name).toBe("Free Chips");
     expect(reward.unitLabel).toBe("pcs");
-    expect(queries.some((q) => q.includes("base_unit"))).toBe(true);
-    expect(queries.some((q) => q.includes("sp.unit_label"))).toBe(false);
+    expect(client.query).not.toHaveBeenCalled();
+  });
+
+  it("names a free line from the product id when pricing stored no title", async () => {
+    const priceStorefrontLines = async () => ({
+      subtotalMinor: 100,
+      promotionDiscountTotalMinor: 0,
+      couponDiscountMinor: 0,
+      couponCodeNormalized: null,
+      couponCodesNormalized: [],
+      appliedPromotionIds: [],
+      lines: [
+        {
+          cartItemId: "inject:abcdef12-3456-4678-89ab-cdef01234567",
+          productId: "abcdef12-3456-4678-89ab-cdef01234567",
+          quantity: 1,
+          paid_quantity: 0,
+          free_quantity: 1,
+          display_quantity: 1,
+          final_price_minor: 0,
+          line_total_minor: 0,
+          list_price_minor: 50,
+          total_price_minor: 50,
+          applied_promotion_ids: []
+        }
+      ]
+    });
+
+    const { orderItems } = await buildCheckoutOrderLines({
+      cartRepo: { listLiveProductPricingByIds: async () => [] },
+      client: { query: vi.fn() },
+      shopId: "shop",
+      custKey: "cust",
+      items: [],
+      couponCode: null,
+      priceStorefrontLines
+    });
+
+    const reward = orderItems.find((it) => String(it.productId).startsWith("abcdef12"));
+    expect(reward.name).toBe("Product abcdef12");
+    expect(reward.unitLabel).toBe(null);
   });
 });

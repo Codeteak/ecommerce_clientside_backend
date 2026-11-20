@@ -1,0 +1,32 @@
+meta {
+  name: Checkout
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/storefront/checkout
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "notes": null,
+    "couponCode": "{{couponCode}}",
+    "items": [
+      {
+        "productId": "{{productId}}",
+        "quantity": 1
+      }
+    ]
+  }
+}
+
+docs {
+  Requires a customer token, shop membership, and a saved serviceable address. items is required, 1 to 100 lines. Each productId is a UUID and quantity must be positive. Remove couponCode to check out without a coupon. Run Check Location first when serviceability enforcement is on, with the cookie jar enabled.
+}

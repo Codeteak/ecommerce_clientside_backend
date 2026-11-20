@@ -19,7 +19,3 @@ export function addOutboxMetric(name, value = 1) {
   counters[name] += n;
   addOutboxPromMetric(name, n);
 }
-
-export function getOutboxMetricsSnapshot() {
-  return { ...counters };
-}

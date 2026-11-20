@@ -1,0 +1,15 @@
+meta {
+  name: Health Ready
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/health/ready
+  body: none
+  auth: none
+}
+
+docs {
+  Readiness check. Returns 503 when a dependency such as the database is down.
+}

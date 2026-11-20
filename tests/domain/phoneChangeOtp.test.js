@@ -30,8 +30,7 @@ describe("phone change OTP", () => {
       getShopById: vi.fn().mockResolvedValue(activeShop()),
       isPhoneUsedByAnotherActiveShopStaff: vi.fn().mockResolvedValue(false),
       isPhoneUsedByAnotherActiveCustomer: vi.fn().mockResolvedValue(false),
-      findLatestOtpChallenge: vi.fn().mockResolvedValue(null),
-      countOtpChallengesSince: vi.fn().mockResolvedValue(0),
+      getOtpRequestGate: vi.fn().mockResolvedValue({ latestChallenge: null, sentCountInWindow: 0 }),
       insertOtpChallenge: vi.fn().mockResolvedValue({ id: "otp-1" })
     };
     const smsSender = { sendOtp: vi.fn().mockResolvedValue(undefined) };
@@ -82,7 +81,7 @@ describe("phone change OTP", () => {
     });
 
     await expect(
-      run({}, { userId, customerId, shopId, newPhone: "+919999999999", code: "123456" })
+      run({}, { userId, customerId, shopId, newPhone: "+919999999999", code: "1234" })
     ).rejects.toMatchObject({
       code: "CONFLICT",
       message: "Phone number is already in use"

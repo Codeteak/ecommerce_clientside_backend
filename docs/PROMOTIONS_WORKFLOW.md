@@ -468,7 +468,7 @@ Active promotion/coupon must satisfy:
 | Cart pricing wrapper | `src/application/services/storefront/cart/cartPricing.js` |
 | Checkout | `src/application/services/checkout/checkoutStorefront.js` |
 | Order line build | `src/application/services/checkout/checkoutOrderAssembly.js` |
-| PostgreSQL | `src/adapters/repositories/postgres/PromotionRepoPg.js` |
+| PostgreSQL | `src/adapters/repositories/postgres/promotions/PromotionRepoPg.js` |
 | Port | `src/application/ports/repositories/PromotionRepo.js` |
 | Wiring | `src/main/composition.js` |
 

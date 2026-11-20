@@ -1,0 +1,26 @@
+meta {
+  name: Add Cart Item
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/storefront/cart/items
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "quantity": 1
+  }
+}
+
+docs {
+  Retired. Expect 410 CART_SERVER_RETIRED. Body still validates: productId UUID plus quantity or delta.
+}

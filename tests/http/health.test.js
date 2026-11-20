@@ -2,22 +2,6 @@ import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
 import { getTestApp } from "../helpers/testApp.js";
 
-describe("GET /", () => {
-  let app;
-
-  beforeAll(() => {
-    app = getTestApp();
-  });
-
-  it("returns 200 with service discovery pointers", async () => {
-    const res = await request(app).get("/").expect(200);
-    expect(res.body.ok).toBe(true);
-    expect(res.body.service).toBe("clientside-ecommerce-api");
-    expect(res.body.openapi).toBe("/openapi.json");
-    expect(res.body.swaggerUi).toBe("/api-docs");
-  });
-});
-
 describe("GET /health", () => {
   let app;
 
@@ -59,20 +43,5 @@ describe("GET /metrics", () => {
     const res = await request(app).get("/metrics").expect(200);
     expect(res.headers["content-type"]).toMatch(/text\/plain/);
     expect(res.text).toContain("http_requests_total");
-  });
-});
-
-describe("GET /metrics/json", () => {
-  let app;
-
-  beforeAll(() => {
-    app = getTestApp();
-  });
-
-  it("returns JSON counters", async () => {
-    await request(app).get("/health");
-    const res = await request(app).get("/metrics/json").expect(200);
-    expect(typeof res.body.requests_total).toBe("number");
-    expect(res.body.by_method_route_status).toBeDefined();
   });
 });

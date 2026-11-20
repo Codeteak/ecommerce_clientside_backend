@@ -290,36 +290,79 @@ export function buildBxgyDealsForSection({
  *   }>
  * }} [opts]
  */
+function uniqueIdCount(value) {
+  return new Set(asIdList(value)).size;
+}
+
 /**
- * Expand category_ids → sellable products for product/event shelves (parallel per section).
+ * Shelves that still have room under the 50 pin cap and name at least one category.
+ * A shelf with 50 different pins never shows category fillers.
+ * @returns {{ sectionId: string, categoryIds: string[] }[]}
+ */
+function sectionsNeedingCategoryProducts(rows) {
+  const pending = [];
+  for (const row of rows) {
+    if (row.type === "buy_x_get_y") continue;
+    const cats = [...new Set(asIdList(row.category_ids))];
+    if (!cats.length) continue;
+    if (uniqueIdCount(row.product_ids) >= STOREFRONT_SHELF_PRODUCT_CAP) continue;
+    pending.push({ sectionId: String(row.id), categoryIds: cats });
+  }
+  return pending;
+}
+
+/**
+ * Expand category_ids → sellable products for product/event shelves.
+ * One query covers every shelf that still has room. Each shelf keeps its own newest 50.
  * @returns {Promise<Map<string, unknown[]>>} sectionId → category product rows
  */
 async function loadCategoryProductsBySection(catalogRepo, shopId, rows) {
   const map = new Map();
-  const jobs = [];
   for (const row of rows) {
     if (row.type === "buy_x_get_y") continue;
-    const cats = asIdList(row.category_ids);
-    if (!cats.length) {
-      map.set(String(row.id), []);
-      continue;
+    map.set(String(row.id), []);
+  }
+  const pending = sectionsNeedingCategoryProducts(rows);
+  if (!pending.length) return map;
+
+  if (typeof catalogRepo.listSellableProductsBySectionCategoriesStorefront === "function") {
+    try {
+      const loaded = await catalogRepo.listSellableProductsBySectionCategoriesStorefront(
+        shopId,
+        pending,
+        STOREFRONT_SHELF_PRODUCT_CAP
+      );
+      for (const product of Array.isArray(loaded) ? loaded : []) {
+        const sectionId = product?.section_id != null ? String(product.section_id) : "";
+        if (!map.has(sectionId)) continue;
+        map.get(sectionId).push(product);
+      }
+    } catch {
+      // Leave those shelves with pins only, same as a failed per-shelf search.
     }
-    if (typeof catalogRepo.listSellableProductsByCategoryIdsStorefront !== "function") {
-      map.set(String(row.id), []);
-      continue;
-    }
-    jobs.push(
+    return map;
+  }
+
+  if (typeof catalogRepo.listSellableProductsByCategoryIdsStorefront !== "function") {
+    return map;
+  }
+
+  await Promise.all(
+    pending.map((section) =>
       catalogRepo
-        .listSellableProductsByCategoryIdsStorefront(shopId, cats, STOREFRONT_SHELF_PRODUCT_CAP)
+        .listSellableProductsByCategoryIdsStorefront(
+          shopId,
+          section.categoryIds,
+          STOREFRONT_SHELF_PRODUCT_CAP
+        )
         .then((prods) => {
-          map.set(String(row.id), Array.isArray(prods) ? prods : []);
+          map.set(section.sectionId, Array.isArray(prods) ? prods : []);
         })
         .catch(() => {
-          map.set(String(row.id), []);
+          map.set(section.sectionId, []);
         })
-    );
-  }
-  if (jobs.length) await Promise.all(jobs);
+    )
+  );
   return map;
 }
 
@@ -509,6 +552,10 @@ export async function lookupStorefrontHomeSection(catalogRepo, shopId, sectionId
     listActiveCategoriesByIdsStorefront: (...a) =>
       catalogRepo.listActiveCategoriesByIdsStorefront(...a)
   };
+  if (typeof catalogRepo.listSellableProductsBySectionCategoriesStorefront === "function") {
+    fakeRepo.listSellableProductsBySectionCategoriesStorefront = (...args) =>
+      catalogRepo.listSellableProductsBySectionCategoriesStorefront(...args);
+  }
   const sections = await resolveStorefrontHomeSections(fakeRepo, shopId, opts);
   const section = sections[0] || null;
   if (!section || !Array.isArray(section.products) || section.products.length === 0) {

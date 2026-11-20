@@ -154,7 +154,7 @@ export async function processOutboxBatch({
   const log = logger ?? getRequestLogger();
   const { payloadColumn } = await resolveOutboxSchema(pool);
   const claimClient = await pool.connect();
-  let claimedRows = [];
+  let claimedRows;
   try {
     await claimClient.query("BEGIN");
     claimedRows = await claimPendingBatch(claimClient, batchSize, payloadColumn);
@@ -162,7 +162,9 @@ export async function processOutboxBatch({
   } catch (err) {
     try {
       await claimClient.query("ROLLBACK");
-    } catch {}
+    } catch {
+      // Rethrow the original claim error if rollback itself fails.
+    }
     throw err;
   } finally {
     claimClient.release();

@@ -1,0 +1,15 @@
+meta {
+  name: Catalog Revision
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/storefront/catalog/revision
+  body: none
+  auth: none
+}
+
+docs {
+  Returns the catalog cache generation for x-shop-id. Response is shopId and generation. Cache-Control is no-store.
+}

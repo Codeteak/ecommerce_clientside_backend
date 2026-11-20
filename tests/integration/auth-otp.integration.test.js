@@ -1,11 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import jwt from "jsonwebtoken";
 import pg from "pg";
 import { env } from "../../src/config/env.js";
 import { createRequestCustomerOtp } from "../../src/application/services/auth/requestCustomerOtp.js";
 import { createVerifyCustomerOtp } from "../../src/application/services/auth/verifyCustomerOtp.js";
 import { buildStorefrontSessionResponse } from "../../src/application/services/auth/buildStorefrontSessionResponse.js";
-import { CustomerAuthRepoPg } from "../../src/adapters/repositories/postgres/CustomerAuthRepoPg.js";
+import { CustomerAuthRepoPg } from "../../src/adapters/repositories/postgres/auth/CustomerAuthRepoPg.js";
 import {
   defaultIntegrationDbUrl,
   integrationDescribe

@@ -1,0 +1,28 @@
+meta {
+  name: Update Address
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/storefront/address
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "line1": "{{addressLine1}}",
+    "city": "{{addressCity}}",
+    "lat": {{lat}},
+    "lng": {{lng}}
+  }
+}
+
+docs {
+  Partial update of line1, line2, landmark, city, lat, lng, or raw.
+}

@@ -2,6 +2,22 @@ import { describe, it, expect, vi } from "vitest";
 import { createUpdateStorefrontProfile } from "../../src/application/services/profile/updateStorefrontProfile.js";
 
 describe("updateStorefrontProfile", () => {
+  it("updates the display name with the locked profile write", async () => {
+    const authRepo = {
+      getCustomerProfileByCustomerId: vi.fn(),
+      patchCustomerProfile: vi.fn().mockResolvedValue({ created: false })
+    };
+    const run = createUpdateStorefrontProfile({ authRepo });
+
+    await run({}, { userId: "user-1", customerId: "cust-1", displayName: "Ada" });
+
+    expect(authRepo.patchCustomerProfile).toHaveBeenCalledWith(
+      {},
+      { customerId: "cust-1", userId: "user-1", displayName: "Ada" }
+    );
+    expect(authRepo.getCustomerProfileByCustomerId).not.toHaveBeenCalled();
+  });
+
   it("maps duplicate phone database error to conflict error", async () => {
     const authRepo = {
       getCustomerProfileByCustomerId: vi.fn().mockResolvedValue({

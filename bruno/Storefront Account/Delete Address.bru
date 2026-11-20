@@ -1,0 +1,19 @@
+meta {
+  name: Delete Address
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/storefront/address
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Removes the saved address.
+}

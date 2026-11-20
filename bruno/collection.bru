@@ -1,0 +1,27 @@
+meta {
+  name: Clientside Ecommerce API
+}
+
+docs {
+  Customer storefront API collection.
+
+  Open this `bruno` folder in Bruno, select the Local environment, then set `shopId` and `phone`.
+
+  Run Auth / Verify Phone OTP after you have a code. That request saves `accessToken` and `refreshToken` into the environment.
+
+  Every request sends `x-shop-id` from the collection. Catalog, cart, checkout, and orders need that shop UUID.
+
+  Storefront routes are also mounted without the `/api` prefix (`/storefront/...`). This collection calls `/api/storefront/...`.
+
+  POST /api/storefront/cart and cart item create, update, and delete return 410 CART_SERVER_RETIRED. Price lines with Cart Preview, then checkout with `items` in the body.
+
+  Keep Bruno's cookie jar enabled. Location Check sets the serviceability cookie used by checkout.
+}
+
+auth {
+  mode: none
+}
+
+headers {
+  x-shop-id: {{shopId}}
+}

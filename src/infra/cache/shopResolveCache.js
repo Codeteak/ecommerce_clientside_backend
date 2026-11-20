@@ -7,7 +7,7 @@ const NULL_MARKER = "__null__";
  *
  * @param {{
  *   redis: import("ioredis").default | null,
- *   shopLookupRepo: import("../../adapters/repositories/postgres/ShopLookupRepoPg.js").ShopLookupRepoPg,
+ *   shopLookupRepo: import("../../adapters/repositories/postgres/shops/ShopLookupRepoPg.js").ShopLookupRepoPg,
  *   getShopById: (shopId: string) => Promise<object | null>,
  *   resolveTtlSec?: number,
  *   metaTtlSec?: number,

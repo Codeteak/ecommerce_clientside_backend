@@ -4,6 +4,22 @@ import { AppError } from "../../../../domain/errors/AppError.js";
 export const BUNDLE_REWARD_ID_SUFFIX = ":bundle-reward";
 export const MAX_LINE_QUANTITY = 10;
 
+/**
+ * When stock_quantity is null/blank, treat as unlimited.
+ * Otherwise require on-hand stock >= ordered quantity (same unit as the line).
+ * @param {unknown} stockQuantity
+ * @param {number} orderedQty
+ * @returns {boolean}
+ */
+export function hasEnoughStock(stockQuantity, orderedQty) {
+  if (stockQuantity == null || String(stockQuantity).trim() === "") return true;
+  const stock = Number(stockQuantity);
+  if (!Number.isFinite(stock)) return true;
+  const need = Number(orderedQty);
+  if (!Number.isFinite(need) || need <= 0) return false;
+  return stock + 1e-9 >= need;
+}
+
 export function parseBillableCartQuantity(raw, { allowFractional = false } = {}) {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return 0;

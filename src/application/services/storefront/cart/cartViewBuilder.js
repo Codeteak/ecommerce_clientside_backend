@@ -233,7 +233,6 @@ export function createCartViewBuilder({
     let priceMetaByItemId = new Map();
     if (items.length > 0) {
       const syncResult = await syncCartLinesFromCatalog(client, shopId, items, snapshots);
-      snapshots = syncResult.snapshots;
       priceMetaByItemId = syncResult.metaByItemId;
       if (syncResult.mutated) {
         mutated = true;
