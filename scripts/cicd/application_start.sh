@@ -97,7 +97,9 @@ echo "[application_start] Appending runtime overrides..."
 {
   echo "NODE_ENV=production"
   echo "CUSTOMER_PORT=${APP_PORT}"
-  echo "DATABASE_SSL_REJECT_UNAUTHORIZED=${DATABASE_SSL_REJECT_UNAUTHORIZED:-false}"
+  # Production schema requires true (or ALLOW_INSECURE_DB_SSL_IN_PRODUCTION).
+  # Default true so a later .env line does not undo Secrets Manager / wipe to false.
+  echo "DATABASE_SSL_REJECT_UNAUTHORIZED=${DATABASE_SSL_REJECT_UNAUTHORIZED:-true}"
   echo "TRUST_PROXY=true"
 } >> .env
 
